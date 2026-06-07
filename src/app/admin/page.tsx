@@ -259,7 +259,7 @@ export default function AdminDashboard() {
     await supabase.from('invoices').insert({
       client_id: clientId,
       invoice_number: clientInvoiceForm.invoice_number,
-      amount: parseFloat(clientInvoiceForm.amount),
+      amount: parseFloat(clientInvoiceForm.total_fee || '0'),
       due_date: clientInvoiceForm.due_date || null,
       status: 'pending'
     })
