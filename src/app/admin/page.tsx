@@ -1372,7 +1372,12 @@ export default function AdminDashboard() {
                     <a href={'mailto:'+focusedClient.email} className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}}>
                       Email {focusedClient.name.split(' ')[0]}
                     </a>
-                    <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>{setShowClientInvoice(!showClientInvoice);setInvoiceType(null)}}>
+                    <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>{
+                                                                                                                                    const next = 'INV-' + String(invoices.length + 1).padStart(3,'0')
+                                                                                                                                    setClientInvoiceForm(f=>({...f,invoice_number:next}))
+                                                                                                                                    setShowClientInvoice(!showClientInvoice)
+                                                                                                                                    setInvoiceType(null)
+}}>
                       Create Invoice
                     </button>
                     <button className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}} onClick={()=>setShowScheduleMeeting(!showScheduleMeeting)}>
