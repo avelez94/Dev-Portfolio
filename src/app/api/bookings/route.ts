@@ -155,9 +155,10 @@ export async function POST(req: NextRequest) {
     })
 
     const formattedTime = new Date(scheduledAt).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'America/New_York',
+  timeZoneName: 'short',
     })
 
     // Send confirmation email to client

@@ -42,7 +42,6 @@ type Invoice = {
 type Pricing = {
   id: string; name: string; price: string; description: string; updated_at: string
 }
-
 type Document = {
   id: string; client_id: string | null; name: string; type: string; storage_path: string; created_at: string
 }
@@ -174,7 +173,6 @@ export default function AdminDashboard() {
     setEditingPricing(null)
     await fetchPricing()
   }
-
   async function toggleDay(a: Availability) {
     await supabase.from('availability').update({is_active:!a.is_active}).eq('id',a.id); await fetchAvailability()
   }
@@ -206,7 +204,8 @@ export default function AdminDashboard() {
       setShowActiveProjectPopup(true)
       return
     }
-    await supabase.from('clients').update({pipeline_stage:nextStage}).eq('id',c.id); await fetchClients()
+    await supabase.from('clients').update({pipeline_stage:nextStage}).eq('id',c.id)
+    await fetchClients()
     if (focused?.type==='client' && focused.data.id===c.id) setFocused({type:'client',data:{...c,pipeline_stage:nextStage}})
   }
   async function confirmActiveProject() {
@@ -256,14 +255,34 @@ export default function AdminDashboard() {
   }
   async function addClientInvoice(clientId: string, clientName: string, clientEmail: string) {
     if (!clientInvoiceForm.invoice_number) return
+    const isProject = invoiceType === 'project'
+    const isRevision = invoiceType === 'revision'
+    if (isProject && !clientInvoiceForm.total_fee) return
+    if (isRevision && !clientInvoiceForm.hours) return
+    const totalFee = isProject
+      ? parseFloat(clientInvoiceForm.total_fee)
+      : parseFloat(clientInvoiceForm.hours) * parseFloat(clientInvoiceForm.hourly_rate)
+    const depositAmount = isProject
+      ? parseFloat(clientInvoiceForm.deposit_amount || String(totalFee * 0.5))
+      : 0
     await supabase.from('invoices').insert({
       client_id: clientId,
       invoice_number: clientInvoiceForm.invoice_number,
-      amount: parseFloat(clientInvoiceForm.total_fee || '0'),
+      invoice_type: invoiceType || 'project',
+      total_fee: totalFee,
+      deposit_amount: depositAmount,
+      amount: totalFee,
       due_date: clientInvoiceForm.due_date || null,
-      status: 'pending'
+      service_desc: clientInvoiceForm.service_desc || null,
+      hours: isRevision ? parseFloat(clientInvoiceForm.hours) : 0,
+      hourly_rate: isRevision ? parseFloat(clientInvoiceForm.hourly_rate) : 65,
+      status: isProject ? 'awaiting_deposit' : 'pending',
     })
-    setShowClientInvoice(false); await fetchInvoices()
+    generateClientInvoicePDF(clientName, clientEmail, invoiceType || 'project', totalFee, depositAmount)
+    setClientInvoiceForm({ invoice_number:'', total_fee:'', deposit_amount:'', due_date:'', service_desc:'', hours:'', hourly_rate:'65' })
+    setShowClientInvoice(false)
+    setInvoiceType(null)
+    await fetchInvoices()
   }
   async function markInvoicePaid(inv: Invoice) {
     const today = new Date().toISOString().split('T')[0]
@@ -271,6 +290,8 @@ export default function AdminDashboard() {
       if (inv.status === 'awaiting_deposit') {
         await supabase.from('invoices').update({status:'deposit_paid', deposit_paid_date:today}).eq('id',inv.id)
       } else if (inv.status === 'deposit_paid') {
+        await supabase.from('invoices').update({status:'paid', paid_date:today}).eq('id',inv.id)
+      } else {
         await supabase.from('invoices').update({status:'paid', paid_date:today}).eq('id',inv.id)
       }
     } else {
@@ -464,21 +485,24 @@ export default function AdminDashboard() {
   }
   function fmtMoney(n: number) { return '$'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}) }
 
-  const totalEarned = invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0)
-  const totalOutstanding = invoices.filter(i=>i.status==='pending'||i.status==='overdue').reduce((s,i)=>s+i.amount,0)
-  const thisMonth = invoices.filter(i=>i.status==='paid'&&i.paid_date&&new Date(i.paid_date).getMonth()===new Date().getMonth()&&new Date(i.paid_date).getFullYear()===new Date().getFullYear()).reduce((s,i)=>s+i.amount,0)
+  const totalEarned = invoices.filter(i=>i.status==='paid'||i.status==='deposit_paid').reduce((s,i)=>i.status==='paid'?s+i.total_fee:s+(i.deposit_amount||i.total_fee*0.5),0)
+  const totalOutstanding = invoices.filter(i=>i.status==='pending'||i.status==='awaiting_deposit'||i.status==='deposit_paid').reduce((s,i)=>{
+    if (i.status==='deposit_paid') return s + ((i.total_fee||0) - (i.deposit_amount||0))
+    return s + (i.total_fee || i.amount)
+  },0)
+  const thisMonth = invoices.filter(i=>(i.status==='paid'||i.status==='deposit_paid')&&(i.paid_date||i.deposit_paid_date)&&new Date((i.paid_date||i.deposit_paid_date) as string).getMonth()===new Date().getMonth()&&new Date((i.paid_date||i.deposit_paid_date) as string).getFullYear()===new Date().getFullYear()).reduce((s,i)=>i.status==='paid'?s+(i.total_fee||i.amount):s+(i.deposit_amount||0),0)
   const avgProject = projects.length>0 ? projects.reduce((s,p)=>s+p.value,0)/projects.length : 0
   const monthlyData = Array.from({length:6},(_,i)=>{
     const dt = new Date(); dt.setMonth(dt.getMonth()-5+i)
     const m = dt.getMonth(), y = dt.getFullYear()
-    const total = invoices.filter(inv=>inv.status==='paid'&&inv.paid_date&&new Date(inv.paid_date).getMonth()===m&&new Date(inv.paid_date).getFullYear()===y).reduce((s,inv)=>s+inv.amount,0)
+    const total = invoices.filter(inv=>inv.status==='paid'&&inv.paid_date&&new Date(inv.paid_date).getMonth()===m&&new Date(inv.paid_date).getFullYear()===y).reduce((s,inv)=>s+(inv.total_fee||inv.amount),0)
     return { label:MONTHS[m], value:total, month:m, year:y }
   })
   const maxMonthly = Math.max(...monthlyData.map(m=>m.value), 1)
   const directRevenue = projects.filter(p=>p.platform==='direct').reduce((s,p)=>s+p.value,0)
   const referralRevenue = projects.filter(p=>p.platform==='referral').reduce((s,p)=>s+p.value,0)
   const totalProjectValue = directRevenue + referralRevenue || 1
-  const overdueInvoices = invoices.filter(i => i.status==='pending' && i.due_date && new Date(i.due_date) < new Date())
+  const overdueInvoices = invoices.filter(i => (i.status==='pending'||i.status==='awaiting_deposit') && i.due_date && new Date(i.due_date) < new Date())
   const activeProjects = projects.filter(p => p.status==='active').sort((a,b) => {
     if (!a.end_date) return 1; if (!b.end_date) return -1
     return new Date(a.end_date).getTime() - new Date(b.end_date).getTime()
@@ -687,7 +711,10 @@ export default function AdminDashboard() {
         .section-divider{height:1px;margin:16px 0}
         .section-mini-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
         .notes-box{border-radius:10px;border-width:1px;border-style:solid;padding:12px;font-size:12px;line-height:1.6;min-height:60px;cursor:pointer}
-        .inv-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:4px}
+        .inv-row{display:flex;align-items:flex-start;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;margin-bottom:6px}
+        .process-step{background:var(--espresso-mid);padding:36px 32px;position:relative;opacity:0;transform:translateY(20px);transition:opacity 0.6s,transform 0.6s,scale 0.25s,background 0.25s,box-shadow 0.25s;cursor:default}
+        .process-step.visible{opacity:1;transform:translateY(0)}
+        .process-step.visible:hover{scale:1.04;background:#4a3220;box-shadow:0 16px 48px rgba(0,0,0,0.3);z-index:2}
       `}</style>
       <div className="shell" style={{background:d.bg,color:d.text,display:'grid',gridTemplateColumns:'80px 1fr',height:'100vh',overflow:'hidden'}}>
         <div className="sidebar" style={{background:d.white,borderColor:d.border}}>
@@ -737,7 +764,7 @@ export default function AdminDashboard() {
                       <div key={inv.id} className="alert-row" style={{background:d.red,borderColor:d.redText+'44'}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,fontWeight:500,color:d.text}}>Invoice #{inv.invoice_number}</div>
-                          <div style={{fontSize:11,color:d.redText}}>Due {inv.due_date?fmtShort(inv.due_date):'unknown'} · {fmtMoney(inv.amount)}</div>
+                          <div style={{fontSize:11,color:d.redText}}>Due {inv.due_date?fmtShort(inv.due_date):'unknown'} · {fmtMoney(inv.total_fee||inv.amount)}</div>
                         </div>
                         <button className="cr-btn" style={{background:d.redText,color:'white'}} onClick={()=>markInvoicePaid(inv)}>Mark Paid</button>
                       </div>
@@ -847,7 +874,7 @@ export default function AdminDashboard() {
                       ? <div className="empty-note" style={{textAlign:'left',paddingLeft:0,paddingTop:4,color:d.text3}}>Empty</div>
                       : clientsByStage[stage].map(c=>(
                         <div key={c.id} className="client-row" style={{background:d.white,borderColor:d.border}}
-                          onClick={()=>{setFocused({type:'client',data:c});setClientNotes(c.notes||'');setEditingNotes(false);setShowClientInvoice(false)}}>
+                          onClick={()=>{setFocused({type:'client',data:c});setClientNotes(c.notes||'');setEditingNotes(false);setShowClientInvoice(false);setInvoiceType(null)}}>
                           <div style={{flex:1}}>
                             <div className="cr-name" style={{color:d.text}}>{c.name}</div>
                             <div className="cr-meta" style={{color:d.text2}}>{c.email}{c.business?' · '+c.business:''}{c.platform&&c.platform!=='direct'?' · '+c.platform:''}</div>
@@ -943,21 +970,23 @@ export default function AdminDashboard() {
                 </div>
                 <div className="section-label" style={{color:d.text2,marginBottom:12}}>All Invoices</div>
                 <div className="data-table" style={{borderColor:d.border}}>
-                  <div className="dt-header" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr 60px',background:d.surface,borderColor:d.border}}>
+                  <div className="dt-header" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr 80px',background:d.surface,borderColor:d.border}}>
                     {['Invoice #','Amount','Due','Status',''].map((h,i)=><div key={i} className="dt-cell hd" style={{color:d.text3}}>{h}</div>)}
                   </div>
                   {invoices.length===0 ? <div className="empty-note" style={{color:d.text3}}>No invoices yet.</div>
                   : invoices.map(inv=>{
-                    const isPaid=inv.status==='paid'
                     const pillStyle = inv.status==='paid'?{background:d.green,color:d.greenText}:inv.status==='deposit_paid'?{background:d.amber,color:d.amberText}:inv.status==='awaiting_deposit'?{background:d.surface2,color:d.text3}:{background:d.amber,color:d.amberText}
+                    const statusLabel = inv.status==='awaiting_deposit'?'Awaiting Dep':inv.status==='deposit_paid'?'Dep Paid':inv.status==='paid'?'Paid':'Pending'
                     return (
-                      <div key={inv.id} className="dt-row" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr 60px',borderColor:d.border}}>
-                        <div className="dt-cell" style={{color:d.text}}>{inv.invoice_number}</div>
-                        <div className="dt-cell" style={{color:d.accent,fontWeight:500}}>{fmtMoney(inv.amount)}</div>
+                      <div key={inv.id} className="dt-row" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr 80px',borderColor:d.border}}>
+                        <div className="dt-cell" style={{color:d.text}}>{inv.invoice_number}{inv.invoice_type==='revision'?' (rev)':''}</div>
+                        <div className="dt-cell" style={{color:d.accent,fontWeight:500}}>{fmtMoney(inv.total_fee||inv.amount)}</div>
                         <div className="dt-cell" style={{color:d.text2}}>{inv.due_date?fmtShort(inv.due_date):'none'}</div>
-                        <div className="dt-cell"><span className="status-pill" style={pillStyle}>{inv.status}</span></div>
+                        <div className="dt-cell"><span className="status-pill" style={pillStyle}>{statusLabel}</span></div>
                         <div className="dt-cell" style={{display:'flex',gap:4}}>
-                          {!isPaid&&<button className="icon-btn" style={{color:d.greenText,fontSize:12}} onClick={()=>markInvoicePaid(inv)} title="Mark paid">ok</button>}
+                          {inv.status==='awaiting_deposit'&&<button className="icon-btn" style={{color:d.amberText,fontSize:11}} onClick={()=>markInvoicePaid(inv)} title="Mark deposit paid">dep</button>}
+                          {inv.status==='deposit_paid'&&<button className="icon-btn" style={{color:d.greenText,fontSize:11}} onClick={()=>markInvoicePaid(inv)} title="Mark final paid">fin</button>}
+                          {inv.status==='pending'&&<button className="icon-btn" style={{color:d.greenText,fontSize:12}} onClick={()=>markInvoicePaid(inv)} title="Mark paid">ok</button>}
                           <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteInvoice(inv.id)}>x</button>
                         </div>
                       </div>
@@ -1001,8 +1030,7 @@ export default function AdminDashboard() {
                     )
                   })}
                 </div>
-
-                                <div className="section-label" style={{color:d.text2,marginBottom:16}}>Fill and generate</div>
+                <div className="section-label" style={{color:d.text2,marginBottom:16}}>Fill and generate</div>
                 <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
                   <div className="doc-card-header">
                     <div className="doc-icon" style={{background:d.sand,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M5 5h6M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg></div>
@@ -1311,7 +1339,7 @@ export default function AdminDashboard() {
                     <a href={'mailto:'+focusedClient.email} className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}}>
                       Email {focusedClient.name.split(' ')[0]}
                     </a>
-                    <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>setShowClientInvoice(!showClientInvoice)}>
+                    <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>{setShowClientInvoice(!showClientInvoice);setInvoiceType(null)}}>
                       Create Invoice
                     </button>
                   </div>
@@ -1371,18 +1399,18 @@ export default function AdminDashboard() {
                         const statusLabel = inv.status==='awaiting_deposit'?'Awaiting Deposit':inv.status==='deposit_paid'?'Deposit Paid':inv.status==='paid'?'Paid in Full':'Pending'
                         const nextAction = inv.status==='awaiting_deposit'?'Mark Deposit Paid':inv.status==='deposit_paid'?'Mark Final Paid':inv.status==='pending'?'Mark Paid':null
                         return (
-                          <div key={inv.id} className="inv-row" style={{background:d.surface,flexDirection:'column',alignItems:'flex-start',gap:6}}>
+                          <div key={inv.id} className="inv-row" style={{background:d.surface}}>
                             <div style={{display:'flex',alignItems:'center',gap:8,width:'100%'}}>
                               <div style={{flex:1}}>
-                                <div style={{fontSize:12,color:d.text,fontWeight:500}}>#{inv.invoice_number} {inv.invoice_type==='revision'?'· Revision':''}</div>
+                                <div style={{fontSize:12,color:d.text,fontWeight:500}}>#{inv.invoice_number}{inv.invoice_type==='revision'?' · Revision':''}</div>
                                 <div style={{fontSize:11,color:d.text2}}>{fmtMoney(inv.total_fee||inv.amount)}{inv.due_date?' · Due '+fmtShort(inv.due_date):''}</div>
                               </div>
                               <span className="status-pill" style={{background:sc.bg,color:sc.text}}>{statusLabel}</span>
                             </div>
                             {inv.invoice_type==='project' && inv.status!=='paid' && (
                               <div style={{fontSize:10,color:d.text3,paddingLeft:2}}>
-                                {inv.status==='awaiting_deposit'?'Deposit: '+fmtMoney(inv.deposit_amount||inv.total_fee*0.5)+' · Balance: '+fmtMoney((inv.total_fee||0)-(inv.deposit_amount||inv.total_fee*0.5)):''}
-                                {inv.status==='deposit_paid'?'Deposit received · Balance due: '+fmtMoney((inv.total_fee||0)-(inv.deposit_amount||0)):''}
+                                {inv.status==='awaiting_deposit'&&'Deposit: '+fmtMoney(inv.deposit_amount||inv.total_fee*0.5)+' · Balance: '+fmtMoney((inv.total_fee||0)-(inv.deposit_amount||inv.total_fee*0.5))}
+                                {inv.status==='deposit_paid'&&'Deposit received · Balance due: '+fmtMoney((inv.total_fee||0)-(inv.deposit_amount||0))}
                               </div>
                             )}
                             {nextAction && (
@@ -1414,9 +1442,9 @@ export default function AdminDashboard() {
                       <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Documents</div>
                       {clientDocs.map(doc=>(
                         <div key={doc.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:d.surface,borderRadius:10,marginBottom:6}}>
-                          <span style={{fontSize:14,color:d.text3}}>doc</span>
+                          <span style={{fontSize:11,color:d.text3}}>doc</span>
                           <span style={{flex:1,fontSize:12,color:d.text}}>{doc.name}</span>
-                          <button className="icon-btn" style={{color:d.accent,fontSize:12}} onClick={()=>downloadDoc(doc.storage_path,doc.name)}>down</button>
+                          <button className="icon-btn" style={{color:d.accent,fontSize:12}} onClick={()=>downloadDoc(doc.storage_path,doc.name)}>↓</button>
                           <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteDocument(doc.id,doc.storage_path)}>x</button>
                         </div>
                       ))}
@@ -1429,7 +1457,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Active Project Popup */}
       {showActiveProjectPopup && pendingAdvanceClient && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
           <div style={{background:d.white,borderRadius:20,padding:32,width:380,border:'1px solid '+d.border}}>
