@@ -44,8 +44,7 @@ export async function GET(req: NextRequest) {
 
         for (let hour = startHour; hour < endHour; hour++) {
           for (const minute of [0, 30]) {
-            const slotTime = new Date(current)
-            slotTime.setHours(hour, minute, 0, 0)
+            const slotTime = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00-04:00`)
             const slotKey = `${dateStr}-${hour}:${String(minute).padStart(2, '0')}`
 
             const isBlockedSlot = dayBlockedSlots.some((s: any) => {
