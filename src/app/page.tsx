@@ -167,8 +167,9 @@ export default function Home() {
         .rate-price { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: var(--terracotta); letter-spacing: 0.06em; margin-bottom: 10px; }
         .rate-desc { font-size: 0.8rem; line-height: 1.6; color: rgba(250,246,240,0.45); }
         .process-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-bottom: 64px; }
-        .process-step { background: var(--espresso-mid); padding: 36px 32px; position: relative; opacity: 0; transform: translateY(20px); transition: opacity 0.6s, transform 0.6s; }
+        .process-step { background: var(--espresso-mid); padding: 36px 32px; position: relative; opacity: 0; transform: translateY(20px); transition: opacity 0.6s, transform 0.6s, scale 0.25s, background 0.25s, box-shadow 0.25s; cursor: default; }
         .process-step.visible { opacity: 1; transform: translateY(0); }
+        .process-step.visible:hover { scale: 1.04; background: #4a3220; box-shadow: 0 16px 48px rgba(0,0,0,0.3); z-index: 2; }
         .process-step::after { content: ''; position: absolute; top: 50%; right: -1px; width: 1px; height: 40%; background: var(--border); transform: translateY(-50%); }
         .process-step:last-child::after { display: none; }
         .process-num { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--terracotta); letter-spacing: 0.18em; margin-bottom: 16px; opacity: 0.7; }
