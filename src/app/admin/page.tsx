@@ -154,8 +154,7 @@ export default function AdminDashboard() {
     setDocuments(data || [])
   }
   async function fetchPricing() {
-    const { data, error } = await supabase.from('pricing').select('*').order('id')
-    console.log('pricing data:', data, 'error:', error)
+    const { data } = await supabase.from('pricing').select('*').order('id')
     setPricing(data || [])
   }
   async function savePricing(id: string) {
