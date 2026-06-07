@@ -255,7 +255,7 @@ export default function AdminDashboard() {
     setShowNewProject(false); await fetchProjects()
   }
   async function addClientInvoice(clientId: string, clientName: string, clientEmail: string) {
-    if (!clientInvoiceForm.invoice_number || !clientInvoiceForm.amount) return
+    if (!clientInvoiceForm.invoice_number) return
     await supabase.from('invoices').insert({
       client_id: clientId,
       invoice_number: clientInvoiceForm.invoice_number,
