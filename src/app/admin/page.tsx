@@ -42,6 +42,12 @@ type Invoice = {
 type Pricing = {
   id: string; name: string; price: string; description: string; updated_at: string
 }
+type Meeting = {
+  id: string; client_id: string; scheduled_at: string
+  zoom_join_url: string | null; zoom_host_url: string | null
+  title: string; status: string; created_at: string
+}
+
 type Document = {
   id: string; client_id: string | null; name: string; type: string; storage_path: string; created_at: string
 }
@@ -67,6 +73,10 @@ export default function AdminDashboard() {
   const [projects, setProjects] = useState<Project[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [showScheduleMeeting, setShowScheduleMeeting] = useState(false)
+  const [meetingForm, setMeetingForm] = useState({ title:'Project Check-in', date:'', time:'' })
+  const [schedulingMeeting, setSchedulingMeeting] = useState(false)
   const [pricing, setPricing] = useState<Pricing[]>([])
   const [editingPricing, setEditingPricing] = useState<string|null>(null)
   const [pricingEdits, setPricingEdits] = useState<Record<string,{price:string,description:string}>>({})
@@ -122,7 +132,7 @@ export default function AdminDashboard() {
 
   async function fetchAll() {
     setLoading(true)
-    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing()])
+    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing(),fetchMeetings()])
     setLoading(false)
   }
   async function fetchBookings() {
@@ -166,6 +176,29 @@ export default function AdminDashboard() {
     const { data } = await supabase.from('pricing').select('*').order('id')
     setPricing(data || [])
   }
+  async function fetchMeetings() {
+    const { data } = await supabase.from('meetings').select('*').order('scheduled_at',{ascending:false})
+    setMeetings(data || [])
+  }
+  async function scheduleMeeting(clientId: string, clientName: string, clientEmail: string) {
+    if (!meetingForm.date || !meetingForm.time) return
+    setSchedulingMeeting(true)
+    const scheduledAt = new Date(meetingForm.date + 'T' + meetingForm.time + ':00-04:00').toISOString()
+    try {
+      await fetch('/api/meetings/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, clientName, clientEmail, scheduledAt, title: meetingForm.title })
+      })
+      setMeetingForm({ title:'Project Check-in', date:'', time:'' })
+      setShowScheduleMeeting(false)
+      await fetchMeetings()
+    } catch (e) {
+      console.error(e)
+    }
+    setSchedulingMeeting(false)
+  }
+
   async function savePricing(id: string) {
     const edits = pricingEdits[id]
     if (!edits) return
@@ -512,6 +545,7 @@ export default function AdminDashboard() {
   const focusedSub = focused?.type==='submission'?focused.data as Submission:null
   const focusedClient = focused?.type==='client'?focused.data as Client:null
   const clientDocs = focusedClient ? documents.filter(doc=>doc.client_id===focusedClient.id) : []
+  const clientMeetings = focusedClient ? meetings.filter(m=>m.client_id===focusedClient.id).sort((a,b)=>new Date(b.scheduled_at).getTime()-new Date(a.scheduled_at).getTime()) : []
   const clientInvoices = focusedClient ? invoices.filter(inv=>inv.client_id===focusedClient.id) : []
   const bookedDays = new Set(bookings.map(b => { const dt=new Date(b.scheduled_at); return dt.getFullYear()+'-'+dt.getMonth()+'-'+dt.getDate() }))
   const blockedDaySet = new Set(blockedDates.map(b=>b.blocked_date))
@@ -1342,6 +1376,9 @@ export default function AdminDashboard() {
                     <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>{setShowClientInvoice(!showClientInvoice);setInvoiceType(null)}}>
                       Create Invoice
                     </button>
+                    <button className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}} onClick={()=>setShowScheduleMeeting(!showScheduleMeeting)}>
+                      Schedule Meeting
+                    </button>
                   </div>
                   {showClientInvoice && (
                     <div className="form-card" style={{background:d.surface,borderColor:d.border,marginBottom:16}}>
@@ -1385,6 +1422,45 @@ export default function AdminDashboard() {
                       )}
                     </div>
                   )}
+                  {showScheduleMeeting && (
+                    <div className="form-card" style={{background:d.surface,borderColor:d.border,marginBottom:16}}>
+                      <div className="form-title" style={{color:d.text}}>Schedule a meeting</div>
+                      <div className="form-group" style={{marginBottom:10}}>
+                        <div className="form-label" style={{color:d.text3}}>Meeting title</div>
+                        <input style={inputStyle} value={meetingForm.title} onChange={e=>setMeetingForm({...meetingForm,title:e.target.value})} placeholder="Project Check-in"/>
+                      </div>
+                      <div className="form-grid">
+                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Date</div><input style={inputStyle} type="date" value={meetingForm.date} onChange={e=>setMeetingForm({...meetingForm,date:e.target.value})}/></div>
+                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Time (EST)</div><input style={inputStyle} type="time" value={meetingForm.time} onChange={e=>setMeetingForm({...meetingForm,time:e.target.value})}/></div>
+                      </div>
+                      <div className="form-actions">
+                        <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowScheduleMeeting(false)}>Cancel</button>
+                        <button className="btn-save" disabled={schedulingMeeting||!meetingForm.date||!meetingForm.time} onClick={()=>scheduleMeeting(focusedClient.id,focusedClient.name,focusedClient.email)}>
+                          {schedulingMeeting?'Scheduling...':'Schedule and Email Client'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {clientMeetings.length > 0 && (
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Meetings</div>
+                      {clientMeetings.map(m=>{
+                        const isPast = new Date(m.scheduled_at) < new Date()
+                        return (
+                          <div key={m.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:d.surface,borderRadius:10,marginBottom:4,opacity:isPast?0.6:1}}>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:12,color:d.text,fontWeight:500}}>{m.title}</div>
+                              <div style={{fontSize:11,color:d.text2}}>{fmtShort(m.scheduled_at)} · {new Date(m.scheduled_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York',timeZoneName:'short'})}</div>
+                            </div>
+                            {!isPast&&m.zoom_host_url&&<a href={m.zoom_host_url} target="_blank" style={{fontSize:10,color:d.accent,textDecoration:'none',fontWeight:500}}>Start</a>}
+                            {isPast&&<span style={{fontSize:10,color:d.text3}}>Done</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
                   {clientInvoices.length > 0 && (
                     <div style={{marginBottom:16}}>
                       <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Invoices</div>
