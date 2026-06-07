@@ -127,6 +127,26 @@ export async function POST(req: NextRequest) {
       .update({ status: 'booked' })
       .eq('id', intakeId)
 
+    // Auto-create client in pipeline
+    const { data: existingClient } = await supabaseAdmin
+      .from('clients')
+      .select('id')
+      .eq('intake_id', intakeId)
+      .single()
+
+    if (!existingClient) {
+      await supabaseAdmin.from('clients').insert({
+        intake_id: intakeId,
+        booking_id: booking.id,
+        name: intake.name,
+        email: intake.email,
+        business: intake.business || null,
+        pipeline_stage: 'discovery_call',
+        platform: 'direct',
+        notes: null,
+      })
+    }
+
     const formattedDate = new Date(scheduledAt).toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -228,7 +248,7 @@ function getClientConfirmationHtml({ name, date, time, joinUrl }: {
     <div class="detail-label">Format</div>
     <div class="detail-value">Zoom video call</div>
   </div>
-  <a href="${joinUrl}" class="cta">Join Zoom Call →</a>
+  <a href="${joinUrl}" class="cta">Join Zoom Call</a>
   <p style="margin-top: 24px;">Have your project references, existing logins, or any questions ready. If you need to reschedule, just reply to this email.</p>
   <div class="footer">
     <p>Alante Velez &nbsp;·&nbsp; Full Stack Web Developer</p>
@@ -253,7 +273,6 @@ function getAdminNotificationHtml({
   .heading { font-family: Georgia, serif; font-size: 22px; color: #FAF6F0; margin-bottom: 8px; }
   .heading span { color: #C4704A; }
   .sub { font-size: 13px; color: rgba(250,246,240,0.4); margin-bottom: 28px; font-family: 'Courier New', monospace; }
-  .section { margin-bottom: 24px; }
   .label { font-family: 'Courier New', monospace; font-size: 11px; color: #C4704A; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px; }
   .value { font-size: 14px; color: #FAF6F0; line-height: 1.6; margin-bottom: 16px; }
   .divider { height: 1px; background: #2a2a2a; margin: 24px 0; }

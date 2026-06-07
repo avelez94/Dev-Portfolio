@@ -201,7 +201,10 @@ export default function AdminDashboard() {
   }
   async function addClientManually() {
     if (!nc.name || !nc.email) return
-    await supabase.from('clients').insert({name:nc.name,email:nc.email,business:nc.business||null,pipeline_stage:nc.pipeline_stage,platform:nc.platform,notes:null})
+    const payload = {name:nc.name,email:nc.email,business:nc.business||null,pipeline_stage:nc.pipeline_stage,platform:nc.platform,notes:null}
+    console.log('inserting client:', payload)
+    const { error } = await supabase.from('clients').insert(payload)
+    console.log('insert error:', error)
     setNc({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
     setShowAddClient(false); await fetchClients()
   }
