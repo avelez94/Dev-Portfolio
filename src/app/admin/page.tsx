@@ -887,7 +887,6 @@ export default function AdminDashboard() {
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Email</div><input style={inputStyle} value={nc.email} onChange={e=>setNc({...nc,email:e.target.value})} placeholder="client@email.com"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Business (optional)</div><input style={inputStyle} value={nc.business} onChange={e=>setNc({...nc,business:e.target.value})} placeholder="Company name"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Platform</div><select style={inputStyle} value={nc.platform} onChange={e=>setNc({...nc,platform:e.target.value})}><option value="direct">Direct</option><option value="upwork">Upwork</option><option value="fiverr">Fiverr</option><option value="referral">Referral</option></select></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Stage</div><select style={inputStyle} value={nc.pipeline_stage} onChange={e=>setNc({...nc,pipeline_stage:e.target.value})}>{PIPELINE_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select></div>
                     </div>
                     <div className="form-actions">
                       <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowAddClient(false)}>Cancel</button>
