@@ -267,12 +267,12 @@ export default function Home() {
           </div>
           <div className="about-right">
             <div className="about-text" style={{marginBottom: '32px'}}>
-              <p>I have built an AI travel platform, a custom learning management system, payment workflows, dashboards, and client portals. Most developers talk about building products. I build them, deploy them, and maintain them.</p>
+              <p>I have built an AI travel platform, a custom learning management system, payment workflows, dashboards, and client portals. Most developers talk about building products. I build them, deploy them, and maintain them. If you have hired developers who disappear after handing over a zip file, I am not that.</p>
               <p>Planary generates and delivers fully custom travel itineraries through an <strong>AI pipeline I built end to end</strong>. Rising Sons runs a video player I built from scratch with <strong>per-student access control, progress tracking, and custom playback</strong>, because an embed would not have done what the platform needed.</p>
-              <p>I started in IT programs and kept going further than the curriculum took me. I work in <strong>Next.js, Supabase, Stripe, PayPal, and the Anthropic API</strong> and handle everything from database schema to deployment. If you have hired developers who disappear after handing over a zip file, I am not that.</p>
+              <p>My background is in IT, but most of what I know came from building and shipping real products. I work in <strong>Next.js, Supabase, Stripe, PayPal, and the Anthropic API</strong> and handle everything from database schema to deployment.</p>
             </div>
             <div className="about-stats">
-              <div className="stat-box" data-observe="true"><div className="stat-num">2</div><div className="stat-label">Platforms live in production</div></div>
+              <div className="stat-box" data-observe="true"><div className="stat-num">2</div><div className="stat-label">Client platforms live and actively used</div></div>
               <div className="stat-box" data-observe="true"><div className="stat-num">5+</div><div className="stat-label">Years building independently</div></div>
               <div className="stat-box" data-observe="true"><div className="stat-num">7-10</div><div className="stat-label">Day delivery on most projects</div></div>
               <div className="stat-box" data-observe="true"><div className="stat-num">✓</div><div className="stat-label">Documentation and post-launch support on every project</div></div>

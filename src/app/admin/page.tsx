@@ -36,6 +36,10 @@ type Invoice = {
   invoice_number: string; amount: number; status: string
   due_date: string | null; paid_date: string | null; notes: string | null; created_at: string
 }
+type Pricing = {
+  id: string; name: string; price: string; description: string; updated_at: string
+}
+
 type Document = {
   id: string; client_id: string | null; name: string; type: string; storage_path: string; created_at: string
 }
@@ -61,6 +65,9 @@ export default function AdminDashboard() {
   const [projects, setProjects] = useState<Project[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [pricing, setPricing] = useState<Pricing[]>([])
+  const [editingPricing, setEditingPricing] = useState<string|null>(null)
+  const [pricingEdits, setPricingEdits] = useState<Record<string,{price:string,description:string}>>({})
   const [focused, setFocused] = useState<{type:string,data:any}|null>(null)
   const [selectedDay, setSelectedDay] = useState<string|null>(null)
   const [blockStart, setBlockStart] = useState('')
@@ -106,7 +113,7 @@ export default function AdminDashboard() {
 
   async function fetchAll() {
     setLoading(true)
-    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments()])
+    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing()])
     setLoading(false)
   }
   async function fetchBookings() {
@@ -146,6 +153,18 @@ export default function AdminDashboard() {
     const { data } = await supabase.from('documents').select('*').order('created_at',{ascending:false})
     setDocuments(data || [])
   }
+  async function fetchPricing() {
+    const { data } = await supabase.from('pricing').select('*').order('id')
+    setPricing(data || [])
+  }
+  async function savePricing(id: string) {
+    const edits = pricingEdits[id]
+    if (!edits) return
+    await supabase.from('pricing').update({ price: edits.price, description: edits.description, updated_at: new Date().toISOString() }).eq('id', id)
+    setEditingPricing(null)
+    await fetchPricing()
+  }
+
   async function toggleDay(a: Availability) {
     await supabase.from('availability').update({is_active:!a.is_active}).eq('id',a.id); await fetchAvailability()
   }
@@ -900,22 +919,33 @@ export default function AdminDashboard() {
                 </div>
                 <div className="section-label" style={{color:d.text2,marginBottom:12}}>My Pricing</div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:24}}>
-                  {[
-                    {name:'Landing Page',price:'$400 to $700',desc:'Next.js site on Vercel. Clean design, fast load, mobile ready.'},
-                    {name:'Booking + Payments',price:'$500 to $1,500',desc:'Scheduling, Stripe or PayPal, confirmation flows.'},
-                    {name:'Web Application',price:'$1,000 to $3,500',desc:'Custom portals, dashboards, full stack apps.'},
-                    {name:'AI Workflow',price:'$500 to $2,000+',desc:'Claude API integrations, automation, AI powered features.'},
-                    {name:'Hourly Rate',price:'$65/hr',desc:'Change orders, extra revisions, ongoing support.'},
-                    {name:'Revisions',price:'2 rounds included',desc:'Additional rounds billed at $65/hr.'},
-                    {name:'Deposit',price:'50% upfront',desc:'50% deposit to start, 50% on delivery.'},
-                    {name:'Payment Methods',price:'Stripe, PayPal, Zelle, Wise',desc:'US and international clients accepted.'},
-                  ].map((p,i)=>(
-                    <div key={i} style={{background:d.surface,borderRadius:12,padding:'12px 14px',border:'1px solid '+d.border}}>
-                      <div style={{fontSize:11,fontWeight:500,color:d.text,marginBottom:3}}>{p.name}</div>
-                      <div style={{fontFamily:'Playfair Display,serif',fontSize:14,fontWeight:600,color:d.accent,marginBottom:4}}>{p.price}</div>
-                      <div style={{fontSize:10,color:d.text3,lineHeight:1.5}}>{p.desc}</div>
-                    </div>
-                  ))}
+                  {pricing.map(p=>{
+                    const isEditing = editingPricing === p.id
+                    const edits = pricingEdits[p.id] || {price:p.price,description:p.description}
+                    return (
+                      <div key={p.id} style={{background:d.surface,borderRadius:12,padding:'12px 14px',border:'1px solid '+(isEditing?d.accent:d.border),transition:'border-color 0.2s'}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+                          <div style={{fontSize:11,fontWeight:500,color:d.text}}>{p.name}</div>
+                          <button className="icon-btn" style={{color:isEditing?d.accent:d.text3,fontSize:11}} onClick={()=>{
+                            if(isEditing){setEditingPricing(null)}
+                            else{setEditingPricing(p.id);setPricingEdits(prev=>({...prev,[p.id]:{price:p.price,description:p.description}}))}
+                          }}>{isEditing?'cancel':'edit'}</button>
+                        </div>
+                        {isEditing ? (
+                          <>
+                            <input style={{...inputStyle,marginBottom:6,fontSize:12,fontWeight:600}} value={edits.price} onChange={e=>setPricingEdits(prev=>({...prev,[p.id]:{...edits,price:e.target.value}}))} placeholder="Price"/>
+                            <input style={{...inputStyle,marginBottom:8,fontSize:11}} value={edits.description} onChange={e=>setPricingEdits(prev=>({...prev,[p.id]:{...edits,description:e.target.value}}))} placeholder="Description"/>
+                            <button className="btn-save" style={{width:'100%'}} onClick={()=>savePricing(p.id)}>Save</button>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{fontFamily:'Playfair Display,serif',fontSize:14,fontWeight:600,color:d.accent,marginBottom:4}}>{p.price}</div>
+                            <div style={{fontSize:10,color:d.text3,lineHeight:1.5}}>{p.description}</div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
 
                                 <div className="section-label" style={{color:d.text2,marginBottom:16}}>Fill and generate</div>
