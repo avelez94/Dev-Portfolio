@@ -218,14 +218,13 @@ export default function AdminDashboard() {
   }
   async function addClientInvoice(clientId: string, clientName: string, clientEmail: string) {
     if (!clientInvoiceForm.invoice_number || !clientInvoiceForm.amount) return
-    const { error } = await supabase.from('invoices').insert({
+    await supabase.from('invoices').insert({
       client_id: clientId,
       invoice_number: clientInvoiceForm.invoice_number,
       amount: parseFloat(clientInvoiceForm.amount),
       due_date: clientInvoiceForm.due_date || null,
       status: 'pending'
     })
-    console.log('invoice error:', error)
     generateClientInvoicePDF(clientName, clientEmail)
     setClientInvoiceForm({ invoice_number:'', amount:'', due_date:'', service_desc:'' })
     setShowClientInvoice(false); await fetchInvoices()
