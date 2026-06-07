@@ -98,6 +98,11 @@ export default function AdminDashboard() {
   const [editingNotes, setEditingNotes] = useState(false)
   const [clientNotes, setClientNotes] = useState('')
   const [activeFillForm, setActiveFillForm] = useState<'sow'|'contract'|null>(null)
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice|null>(null)
+  const [viewingProject, setViewingProject] = useState<Project|null>(null)
+  const [editingProjectNotes, setEditingProjectNotes] = useState(false)
+  const [projectNotes, setProjectNotes] = useState('')
+  const [sendingInvoice, setSendingInvoice] = useState(false)
   const [np, setNp] = useState({ name:'', type:'Landing Page', value:'', platform:'direct', status:'active', end_date:'' })
   const [nc, setNc] = useState({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
   const [clientInvoiceForm, setClientInvoiceForm] = useState({
@@ -291,7 +296,7 @@ export default function AdminDashboard() {
     setNp({ name:'', type:'Landing Page', value:'', platform:'direct', status:'active', end_date:'' })
     setShowNewProject(false); await fetchProjects()
   }
-  async function addClientInvoice(clientId: string, clientName: string, clientEmail: string) {
+  async function addClientInvoice(clientId: string, clientName: string, clientEmail: string, action: 'download'|'send' = 'download') {
     if (!clientInvoiceForm.invoice_number) return
     const isProject = invoiceType === 'project'
     const isRevision = invoiceType === 'revision'
@@ -303,7 +308,7 @@ export default function AdminDashboard() {
     const depositAmount = isProject
       ? parseFloat(clientInvoiceForm.deposit_amount || String(totalFee * 0.5))
       : 0
-    await supabase.from('invoices').insert({
+    const { data: insertedInv } = await supabase.from('invoices').insert({
       client_id: clientId,
       invoice_number: clientInvoiceForm.invoice_number,
       invoice_type: invoiceType || 'project',
@@ -315,13 +320,63 @@ export default function AdminDashboard() {
       hours: isRevision ? parseFloat(clientInvoiceForm.hours) : 0,
       hourly_rate: isRevision ? parseFloat(clientInvoiceForm.hourly_rate) : 65,
       status: isProject ? 'awaiting_deposit' : 'pending',
-    })
-    generateClientInvoicePDF(clientName, clientEmail, invoiceType || 'project', totalFee, depositAmount)
+    }).select().single()
+    if (action === 'download') {
+      generateClientInvoicePDF(clientName, clientEmail, invoiceType || 'project', totalFee, depositAmount)
+    } else if (action === 'send' && insertedInv) {
+      await sendInvoiceEmail(clientName, clientEmail, insertedInv)
+    }
     setClientInvoiceForm({ invoice_number:'', total_fee:'', deposit_amount:'', due_date:'', service_desc:'', hours:'', hourly_rate:'65' })
     setShowClientInvoice(false)
     setInvoiceType(null)
     await fetchInvoices()
   }
+  async function sendInvoiceEmail(clientName: string, clientEmail: string, inv: Invoice) {
+    setSendingInvoice(true)
+    try {
+      const totalFee = inv.total_fee || inv.amount
+      const depositAmount = inv.deposit_amount || totalFee * 0.5
+      const isProject = inv.invoice_type === 'project'
+      const isRevision = inv.invoice_type === 'revision'
+
+      const paymentSection = isProject
+        ? `<div class="detail-label">Total project fee</div>
+           <div class="detail-value">$${totalFee.toLocaleString()}</div>
+           <div class="detail-label">Deposit due now</div>
+           <div class="detail-value" style="color:#C4704A;font-weight:500;">$${depositAmount.toLocaleString()}</div>
+           <div class="detail-label">Balance due on delivery</div>
+           <div class="detail-value">$${(totalFee - depositAmount).toLocaleString()}</div>`
+        : `<div class="detail-label">Amount due</div>
+           <div class="detail-value" style="color:#C4704A;font-weight:500;">$${totalFee.toLocaleString()}</div>`
+
+      await fetch('/api/invoices/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientEmail,
+          clientName,
+          invoiceNumber: inv.invoice_number,
+          invoiceType: inv.invoice_type,
+          totalFee,
+          depositAmount,
+          dueDate: inv.due_date,
+          serviceDesc: inv.service_desc,
+          hours: inv.hours,
+          hourlyRate: inv.hourly_rate,
+        })
+      })
+    } catch(e) {
+      console.error(e)
+    }
+    setSendingInvoice(false)
+  }
+  async function saveProjectNotes(projectId: string) {
+    await supabase.from('projects').update({notes:projectNotes}).eq('id',projectId)
+    setEditingProjectNotes(false)
+    await fetchProjects()
+    if (viewingProject) setViewingProject({...viewingProject,notes:projectNotes})
+  }
+
   async function markInvoicePaid(inv: Invoice) {
     const today = new Date().toISOString().split('T')[0]
     if (inv.invoice_type === 'project') {
@@ -1006,7 +1061,10 @@ export default function AdminDashboard() {
                       <div className="dt-cell" style={{color:d.accent,fontWeight:500}}>{fmtMoney(p.value)}</div>
                       <div className="dt-cell"><span className="status-pill" style={{background:p.platform==='direct'?d.accentBg:d.surface2,color:p.platform==='direct'?d.accent:d.text2}}>{p.platform}</span></div>
                       <div className="dt-cell" style={{color:d.text2}}>{p.end_date?fmtShort(p.end_date):'none'}</div>
-                      <div className="dt-cell"><button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteProject(p.id)}>x</button></div>
+                      <div className="dt-cell" style={{display:'flex',gap:4}}>
+                        <button className="icon-btn" style={{color:d.text2,fontSize:11}} onClick={()=>{setViewingProject(p);setProjectNotes(p.notes||'');setEditingProjectNotes(false)}} title="View">view</button>
+                        <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteProject(p.id)}>x</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1026,6 +1084,7 @@ export default function AdminDashboard() {
                         <div className="dt-cell" style={{color:d.text2}}>{inv.due_date?fmtShort(inv.due_date):'none'}</div>
                         <div className="dt-cell"><span className="status-pill" style={pillStyle}>{statusLabel}</span></div>
                         <div className="dt-cell" style={{display:'flex',gap:4}}>
+                          <button className="icon-btn" style={{color:d.text2,fontSize:11}} onClick={()=>setViewingInvoice(inv)} title="View">view</button>
                           {inv.status==='awaiting_deposit'&&<button className="icon-btn" style={{color:d.amberText,fontSize:11}} onClick={()=>markInvoicePaid(inv)} title="Mark deposit paid">dep</button>}
                           {inv.status==='deposit_paid'&&<button className="icon-btn" style={{color:d.greenText,fontSize:11}} onClick={()=>markInvoicePaid(inv)} title="Mark final paid">fin</button>}
                           {inv.status==='pending'&&<button className="icon-btn" style={{color:d.greenText,fontSize:12}} onClick={()=>markInvoicePaid(inv)} title="Mark paid">ok</button>}
@@ -1409,7 +1468,11 @@ export default function AdminDashboard() {
                           </div>
                           <div className="form-actions">
                             <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
-                            <button className="btn-save" onClick={()=>addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email)}>Save and Download PDF</button>
+                            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                              <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
+                              <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'download')}}>Download PDF</button>
+                              <button className="btn-save" onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'send')}}>Send to Client</button>
+                            </div>
                           </div>
                         </>
                       ) : (
@@ -1424,7 +1487,11 @@ export default function AdminDashboard() {
                           </div>
                           <div className="form-actions">
                             <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
-                            <button className="btn-save" onClick={()=>addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email)}>Save and Download PDF</button>
+                            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                              <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
+                              <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'download')}}>Download PDF</button>
+                              <button className="btn-save" onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'send')}}>Send to Client</button>
+                            </div>
                           </div>
                         </>
                       )}
@@ -1497,9 +1564,13 @@ export default function AdminDashboard() {
                                 {inv.status==='deposit_paid'&&'Deposit received · Balance due: '+fmtMoney((inv.total_fee||0)-(inv.deposit_amount||0))}
                               </div>
                             )}
-                            {nextAction && (
-                              <button className="cr-btn" style={{background:d.accentBg,color:d.accent,fontSize:10,padding:'4px 10px'}} onClick={()=>markInvoicePaid(inv)}>{nextAction}</button>
-                            )}
+                            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                              <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'4px 10px'}} onClick={()=>setViewingInvoice(inv)}>View</button>
+                              {nextAction && (
+                                <button className="cr-btn" style={{background:d.accentBg,color:d.accent,fontSize:10,padding:'4px 10px'}} onClick={()=>markInvoicePaid(inv)}>{nextAction}</button>
+                              )}
+                              {inv.status!=='paid'&&<button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'4px 10px'}} onClick={()=>sendInvoiceEmail(focusedClient.name,focusedClient.email,inv)}>{sendingInvoice?'Sending...':'Resend'}</button>}
+                            </div>
                           </div>
                         )
                       })}
@@ -1540,6 +1611,83 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {viewingInvoice && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingInvoice(null)}>
+          <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+              <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text}}>Invoice #{viewingInvoice.invoice_number}</div>
+              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setViewingInvoice(null)}>x</button>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:20}}>
+              {[
+                {label:'Type',val:(viewingInvoice.invoice_type==='revision'?'Revision Invoice':'Project Invoice')},
+                {label:'Service',val:viewingInvoice.service_desc||'Web development services'},
+                {label:'Total fee',val:fmtMoney(viewingInvoice.total_fee||viewingInvoice.amount)},
+                ...(viewingInvoice.invoice_type==='project'?[
+                  {label:'Deposit',val:fmtMoney(viewingInvoice.deposit_amount||viewingInvoice.total_fee*0.5)},
+                  {label:'Balance',val:fmtMoney((viewingInvoice.total_fee||0)-(viewingInvoice.deposit_amount||0))},
+                ]:[
+                  {label:'Hours',val:viewingInvoice.hours+'h x $'+viewingInvoice.hourly_rate+'/hr'},
+                ]),
+                {label:'Due date',val:viewingInvoice.due_date?fmtShort(viewingInvoice.due_date):'Upon receipt'},
+                {label:'Status',val:viewingInvoice.status==='awaiting_deposit'?'Awaiting Deposit':viewingInvoice.status==='deposit_paid'?'Deposit Paid':viewingInvoice.status==='paid'?'Paid in Full':'Pending'},
+              ].map((row,i)=>(
+                <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid '+d.border}}>
+                  <div style={{fontSize:11,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>{row.label}</div>
+                  <div style={{fontSize:13,color:d.text,fontWeight:500}}>{row.val}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn-save" style={{flex:1,background:d.surface2,color:d.text}} onClick={()=>{generateClientInvoicePDF('Client','',viewingInvoice.invoice_type,viewingInvoice.total_fee||viewingInvoice.amount,viewingInvoice.deposit_amount||0)}}>Download PDF</button>
+              <button className="btn-cancel" style={{flex:1,borderColor:d.border,color:d.text2}} onClick={()=>setViewingInvoice(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingProject && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingProject(null)}>
+          <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+              <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text}}>{viewingProject.name}</div>
+              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setViewingProject(null)}>x</button>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:0,marginBottom:20}}>
+              {[
+                {label:'Type',val:viewingProject.type},
+                {label:'Value',val:fmtMoney(viewingProject.value)},
+                {label:'Platform',val:viewingProject.platform},
+                {label:'Status',val:viewingProject.status},
+                {label:'Deadline',val:viewingProject.end_date?fmtShort(viewingProject.end_date):'None set'},
+              ].map((row,i)=>(
+                <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid '+d.border}}>
+                  <div style={{fontSize:11,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>{row.label}</div>
+                  <div style={{fontSize:13,color:d.text,fontWeight:500}}>{row.val}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                <div style={{fontSize:11,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>Notes</div>
+                <button className="icon-btn" style={{color:d.accent,fontSize:11}} onClick={()=>setEditingProjectNotes(!editingProjectNotes)}>{editingProjectNotes?'cancel':'edit'}</button>
+              </div>
+              {editingProjectNotes ? (
+                <div>
+                  <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,marginBottom:8}} value={projectNotes} onChange={e=>setProjectNotes(e.target.value)} placeholder="Project notes, links, login credentials, anything relevant..."/>
+                  <button className="btn-save" onClick={()=>saveProjectNotes(viewingProject.id)}>Save Notes</button>
+                </div>
+              ) : (
+                <div className="notes-box" style={{background:d.surface,borderColor:d.border,color:viewingProject.notes?d.text:d.text3}} onClick={()=>setEditingProjectNotes(true)}>
+                  {viewingProject.notes || 'Click to add notes...'}
+                </div>
+              )}
+            </div>
+            <button className="btn-cancel" style={{width:'100%',borderColor:d.border,color:d.text2}} onClick={()=>setViewingProject(null)}>Close</button>
+          </div>
+        </div>
+      )}
 
       {showActiveProjectPopup && pendingAdvanceClient && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
