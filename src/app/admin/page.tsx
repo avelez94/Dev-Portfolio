@@ -263,8 +263,6 @@ export default function AdminDashboard() {
       due_date: clientInvoiceForm.due_date || null,
       status: 'pending'
     })
-    generateClientInvoicePDF(clientName, clientEmail)
-    setClientInvoiceForm({ invoice_number:'', amount:'', due_date:'', service_desc:'' })
     setShowClientInvoice(false); await fetchInvoices()
   }
   async function markInvoicePaid(inv: Invoice) {
