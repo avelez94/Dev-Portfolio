@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function AdminLogin() {
+function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,6 +37,26 @@ export default function AdminLogin() {
   }
 
   return (
+    <form onSubmit={handleSubmit}>
+      <label className="label">Password</label>
+      <input
+        className="input"
+        type="password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+        placeholder="Enter admin password"
+        autoFocus
+      />
+      <button className="btn" type="submit" disabled={loading || !password}>
+        {loading ? 'Checking...' : 'Enter Dashboard'}
+      </button>
+      {error && <div className="error">{error}</div>}
+    </form>
+  )
+}
+
+export default function AdminLogin() {
+  return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&family=DM+Sans:wght@300;400;500&display=swap');
@@ -60,21 +80,9 @@ export default function AdminLogin() {
           <div className="logo">A</div>
           <div className="title">Admin Access</div>
           <div className="subtitle">Enter your password to continue</div>
-          <form onSubmit={handleSubmit}>
-            <label className="label">Password</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="Enter admin password"
-              autoFocus
-            />
-            <button className="btn" type="submit" disabled={loading || !password}>
-              {loading ? 'Checking...' : 'Enter Dashboard'}
-            </button>
-          </form>
-          {error && <div className="error">{error}</div>}
+          <Suspense fallback={<div style={{color:'#6A5848',fontSize:12,textAlign:'center'}}>Loading...</div>}>
+            <LoginForm />
+          </Suspense>
         </div>
       </div>
     </>
