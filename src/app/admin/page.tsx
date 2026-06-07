@@ -206,6 +206,11 @@ export default function AdminDashboard() {
     setEditingPricing(null)
     await fetchPricing()
   }
+  async function handleLogout() {
+    await fetch('/api/admin/auth', { method: 'DELETE' })
+    window.location.href = '/admin/login'
+  }
+
   async function toggleDay(a: Availability) {
     await supabase.from('availability').update({is_active:!a.is_active}).eq('id',a.id); await fetchAvailability()
   }
@@ -763,6 +768,9 @@ export default function AdminDashboard() {
           </div>
           <div className="sb-divider" style={{background:d.border}}/>
           <button className="sb-toggle" style={{color:d.text3}} onClick={()=>setDark(!dark)}>{dark?'☀️':'🌙'}</button>
+          <button className="sb-toggle" style={{color:d.text3,fontSize:12,marginTop:4}} onClick={handleLogout} title="Log out">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
         </div>
 
         <div className="main" style={{display:'grid',gridTemplateColumns:'1fr 320px',height:'100vh',overflow:'hidden',minWidth:0}}>
@@ -887,6 +895,7 @@ export default function AdminDashboard() {
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Email</div><input style={inputStyle} value={nc.email} onChange={e=>setNc({...nc,email:e.target.value})} placeholder="client@email.com"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Business (optional)</div><input style={inputStyle} value={nc.business} onChange={e=>setNc({...nc,business:e.target.value})} placeholder="Company name"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Platform</div><select style={inputStyle} value={nc.platform} onChange={e=>setNc({...nc,platform:e.target.value})}><option value="direct">Direct</option><option value="upwork">Upwork</option><option value="fiverr">Fiverr</option><option value="referral">Referral</option></select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Stage</div><select style={inputStyle} value={nc.pipeline_stage} onChange={e=>setNc({...nc,pipeline_stage:e.target.value})}>{PIPELINE_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select></div>
                     </div>
                     <div className="form-actions">
                       <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowAddClient(false)}>Cancel</button>
@@ -1372,12 +1381,7 @@ export default function AdminDashboard() {
                     <a href={'mailto:'+focusedClient.email} className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}}>
                       Email {focusedClient.name.split(' ')[0]}
                     </a>
-                    <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>{
-                                                                                                                                    const next = 'INV-' + String(invoices.length + 1).padStart(3,'0')
-                                                                                                                                    setClientInvoiceForm(f=>({...f,invoice_number:next}))
-                                                                                                                                    setShowClientInvoice(!showClientInvoice)
-                                                                                                                                    setInvoiceType(null)
-}}>
+                    <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>{setShowClientInvoice(!showClientInvoice);setInvoiceType(null)}}>
                       Create Invoice
                     </button>
                     <button className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}} onClick={()=>setShowScheduleMeeting(!showScheduleMeeting)}>
