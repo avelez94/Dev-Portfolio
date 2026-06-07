@@ -232,7 +232,6 @@ export default function Home() {
           <p className="hero-desc">I design and ship production ready web applications using modern tools. From SaaS platforms to mission driven organizations, every project I take on is built to last.</p>
           <div className="hero-btns">
             <a href="#hire" className="hero-cta magnetic">Start a Project <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
-            <a href="https://github.com/avelez94" target="_blank" className="hero-cta-ghost magnetic">GitHub <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
           </div>
         </div>
         <div className="hero-scroll">Scroll</div>
@@ -398,8 +397,9 @@ export default function Home() {
       <section className="cta-section">
         <div className="section-label">Ready?</div>
         <h2 className="section-title">Your project starts<br /><em style={{fontStyle: 'italic', color: 'var(--terracotta)'}}>with one form.</em></h2>
-        <p className="cta-subtitle">Fill out the intake form and you'll be prompted to schedule your discovery call directly. I'll have reviewed everything before we speak.</p>
-        <a href="/intake" className="cta-btn magnetic">Get Started <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+        <p className="cta-subtitle">Ready to build? Fill out the intake form and book your discovery call in one shot. Have a question first? Use the same form — just tell me what's on your mind.</p>
+        <a href="/intake" className="cta-btn magnetic">Start the Intake Form <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+        <a href="/intake" className="hero-cta-ghost magnetic" style={{marginTop:16,display:"inline-flex",alignItems:"center",gap:14,padding:"16px 32px",border:"1px solid var(--border)",color:"var(--cream)",fontFamily:"DM Mono,monospace",fontSize:"0.78rem",letterSpacing:"0.1em",textTransform:"uppercase",textDecoration:"none",transition:"border-color 0.25s,color 0.25s,transform 0.25s"}}>Have a question first? <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
       </section>
 
       <footer>
@@ -407,7 +407,6 @@ export default function Home() {
         <div className="footer-links">
           <a href="https://planarytravel.com" target="_blank">Planary</a>
           <a href="https://risingsonsacademy.org" target="_blank">Rising Sons</a>
-          <a href="https://github.com/avelez94" target="_blank">GitHub</a>
           <a href="/intake">Start a Project</a>
         </div>
       </footer>
