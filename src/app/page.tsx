@@ -223,7 +223,7 @@ export default function Home() {
         <div className="hero-bg-text" id="heroBgText">DEVELOPER</div>
         <div className="hero-content">
           <div className="hero-tag">Full Stack Developer</div>
-          <h1 className="hero-name">Building the<br /><em>web that works.</em></h1>
+          <h1 className="hero-name">From idea<br />to <em>production.</em></h1>
           <div className="typewriter-wrap">
             <span className="typewriter-prefix">~/</span>
             <span id="typewriterText"></span>
@@ -266,15 +266,15 @@ export default function Home() {
           </div>
           <div className="about-right">
             <div className="about-text" style={{marginBottom: '32px'}}>
-              <p>I started in IT programs and kept going further than the curriculum took me. The gap between what school teaches and what production software actually requires is wide, and I filled it by building real things.</p>
+              <p>I have built an AI travel platform, a custom learning management system, payment workflows, dashboards, and client portals. Most developers talk about building products. I build them, deploy them, and maintain them.</p>
               <p>Planary generates and delivers fully custom travel itineraries through an <strong>AI pipeline I built end to end</strong>. Rising Sons runs a video player I built from scratch with <strong>per-student access control, progress tracking, and custom playback</strong>, because an embed would not have done what the platform needed.</p>
-              <p>I work in <strong>Next.js, Supabase, Stripe, PayPal, and the Anthropic API</strong>. I handle everything from database schema to deployment. If you have hired developers who disappear after handing over a zip file, I am not that.</p>
+              <p>I started in IT programs and kept going further than the curriculum took me. I work in <strong>Next.js, Supabase, Stripe, PayPal, and the Anthropic API</strong> and handle everything from database schema to deployment. If you have hired developers who disappear after handing over a zip file, I am not that.</p>
             </div>
             <div className="about-stats">
               <div className="stat-box" data-observe="true"><div className="stat-num">2</div><div className="stat-label">Platforms live in production</div></div>
               <div className="stat-box" data-observe="true"><div className="stat-num">5+</div><div className="stat-label">Years building independently</div></div>
               <div className="stat-box" data-observe="true"><div className="stat-num">7-10</div><div className="stat-label">Day delivery on most projects</div></div>
-              <div className="stat-box" data-observe="true"><div className="stat-num">0</div><div className="stat-label">Projects handed off without documentation</div></div>
+              <div className="stat-box" data-observe="true"><div className="stat-num">✓</div><div className="stat-label">Documentation and post-launch support on every project</div></div>
             </div>
           </div>
         </div>
@@ -378,12 +378,7 @@ export default function Home() {
       <section id="hire" className="work-with-me">
         <div className="section-label">Work With Me</div>
         <h2 className="section-title">Let's build something<br /><em style={{fontStyle: 'italic', color: 'var(--terracotta)'}}>that lasts.</em></h2>
-        <div className="rates-grid">
-          <div className="rate-card" data-observe="true"><div className="rate-name">Landing Page</div><div className="rate-price">$400 to $700</div><div className="rate-desc">Next.js site deployed on Vercel. Clean design, fast load, mobile ready.</div></div>
-          <div className="rate-card" data-observe="true"><div className="rate-name">Booking + Payments</div><div className="rate-price">$500 to $1,500</div><div className="rate-desc">Scheduling systems, Stripe or PayPal integration, confirmation flows.</div></div>
-          <div className="rate-card" data-observe="true"><div className="rate-name">Web Application</div><div className="rate-price">$1,000 to $3,500</div><div className="rate-desc">Custom portals, dashboards, and full stack apps built to production standard.</div></div>
-          <div className="rate-card" data-observe="true"><div className="rate-name">AI Workflow</div><div className="rate-price">$500 to $2,000+</div><div className="rate-desc">Claude API integrations that automate onboarding, summarize data, or improve operations.</div></div>
-        </div>
+
         <div className="process-row">
           <div className="process-step" data-observe="true"><div className="process-num">Step 01</div><div className="process-title">Fill out the intake form</div><p className="process-desc">Tell me about your project. Takes about three minutes. You'll book your discovery call right after.</p></div>
           <div className="process-step" data-observe="true"><div className="process-num">Step 02</div><div className="process-title">Discovery call</div><p className="process-desc">A focused 20 minute conversation to confirm scope, timeline, and fit. I'll have reviewed your submission before we speak.</p></div>

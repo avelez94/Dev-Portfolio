@@ -898,7 +898,27 @@ export default function AdminDashboard() {
                   <div className="page-greeting" style={{color:d.text}}>Documents</div>
                   <div className="page-sub" style={{color:d.text3}}>Templates and fill forms</div>
                 </div>
-                <div className="section-label" style={{color:d.text2,marginBottom:16}}>Fill and generate</div>
+                <div className="section-label" style={{color:d.text2,marginBottom:12}}>My Pricing</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:24}}>
+                  {[
+                    {name:'Landing Page',price:'$400 to $700',desc:'Next.js site on Vercel. Clean design, fast load, mobile ready.'},
+                    {name:'Booking + Payments',price:'$500 to $1,500',desc:'Scheduling, Stripe or PayPal, confirmation flows.'},
+                    {name:'Web Application',price:'$1,000 to $3,500',desc:'Custom portals, dashboards, full stack apps.'},
+                    {name:'AI Workflow',price:'$500 to $2,000+',desc:'Claude API integrations, automation, AI powered features.'},
+                    {name:'Hourly Rate',price:'$65/hr',desc:'Change orders, extra revisions, ongoing support.'},
+                    {name:'Revisions',price:'2 rounds included',desc:'Additional rounds billed at $65/hr.'},
+                    {name:'Deposit',price:'50% upfront',desc:'50% deposit to start, 50% on delivery.'},
+                    {name:'Payment Methods',price:'Stripe, PayPal, Zelle, Wise',desc:'US and international clients accepted.'},
+                  ].map((p,i)=>(
+                    <div key={i} style={{background:d.surface,borderRadius:12,padding:'12px 14px',border:'1px solid '+d.border}}>
+                      <div style={{fontSize:11,fontWeight:500,color:d.text,marginBottom:3}}>{p.name}</div>
+                      <div style={{fontFamily:'Playfair Display,serif',fontSize:14,fontWeight:600,color:d.accent,marginBottom:4}}>{p.price}</div>
+                      <div style={{fontSize:10,color:d.text3,lineHeight:1.5}}>{p.desc}</div>
+                    </div>
+                  ))}
+                </div>
+
+                                <div className="section-label" style={{color:d.text2,marginBottom:16}}>Fill and generate</div>
                 <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
                   <div className="doc-card-header">
                     <div className="doc-icon" style={{background:d.sand,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M5 5h6M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg></div>
