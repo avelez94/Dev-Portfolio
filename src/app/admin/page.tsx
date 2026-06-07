@@ -1,0 +1,1284 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
+import jsPDF from 'jspdf'
+
+type Submission = {
+  id: string; name: string; email: string; business: string | null
+  project_type: string; description: string; budget: string | null
+  timeline: string | null; heard_from: string; priority: string | null
+  notes: string | null; status: string; submitted_at: string
+}
+type Booking = {
+  id: string; intake_id: string; scheduled_at: string
+  zoom_join_url: string | null; zoom_host_url: string | null
+  status: string; intake_submissions: Submission
+}
+type Client = {
+  id: string; name: string; email: string; business: string | null
+  pipeline_stage: string; created_at: string
+  intake_id: string | null; booking_id: string | null
+  notes: string | null; platform: string | null
+}
+type Availability = {
+  id: string; day_of_week: number; start_time: string; end_time: string; is_active: boolean
+}
+type BlockedDate = { id: string; blocked_date: string; reason: string | null }
+type BlockedSlot = { id: string; blocked_date: string; start_time: string; end_time: string; reason: string | null }
+type Project = {
+  id: string; client_id: string | null; name: string; type: string
+  status: string; value: number; platform: string
+  start_date: string | null; end_date: string | null; notes: string | null; created_at: string
+}
+type Invoice = {
+  id: string; project_id: string | null; client_id: string | null
+  invoice_number: string; amount: number; status: string
+  due_date: string | null; paid_date: string | null; notes: string | null; created_at: string
+}
+type Document = {
+  id: string; client_id: string | null; name: string; type: string; storage_path: string; created_at: string
+}
+
+const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa']
+const DAYS_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+const PIPELINE_STAGES = ['discovery_call','proposal_sent','active_project','closed']
+const STAGE_LABELS: Record<string,string> = { discovery_call:'Discovery', proposal_sent:'Proposal Sent', active_project:'Active Project', closed:'Closed' }
+const CARD_COLORS_LIGHT = ['#F5EDE4','#EDE8E0','#E8E4DC','#F0E8DC','#EAE0D8']
+const CARD_COLORS_DARK = ['#2C2018','#241E16','#201A14','#281E14','#2A2018']
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const PROJECT_TYPES = ['Landing Page','Booking + Payments','Web Application','AI Workflow','Other']
+
+export default function AdminDashboard() {
+  const [view, setView] = useState<'home'|'pipeline'|'revenue'|'docs'|'schedule'>('home')
+  const [dark, setDark] = useState(true)
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [unbooked, setUnbooked] = useState<Submission[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [availability, setAvailability] = useState<Availability[]>([])
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([])
+  const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [documents, setDocuments] = useState<Document[]>([])
+  const [focused, setFocused] = useState<{type:string,data:any}|null>(null)
+  const [selectedDay, setSelectedDay] = useState<string|null>(null)
+  const [blockStart, setBlockStart] = useState('')
+  const [blockEnd, setBlockEnd] = useState('')
+  const [newBlockedDate, setNewBlockedDate] = useState('')
+  const [newBlockedReason, setNewBlockedReason] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [time, setTime] = useState(new Date())
+  const [showNewProject, setShowNewProject] = useState(false)
+  const [showAddClient, setShowAddClient] = useState(false)
+  const [showClientInvoice, setShowClientInvoice] = useState(false)
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [clientNotes, setClientNotes] = useState('')
+  const [activeFillForm, setActiveFillForm] = useState<'sow'|'contract'|null>(null)
+  const [np, setNp] = useState({ name:'', type:'Landing Page', value:'', platform:'direct', status:'active', end_date:'' })
+  const [nc, setNc] = useState({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
+  const [clientInvoiceForm, setClientInvoiceForm] = useState({ invoice_number:'', amount:'', due_date:'', service_desc:'' })
+  const [contractForm, setContractForm] = useState<{
+    client_name:string; client_email:string; client_business:string
+    project_title:string; project_type:string
+    start_date:string; delivery_date:string; total_fee:string
+    deposit:string; balance:string; kill_fee_pct:string; payment_method:string
+  }>({
+    client_name:'', client_email:'', client_business:'',
+    project_title:'', project_type:'Landing Page',
+    start_date:'', delivery_date:'', total_fee:'',
+    deposit:'', balance:'', kill_fee_pct:'25',
+    payment_method:'Stripe, PayPal, Zelle, or Wise',
+  })
+  const [sowForm, setSowForm] = useState({
+    client_name:'', client_email:'', project_title:'', project_type:'Landing Page',
+    start_date:'', delivery_date:'', total_fee:'', deposit:'', balance:'',
+    description:'', deliverables:'', out_of_scope:'', revisions:'2', hourly_rate:'65',
+    payment_method:'Stripe, PayPal, Zelle, or Wise',
+  })
+  const clockRef = useRef<ReturnType<typeof setInterval>|null>(null)
+
+  useEffect(() => {
+    fetchAll()
+    clockRef.current = setInterval(() => setTime(new Date()), 1000)
+    return () => { if (clockRef.current) clearInterval(clockRef.current) }
+  }, [])
+
+  async function fetchAll() {
+    setLoading(true)
+    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments()])
+    setLoading(false)
+  }
+  async function fetchBookings() {
+    const { data } = await supabase.from('bookings').select('*, intake_submissions(*)').eq('status','scheduled').order('scheduled_at',{ascending:true})
+    const b = data || []; setBookings(b)
+    if (b.length > 0 && !focused) setFocused({type:'booking',data:b[0]})
+  }
+  async function fetchUnbooked() {
+    const { data } = await supabase.from('intake_submissions').select('*').eq('status','pending').order('submitted_at',{ascending:false})
+    setUnbooked(data || [])
+  }
+  async function fetchClients() {
+    const { data } = await supabase.from('clients').select('*').order('created_at',{ascending:false})
+    setClients(data || [])
+  }
+  async function fetchAvailability() {
+    const { data } = await supabase.from('availability').select('*').order('day_of_week')
+    setAvailability(data || [])
+  }
+  async function fetchBlockedDates() {
+    const { data } = await supabase.from('blocked_dates').select('*').gte('blocked_date',new Date().toISOString().split('T')[0]).order('blocked_date')
+    setBlockedDates(data || [])
+  }
+  async function fetchBlockedSlots() {
+    const { data } = await supabase.from('blocked_slots').select('*').gte('blocked_date',new Date().toISOString().split('T')[0]).order('blocked_date')
+    setBlockedSlots(data || [])
+  }
+  async function fetchProjects() {
+    const { data } = await supabase.from('projects').select('*').order('created_at',{ascending:false})
+    setProjects(data || [])
+  }
+  async function fetchInvoices() {
+    const { data } = await supabase.from('invoices').select('*').order('created_at',{ascending:false})
+    setInvoices(data || [])
+  }
+  async function fetchDocuments() {
+    const { data } = await supabase.from('documents').select('*').order('created_at',{ascending:false})
+    setDocuments(data || [])
+  }
+  async function toggleDay(a: Availability) {
+    await supabase.from('availability').update({is_active:!a.is_active}).eq('id',a.id); await fetchAvailability()
+  }
+  async function updateHours(a: Availability, field: 'start_time'|'end_time', val: string) {
+    await supabase.from('availability').update({[field]:val}).eq('id',a.id); await fetchAvailability()
+  }
+  async function addBlockedDate() {
+    if (!newBlockedDate) return
+    await supabase.from('blocked_dates').insert({blocked_date:newBlockedDate,reason:newBlockedReason||null})
+    setNewBlockedDate(''); setNewBlockedReason(''); await fetchBlockedDates()
+  }
+  async function removeBlockedDate(id: string) {
+    await supabase.from('blocked_dates').delete().eq('id',id); await fetchBlockedDates()
+  }
+  async function saveBlockedSlot() {
+    if (!selectedDay || !blockStart || !blockEnd) return
+    await supabase.from('blocked_slots').insert({ blocked_date: selectedDay, start_time: blockStart, end_time: blockEnd })
+    setBlockStart(''); setBlockEnd(''); setSelectedDay(null); await fetchBlockedSlots()
+  }
+  async function removeBlockedSlot(id: string) {
+    await supabase.from('blocked_slots').delete().eq('id',id); await fetchBlockedSlots()
+  }
+  async function moveToNextStage(c: Client) {
+    const i = PIPELINE_STAGES.indexOf(c.pipeline_stage)
+    if (i === PIPELINE_STAGES.length-1) return
+    await supabase.from('clients').update({pipeline_stage:PIPELINE_STAGES[i+1]}).eq('id',c.id); await fetchClients()
+  }
+  async function createClientFromBooking(b: Booking) {
+    const intake = b.intake_submissions
+    const { data: ex } = await supabase.from('clients').select('id').eq('intake_id',intake.id).single()
+    if (ex) return
+    await supabase.from('clients').insert({intake_id:intake.id,booking_id:b.id,name:intake.name,email:intake.email,business:intake.business,pipeline_stage:'discovery_call',notes:null,platform:'direct'})
+    await fetchClients()
+  }
+  async function addClientManually() {
+    if (!nc.name || !nc.email) return
+    await supabase.from('clients').insert({name:nc.name,email:nc.email,business:nc.business||null,pipeline_stage:nc.pipeline_stage,platform:nc.platform,notes:null})
+    setNc({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
+    setShowAddClient(false); await fetchClients()
+  }
+  async function saveClientNotes(clientId: string) {
+    await supabase.from('clients').update({notes:clientNotes}).eq('id',clientId)
+    setEditingNotes(false); await fetchClients()
+    if (focused?.type === 'client') setFocused({type:'client',data:{...focused.data,notes:clientNotes}})
+  }
+  async function addProject() {
+    if (!np.name || !np.value) return
+    await supabase.from('projects').insert({ name:np.name, type:np.type, value:parseFloat(np.value), platform:np.platform, status:np.status, end_date:np.end_date||null })
+    setNp({ name:'', type:'Landing Page', value:'', platform:'direct', status:'active', end_date:'' })
+    setShowNewProject(false); await fetchProjects()
+  }
+  async function addClientInvoice(clientId: string, clientName: string, clientEmail: string) {
+    if (!clientInvoiceForm.invoice_number || !clientInvoiceForm.amount) return
+    await supabase.from('invoices').insert({
+      client_id: clientId,
+      invoice_number: clientInvoiceForm.invoice_number,
+      amount: parseFloat(clientInvoiceForm.amount),
+      due_date: clientInvoiceForm.due_date || null,
+      status: 'pending'
+    })
+    generateClientInvoicePDF(clientName, clientEmail)
+    setClientInvoiceForm({ invoice_number:'', amount:'', due_date:'', service_desc:'' })
+    setShowClientInvoice(false); await fetchInvoices()
+  }
+  async function markInvoicePaid(id: string) {
+    await supabase.from('invoices').update({status:'paid', paid_date:new Date().toISOString().split('T')[0]}).eq('id',id)
+    await fetchInvoices()
+  }
+  async function deleteProject(id: string) {
+    await supabase.from('projects').delete().eq('id',id); await fetchProjects()
+  }
+  async function deleteInvoice(id: string) {
+    await supabase.from('invoices').delete().eq('id',id); await fetchInvoices()
+  }
+  async function deleteDocument(id: string, path: string) {
+    await supabase.storage.from('freelance-docs').remove([path])
+    await supabase.from('documents').delete().eq('id',id); await fetchDocuments()
+  }
+  async function downloadDoc(path: string, name: string) {
+    const { data } = await supabase.storage.from('freelance-docs').download(path)
+    if (!data) return
+    const url = URL.createObjectURL(data)
+    const a = document.createElement('a'); a.href = url; a.download = name; a.click()
+    URL.revokeObjectURL(url)
+  }
+  async function uploadTemplate(file: File) {
+    const path = 'templates/' + Date.now() + '-' + file.name
+    const { error } = await supabase.storage.from('freelance-docs').upload(path, file)
+    if (error) return
+    await supabase.from('documents').insert({ name: file.name, type: 'other', storage_path: path, client_id: null })
+    await fetchDocuments()
+  }
+
+  function makePDF() {
+    const doc = new jsPDF()
+    const lm = 20, rm = 190, lineH = 7
+    let y = 20
+    const addLine = (text: string, size=11, bold=false, accent=false) => {
+      doc.setFontSize(size)
+      doc.setFont('helvetica', bold ? 'bold' : 'normal')
+      accent ? doc.setTextColor(196,112,74) : doc.setTextColor(44,36,32)
+      const lines = doc.splitTextToSize(text, rm - lm)
+      lines.forEach((line: string) => {
+        if (y > 270) { doc.addPage(); y = 20 }
+        doc.text(line, lm, y); y += lineH
+      })
+    }
+    const addSpace = (n=1) => { y += lineH * n }
+    const addDivider = () => {
+      doc.setDrawColor(196,112,74); doc.setLineWidth(0.3)
+      doc.line(lm, y, rm, y); y += lineH
+    }
+    return { doc, addLine, addSpace, addDivider, save: (name: string) => doc.save(name) }
+  }
+
+  function generateSOWDoc() {
+    const f = sowForm
+    const { addLine, addSpace, addDivider, save } = makePDF()
+    addLine('STATEMENT OF WORK', 16, true, true)
+    addLine('Alante Velez | Full Stack Web Developer', 10)
+    addDivider(); addSpace()
+    addLine('CLIENT INFORMATION', 10, true, true); addSpace(0.5)
+    addLine('Client Name: ' + f.client_name)
+    addLine('Client Email: ' + f.client_email)
+    addLine('Project Title: ' + f.project_title)
+    addLine('Project Type: ' + f.project_type)
+    addLine('Start Date: ' + f.start_date)
+    addLine('Estimated Delivery: ' + f.delivery_date)
+    addSpace(); addDivider()
+    addLine('PROJECT OVERVIEW', 10, true, true); addSpace(0.5)
+    addLine(f.description || 'See attached.'); addSpace(); addDivider()
+    addLine('DELIVERABLES', 10, true, true); addSpace(0.5)
+    addLine(f.deliverables || 'To be defined.'); addSpace(); addDivider()
+    addLine('OUT OF SCOPE', 10, true, true); addSpace(0.5)
+    addLine(f.out_of_scope || 'Anything not listed above.'); addSpace(); addDivider()
+    addLine('PAYMENT', 10, true, true); addSpace(0.5)
+    addLine('Total Project Fee: $' + f.total_fee)
+    addLine('Deposit (50% due upfront): $' + f.deposit)
+    addLine('Final Payment (50% on delivery): $' + f.balance)
+    addLine('Hourly Rate (change orders): $' + f.hourly_rate + '/hr')
+    addLine('Payment Method: ' + f.payment_method)
+    addLine('Invoice Terms: Due within 7 days')
+    addSpace(); addDivider()
+    addLine('REVISIONS', 10, true, true); addSpace(0.5)
+    addLine('This project includes ' + f.revisions + ' rounds of revisions.')
+    addLine('Additional revisions billed at $' + f.hourly_rate + '/hr.')
+    addSpace(); addDivider()
+    addLine('SIGNATURES', 10, true, true); addSpace()
+    addLine('Freelancer: Alante Velez'); addSpace()
+    addLine('Date: ___________'); addSpace()
+    addLine('Client: ' + f.client_name); addSpace()
+    addLine('Date: ___________')
+    save('SOW_' + f.client_name.replace(/\s+/g,'_') + '.pdf')
+  }
+
+  function generateClientInvoicePDF(clientName: string, clientEmail: string) {
+    const f = clientInvoiceForm
+    const { addLine, addSpace, addDivider, save } = makePDF()
+    addLine('INVOICE', 16, true, true)
+    addLine('Alante Velez | Full Stack Web Developer', 10)
+    addDivider(); addSpace()
+    addLine('INVOICE #' + f.invoice_number, 12, true); addSpace(0.5)
+    addLine('Due Date: ' + (f.due_date || 'Upon receipt'))
+    addSpace(); addDivider()
+    addLine('BILL TO', 10, true, true); addSpace(0.5)
+    addLine(clientName); addLine(clientEmail)
+    addSpace(); addDivider()
+    addLine('SERVICE', 10, true, true); addSpace(0.5)
+    addLine(f.service_desc || 'Web development services')
+    addSpace(); addDivider()
+    addLine('AMOUNT DUE', 10, true, true); addSpace(0.5)
+    addLine('$' + f.amount, 14, true)
+    addSpace(); addDivider()
+    addLine('PAYMENT', 10, true, true); addSpace(0.5)
+    addLine('Stripe, PayPal, Zelle, or Wise')
+    addLine('Reference: Invoice #' + f.invoice_number + ' | ' + clientName)
+    addSpace(0.5)
+    addLine('Payment due within 7 days. Deliverables transfer upon receipt of full payment.', 10)
+    save('Invoice_' + f.invoice_number + '_' + clientName.replace(/\s+/g,'_') + '.pdf')
+  }
+
+  function generateContractDoc() {
+    const f = contractForm
+    const { addLine, addSpace, addDivider, save } = makePDF()
+    addLine('FREELANCE WEB DEVELOPMENT AGREEMENT', 16, true, true)
+    addLine('Alante Velez | Full Stack Web Developer', 10)
+    addLine('Effective Date: ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}), 10)
+    addDivider(); addSpace()
+    addLine('PARTIES', 10, true, true); addSpace(0.5)
+    addLine('Freelancer: Alante Velez')
+    addLine('Client: ' + f.client_name + (f.client_business ? ' (' + f.client_business + ')' : ''))
+    addLine('Client Email: ' + f.client_email)
+    addSpace(); addDivider()
+    addLine('PROJECT', 10, true, true); addSpace(0.5)
+    addLine('Title: ' + f.project_title)
+    addLine('Type: ' + f.project_type)
+    addLine('Start Date: ' + f.start_date)
+    addLine('Estimated Delivery: ' + f.delivery_date)
+    addSpace(); addDivider()
+    const clauses: [string,string][] = [
+      ['1. SERVICES', 'Freelancer agrees to design and develop the project described above. Work outside the agreed scope will be billed at $65/hr with written approval required before proceeding.'],
+      ['2. PAYMENT', 'Total Fee: $' + f.total_fee + '  Deposit: $' + f.deposit + '  Balance: $' + f.balance + '  Payment Method: ' + f.payment_method + '  Late payments accrue 1.5% interest per month after 14 days.'],
+      ['3. KILL FEE', 'If Client cancels after work has begun, a kill fee of ' + f.kill_fee_pct + '% of the total fee is due immediately, plus payment for all work completed to date.'],
+      ['4. INTELLECTUAL PROPERTY', 'Full ownership of all deliverables transfers to Client upon receipt of final payment. Freelancer retains the right to display work in portfolio.'],
+      ['5. REVISIONS', 'Project includes 2 rounds of revisions. Additional revisions billed at $65/hr.'],
+      ['6. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
+      ['7. WARRANTIES', 'Freelancer warrants work will be original and free of known defects for 30 days post-delivery.'],
+      ['8. LIMITATION OF LIABILITY', 'Freelancer liability is limited to the total amount paid under this agreement.'],
+      ['9. GOVERNING LAW', 'This agreement is governed by the laws of the State of Indiana.'],
+    ]
+    clauses.forEach(([title, body]) => {
+      addLine(title, 10, true, true); addSpace(0.3)
+      addLine(body); addSpace()
+    })
+    addDivider()
+    addLine('SIGNATURES', 10, true, true); addSpace()
+    addLine('Freelancer: Alante Velez'); addSpace()
+    addLine('Date: ___________'); addSpace()
+    addLine('Client: ' + f.client_name); addSpace()
+    addLine('Date: ___________')
+    save('Contract_' + f.client_name.replace(/\s+/g,'_') + '.pdf')
+  }
+
+  function fmtDate(iso: string) { return new Date(iso).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) }
+  function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'}) }
+  function fmtShort(iso: string) { return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'}) }
+  function fmtDayFull(dateStr: string) { return new Date(dateStr+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) }
+  function countdown(iso: string) {
+    const diff = new Date(iso).getTime()-Date.now()
+    if (diff<0) return 'Now'
+    const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000)
+    if (h>48) return Math.floor(h/24)+'d'
+    if (h>0) return h+'h '+m+'m'
+    return m+'m'
+  }
+  function fmtRelative(iso: string) {
+    const d = Math.floor((Date.now()-new Date(iso).getTime())/86400000)
+    return d===0?'Today':d===1?'Yesterday':d+'d ago'
+  }
+  function fmt12(t: string) {
+    const [h,m] = t.split(':').map(Number)
+    return (h%12||12)+':'+(String(m).padStart(2,'0'))+(h>=12?'pm':'am')
+  }
+  function fmtMoney(n: number) { return '$'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}) }
+
+  const totalEarned = invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+i.amount,0)
+  const totalOutstanding = invoices.filter(i=>i.status==='pending'||i.status==='overdue').reduce((s,i)=>s+i.amount,0)
+  const thisMonth = invoices.filter(i=>i.status==='paid'&&i.paid_date&&new Date(i.paid_date).getMonth()===new Date().getMonth()&&new Date(i.paid_date).getFullYear()===new Date().getFullYear()).reduce((s,i)=>s+i.amount,0)
+  const avgProject = projects.length>0 ? projects.reduce((s,p)=>s+p.value,0)/projects.length : 0
+  const monthlyData = Array.from({length:6},(_,i)=>{
+    const dt = new Date(); dt.setMonth(dt.getMonth()-5+i)
+    const m = dt.getMonth(), y = dt.getFullYear()
+    const total = invoices.filter(inv=>inv.status==='paid'&&inv.paid_date&&new Date(inv.paid_date).getMonth()===m&&new Date(inv.paid_date).getFullYear()===y).reduce((s,inv)=>s+inv.amount,0)
+    return { label:MONTHS[m], value:total, month:m, year:y }
+  })
+  const maxMonthly = Math.max(...monthlyData.map(m=>m.value), 1)
+  const directRevenue = projects.filter(p=>p.platform==='direct').reduce((s,p)=>s+p.value,0)
+  const referralRevenue = projects.filter(p=>p.platform==='referral').reduce((s,p)=>s+p.value,0)
+  const totalProjectValue = directRevenue + referralRevenue || 1
+  const overdueInvoices = invoices.filter(i => i.status==='pending' && i.due_date && new Date(i.due_date) < new Date())
+  const activeProjects = projects.filter(p => p.status==='active').sort((a,b) => {
+    if (!a.end_date) return 1; if (!b.end_date) return -1
+    return new Date(a.end_date).getTime() - new Date(b.end_date).getTime()
+  })
+  const clientsByStage = PIPELINE_STAGES.reduce((acc,s)=>{acc[s]=clients.filter(c=>c.pipeline_stage===s);return acc},{} as Record<string,Client[]>)
+  const focusedBooking = focused?.type==='booking'?focused.data as Booking:null
+  const focusedSub = focused?.type==='submission'?focused.data as Submission:null
+  const focusedClient = focused?.type==='client'?focused.data as Client:null
+  const clientDocs = focusedClient ? documents.filter(doc=>doc.client_id===focusedClient.id) : []
+  const clientInvoices = focusedClient ? invoices.filter(inv=>inv.client_id===focusedClient.id) : []
+  const bookedDays = new Set(bookings.map(b => { const dt=new Date(b.scheduled_at); return dt.getFullYear()+'-'+dt.getMonth()+'-'+dt.getDate() }))
+  const blockedDaySet = new Set(blockedDates.map(b=>b.blocked_date))
+  const blockedSlotDays = new Set(blockedSlots.map(s=>s.blocked_date))
+  const slotsForSelectedDay = selectedDay ? blockedSlots.filter(s=>s.blocked_date===selectedDay) : []
+  const templates = documents.filter(doc=>doc.client_id===null)
+  const greetingHour = time.getHours()
+  const greeting = greetingHour<12?'Good morning':greetingHour<17?'Good afternoon':'Good evening'
+  const CARD_COLORS = dark ? CARD_COLORS_DARK : CARD_COLORS_LIGHT
+
+  const d = dark ? {
+    bg:'#18130F', white:'#1E1812', surface:'#251E16', surface2:'#2C2419',
+    surface3:'#342B1E', text:'#F0E8DC', text2:'#A08878', text3:'#6A5848',
+    border:'rgba(240,220,200,0.1)', border2:'rgba(240,220,200,0.16)',
+    accent:'#C4704A', accentBg:'rgba(196,112,74,0.15)',
+    sand:'#2C2018', linen:'#261E14', pebble:'#221A12', blush:'#2E1E16',
+    green:'#1A2C1A', greenText:'#6AAA6A', amber:'#2C2010', amberText:'#C4944A',
+    red:'#2C1010', redText:'#C44A4A',
+  } : {
+    bg:'#F7F3EE', white:'#FFFFFF', surface:'#F0EAE2', surface2:'#EAE2D8',
+    surface3:'#E4DDD4', text:'#2C2420', text2:'#7A6E66', text3:'#A89E96',
+    border:'#E4DDD6', border2:'#D4CCC4',
+    accent:'#C4704A', accentBg:'#F5EDE6',
+    sand:'#F5EDE4', linen:'#EDE8E0', pebble:'#E8E4DC', blush:'#F0E4DC',
+    green:'#E8F4E8', greenText:'#4a6a4a', amber:'#FBF0E0', amberText:'#8a6a2a',
+    red:'#FAEAEA', redText:'#8a2a2a',
+  }
+
+  const inputStyle = { background:d.surface, borderColor:d.border, color:d.text, fontFamily:'DM Sans,sans-serif', fontSize:12, padding:'7px 10px', borderRadius:8, outline:'none', width:'100%', borderWidth:1, borderStyle:'solid' as const }
+
+  const NAV_ITEMS = [
+    { v:'home', label:'Home', icon:<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 7.5L9 2l7 5.5V16a1 1 0 01-1 1H3a1 1 0 01-1-1V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" fill="none"/></svg> },
+    { v:'pipeline', label:'Pipeline', icon:<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="5" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/><rect x="11" y="5" width="5" height="11" rx="2" stroke="currentColor" strokeWidth="1.4"/></svg> },
+    { v:'revenue', label:'Revenue', icon:<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 14l4-4 3 3 4-5 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 4h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+    { v:'docs', label:'Docs', icon:<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="1" width="12" height="16" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M6 5h6M6 8h6M6 11h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+    { v:'schedule', label:'Schedule', icon:<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M6 2v2M12 2v2M2 7h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+  ]
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        html,body{height:100%;overflow:hidden}
+        body{font-family:'DM Sans',sans-serif;font-weight:300;font-size:13px}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{border-radius:2px}
+        .shell{display:grid;grid-template-columns:80px 1fr;height:100vh;overflow:hidden}
+        .main{display:grid;grid-template-columns:1fr 320px;height:100vh;overflow:hidden;min-width:0}
+        .center{overflow-y:auto;padding:28px 24px;min-width:0}
+        .panel{border-left-width:1px;border-left-style:solid;overflow-y:auto}
+        .panel-inner{padding:24px 20px}
+        .sidebar{border-right-width:1px;border-right-style:solid;display:flex;flex-direction:column;align-items:center;padding:24px 0 20px}
+        .sb-logo{width:42px;height:42px;background:#C4704A;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-style:italic;font-size:17px;color:white;flex-shrink:0}
+        .sb-nav{display:flex;flex-direction:column;align-items:center;gap:0;flex:1;justify-content:space-evenly;width:100%;padding:16px 10px}
+        .sb-btn{width:52px;height:52px;border-radius:14px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:all 0.15s;padding:0}
+        .sb-btn-label{font-size:9px;letter-spacing:0.04em;text-transform:uppercase;line-height:1}
+        .sb-divider{width:32px;height:1px;margin:8px 0;flex-shrink:0}
+        .sb-toggle{width:42px;height:42px;border-radius:50%;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-top:8px}
+        .page-header{margin-bottom:24px}
+        .page-greeting{font-family:'Playfair Display',serif;font-size:26px;font-weight:600;line-height:1.2;margin-bottom:4px}
+        .page-greeting em{font-style:italic;color:#C4704A}
+        .page-sub{font-size:12px}
+        .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+        .stat-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+        .stat-card{border-radius:16px;border-width:1px;border-style:solid;padding:16px 18px}
+        .sc-label{font-size:11px;margin-bottom:6px}
+        .sc-num{font-family:'Playfair Display',serif;font-size:26px;font-weight:600;line-height:1}
+        .sc-sub{font-size:11px;margin-top:3px}
+        .section{margin-bottom:24px}
+        .section-label{font-size:12px;font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .section-label-count{font-size:11px;padding:2px 8px;border-radius:10px}
+        .booking-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+        .booking-card{border-radius:16px;padding:16px;cursor:pointer;transition:all 0.15s;border:2px solid transparent}
+        .booking-card:hover{transform:translateY(-2px)}.booking-card.selected{border-color:#C4704A}
+        .bc-type{font-size:10px;margin-bottom:8px}.bc-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;margin-bottom:4px}
+        .bc-date{font-size:11px;margin-bottom:10px}.bc-footer{display:flex;justify-content:space-between;align-items:center}
+        .bc-countdown{font-family:'Playfair Display',serif;font-style:italic;font-size:14px;color:#C4704A}
+        .bc-arrow{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px}
+        .sub-list{display:flex;flex-direction:column;gap:6px}
+        .sub-item{border-radius:12px;border-width:1px;border-style:solid;padding:12px 14px;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:12px}
+        .si-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+        .si-name{font-family:'Playfair Display',serif;font-size:13px;font-weight:600;flex:1}
+        .si-type{font-size:11px}.si-meta{font-size:11px;white-space:nowrap}
+        .alert-row{border-radius:12px;border-width:1px;border-style:solid;padding:12px 14px;margin-bottom:6px;display:flex;align-items:center;gap:12px}
+        .proj-row{border-radius:12px;border-width:1px;border-style:solid;padding:11px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+        .proj-name{font-family:'Playfair Display',serif;font-size:13px;font-weight:600;flex:1}
+        .proj-due{font-size:11px;white-space:nowrap}
+        .cal-wrap{border-radius:16px;border-width:1px;border-style:solid;padding:16px;margin-bottom:12px}
+        .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+        .cal-month-label{font-family:'Playfair Display',serif;font-size:16px;font-weight:600}
+        .cal-days-row{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+        .cal-day-label{font-size:10px;text-align:center;padding:4px 0}
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+        .cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:12px;cursor:pointer;transition:all 0.12s;position:relative}
+        .cal-cell:hover{opacity:0.8}.cal-cell.empty{opacity:0;pointer-events:none}
+        .slot-indicator{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#C4704A}
+        .day-block-panel{border-radius:12px;border-width:1px;border-style:solid;padding:14px;margin-bottom:16px}
+        .dbp-title{font-size:12px;font-weight:500;margin-bottom:12px}
+        .dbp-slots{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+        .dbp-slot{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px}
+        .dbp-slot-time{font-size:12px;flex:1}
+        .dbp-slot-rm{background:none;border:none;font-size:14px;cursor:pointer;line-height:1;padding:0 2px}
+        .dbp-add{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
+        .dbp-input{font-family:'DM Sans',sans-serif;font-size:11px;padding:7px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid}
+        .dbp-save{background:#C4704A;border:none;color:white;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 12px;border-radius:8px;cursor:pointer}
+        .dbp-save:disabled{opacity:0.35;cursor:not-allowed}
+        .day-cards{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px}
+        .day-card{border-radius:10px;padding:8px 4px;border-width:1px;border-style:solid;cursor:pointer;text-align:center;transition:all 0.15s}
+        .dc-name{font-size:9px;font-weight:500;margin-bottom:4px}.dc-dot{width:4px;height:4px;border-radius:50%;margin:0 auto 3px}.dc-time{font-size:8px}
+        .hours-card{border-radius:14px;border-width:1px;border-style:solid;overflow:hidden;margin-bottom:16px}
+        .hour-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom-width:1px;border-bottom-style:solid}
+        .hour-item:last-child{border-bottom:none}.hi-day{font-size:12px;width:34px}
+        .hi-toggle{position:relative;width:34px;height:20px;flex-shrink:0}
+        .hi-toggle input{opacity:0;width:0;height:0;position:absolute}
+        .hi-track{position:absolute;inset:0;border-radius:10px;cursor:pointer;transition:background 0.2s;border-width:1px;border-style:solid}
+        .hi-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:white;border-radius:50%;transition:transform 0.2s;pointer-events:none}
+        .hi-toggle input:checked~.hi-thumb{transform:translateX(14px)}
+        .hi-times{display:flex;align-items:center;gap:6px;margin-left:auto}
+        .hi-input{font-family:'DM Sans',sans-serif;font-size:11px;padding:4px 8px;border-radius:8px;width:70px;outline:none;border-width:1px;border-style:solid}
+        .hi-sep{font-size:10px}
+        .blocked-card{border-radius:14px;border-width:1px;border-style:solid;padding:14px;margin-bottom:16px}
+        .blocked-card-title{font-size:12px;font-weight:500;margin-bottom:10px}
+        .bl-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;margin-bottom:4px}
+        .bl-d{font-size:12px;flex:1}.bl-r{font-size:11px;flex:2}
+        .bl-x{background:none;border:none;font-size:16px;cursor:pointer;line-height:1;padding:0 2px}
+        .add-block-row{display:grid;grid-template-columns:120px 1fr auto;gap:6px;margin-top:10px}
+        .ab-input{font-family:'DM Sans',sans-serif;font-size:11px;padding:7px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid}
+        .ab-btn{background:#C4704A;border:none;color:white;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:pointer}
+        .ab-btn:disabled{opacity:0.35;cursor:not-allowed}
+        .stage-section{margin-bottom:20px}
+        .stage-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+        .stage-pill{font-size:10px;font-weight:500;padding:3px 10px;border-radius:20px}
+        .stage-count{font-size:11px;margin-left:auto}
+        .client-row{border-radius:12px;border-width:1px;border-style:solid;padding:11px 14px;margin-bottom:4px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all 0.15s}
+        .cr-name{font-family:'Playfair Display',serif;font-size:13px;font-weight:600;flex:1}.cr-meta{font-size:11px}
+        .cr-btn{font-size:10px;font-weight:500;border:none;padding:4px 10px;border-radius:20px;cursor:pointer;white-space:nowrap}
+        .rp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;text-align:center;padding:40px}
+        .rp-empty-icon{font-size:40px;margin-bottom:8px}.rp-empty-text{font-size:12px;line-height:1.7}
+        .rp-card{border-radius:16px;padding:18px;margin-bottom:16px}
+        .rp-eyebrow{font-size:10px;font-weight:500;color:#C4704A;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px}
+        .rp-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:600;margin-bottom:3px}
+        .rp-meta{font-size:12px;margin-bottom:2px}
+        .rp-time-badge{display:flex;align-items:center;gap:8px;border-radius:10px;padding:10px 12px;margin-top:10px}
+        .rtb-cd{font-family:'Playfair Display',serif;font-style:italic;font-size:14px;color:#C4704A;margin-left:auto}
+        .rp-fields{margin-bottom:16px;display:flex;flex-direction:column;gap:12px}
+        .rf-label{font-size:10px;font-weight:500;color:#C4704A;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;opacity:0.8}
+        .rf-val{font-size:13px;line-height:1.55}
+        .rp-actions{display:flex;flex-direction:column;gap:8px}
+        .ra-btn{display:flex;align-items:center;justify-content:center;padding:11px 16px;border-radius:12px;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;text-decoration:none;border:none;width:100%}
+        .ra-btn.fill{background:#C4704A;color:white}.ra-btn.fill:hover{background:#d4855f}
+        .empty-note{font-size:11px;text-align:center;padding:16px}
+        .legend{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+        .legend-item{display:flex;align-items:center;gap:5px;font-size:10px}
+        .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+        .chart-wrap{border-radius:16px;border-width:1px;border-style:solid;padding:20px;margin-bottom:20px}
+        .chart-title{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;margin-bottom:16px}
+        .bar-chart{display:flex;align-items:flex-end;gap:8px;height:120px}
+        .bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+        .bar{width:100%;border-radius:6px 6px 0 0;min-height:4px;cursor:pointer}.bar:hover{opacity:0.8}
+        .bar-label{font-size:10px;white-space:nowrap}.bar-val{font-size:9px;white-space:nowrap}
+        .data-table{border-radius:14px;border-width:1px;border-style:solid;overflow:hidden;margin-bottom:20px}
+        .dt-header{display:grid;padding:10px 14px;border-bottom-width:1px;border-bottom-style:solid}
+        .dt-row{display:grid;padding:11px 14px;border-bottom-width:1px;border-bottom-style:solid;align-items:center;transition:background 0.12s}
+        .dt-row:last-child{border-bottom:none}.dt-row:hover{background:rgba(196,112,74,0.05)}
+        .dt-cell{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .dt-cell.hd{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em}
+        .status-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500}
+        .add-row-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font-size:11px;font-weight:500;cursor:pointer;border:none;background:none}
+        .form-card{border-radius:14px;border-width:1px;border-style:solid;padding:16px;margin-bottom:16px}
+        .form-title{font-size:13px;font-weight:500;margin-bottom:14px}
+        .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+        .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+        .form-group{display:flex;flex-direction:column;gap:4px}
+        .form-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em}
+        .form-actions{display:flex;gap:8px;justify-content:flex-end}
+        .btn-save{background:#C4704A;border:none;color:white;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 16px;border-radius:8px;cursor:pointer}
+        .btn-cancel{background:none;border-width:1px;border-style:solid;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 16px;border-radius:8px;cursor:pointer}
+        .platform-bars{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+        .plat-card{border-radius:14px;border-width:1px;border-style:solid;padding:14px}
+        .plat-label{font-size:11px;margin-bottom:6px}
+        .plat-num{font-family:'Playfair Display',serif;font-size:22px;font-weight:600;margin-bottom:8px}
+        .plat-bar-bg{height:6px;border-radius:3px;overflow:hidden}
+        .plat-bar-fill{height:100%;border-radius:3px;transition:width 0.4s}
+        .icon-btn{background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1}
+        .doc-card{border-radius:14px;border-width:1px;border-style:solid;padding:16px;margin-bottom:10px}
+        .doc-card-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+        .doc-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .doc-name{font-family:'Playfair Display',serif;font-size:14px;font-weight:600;flex:1}
+        .doc-actions{display:flex;gap:8px}
+        .doc-btn{flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;border:none;text-align:center;transition:all 0.15s}
+        .doc-btn.fill{background:#C4704A;color:white}.doc-btn.fill:hover{opacity:0.85}
+        .upload-zone{border-radius:12px;border-width:2px;border-style:dashed;padding:20px;text-align:center;cursor:pointer;transition:all 0.15s;margin-bottom:16px;display:block}
+        textarea.form-input{resize:vertical;min-height:70px;font-family:'DM Sans',sans-serif;font-size:12px;padding:8px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid;line-height:1.5}
+        .fill-form-wrap{border-radius:14px;border-width:1px;border-style:solid;padding:20px;margin-bottom:20px}
+        .fill-form-title{font-family:'Playfair Display',serif;font-size:16px;font-weight:600;margin-bottom:4px}
+        .fill-form-sub{font-size:11px;margin-bottom:20px}
+        .section-divider{height:1px;margin:16px 0}
+        .section-mini-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
+        .notes-box{border-radius:10px;border-width:1px;border-style:solid;padding:12px;font-size:12px;line-height:1.6;min-height:60px;cursor:pointer}
+        .inv-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:4px}
+      `}</style>
+      <div className="shell" style={{background:d.bg,color:d.text,display:'grid',gridTemplateColumns:'80px 1fr',height:'100vh',overflow:'hidden'}}>
+        <div className="sidebar" style={{background:d.white,borderColor:d.border}}>
+          <div className="sb-logo">A</div>
+          <div className="sb-nav">
+            {NAV_ITEMS.map(({v,label,icon})=>(
+              <button key={v} className="sb-btn" style={{color:view===v?d.accent:d.text3,background:view===v?d.accentBg:'none'}} onClick={()=>setView(v as any)}>
+                {icon}
+                <span className="sb-btn-label" style={{color:view===v?d.accent:d.text3}}>{label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="sb-divider" style={{background:d.border}}/>
+          <button className="sb-toggle" style={{color:d.text3}} onClick={()=>setDark(!dark)}>{dark?'☀️':'🌙'}</button>
+        </div>
+
+        <div className="main" style={{display:'grid',gridTemplateColumns:'1fr 320px',height:'100vh',overflow:'hidden',minWidth:0}}>
+          <div className="center" style={{background:d.bg,minWidth:0}}>
+            {loading ? (
+              <div className="empty-note" style={{paddingTop:60,color:d.text3}}>Loading...</div>
+            ) : view==='home' ? (
+              <>
+                <div className="page-header">
+                  <div className="page-greeting" style={{color:d.text}}>{greeting}, <em>Alante.</em></div>
+                  <div className="page-sub" style={{color:d.text3}}>{time.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})} · {time.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+                </div>
+                <div className="stat-row-3">
+                  {[
+                    {label:'Upcoming calls',num:bookings.length,sub:bookings.length===0?'None scheduled':'Scheduled',bg:d.sand,hot:bookings.length>0},
+                    {label:'Awaiting booking',num:unbooked.length,sub:'No call yet',bg:d.linen,hot:false},
+                    {label:'Active projects',num:activeProjects.length,sub:'In progress',bg:d.blush,hot:false},
+                  ].map((s,i)=>(
+                    <div key={i} className="stat-card" style={{background:s.bg,borderColor:d.border}}>
+                      <div className="sc-label" style={{color:d.text2}}>{s.label}</div>
+                      <div className="sc-num" style={{color:s.hot?d.accent:d.text}}>{s.num}</div>
+                      <div className="sc-sub" style={{color:d.text3}}>{s.sub}</div>
+                    </div>
+                  ))}
+                </div>
+                {overdueInvoices.length > 0 && (
+                  <div className="section" style={{marginBottom:16}}>
+                    <div className="section-label" style={{color:d.redText}}>
+                      Overdue Invoices
+                      <span className="section-label-count" style={{background:d.red,color:d.redText}}>{overdueInvoices.length}</span>
+                    </div>
+                    {overdueInvoices.map(inv=>(
+                      <div key={inv.id} className="alert-row" style={{background:d.red,borderColor:d.redText+'44'}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:500,color:d.text}}>Invoice #{inv.invoice_number}</div>
+                          <div style={{fontSize:11,color:d.redText}}>Due {inv.due_date?fmtShort(inv.due_date):'unknown'} · {fmtMoney(inv.amount)}</div>
+                        </div>
+                        <button className="cr-btn" style={{background:d.redText,color:'white'}} onClick={()=>markInvoicePaid(inv.id)}>Mark Paid</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {activeProjects.length > 0 && (
+                  <div className="section">
+                    <div className="section-label" style={{color:d.text2}}>
+                      Active Projects
+                      <span className="section-label-count" style={{background:d.surface,color:d.text3}}>{activeProjects.length}</span>
+                    </div>
+                    {activeProjects.map(p=>{
+                      const daysLeft = p.end_date ? Math.ceil((new Date(p.end_date).getTime()-Date.now())/86400000) : null
+                      const isUrgent = daysLeft !== null && daysLeft <= 3
+                      return (
+                        <div key={p.id} className="proj-row" style={{background:d.white,borderColor:isUrgent?d.accent:d.border}}>
+                          <div style={{flex:1}}>
+                            <div className="proj-name" style={{color:d.text}}>{p.name}</div>
+                            <div style={{fontSize:11,color:d.text2}}>{p.type} · {fmtMoney(p.value)}</div>
+                          </div>
+                          <div className="proj-due" style={{color:isUrgent?d.accent:d.text3}}>
+                            {daysLeft===null?'No deadline':daysLeft<0?'Overdue':daysLeft===0?'Due today':daysLeft+'d left'}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="section">
+                  <div className="section-label" style={{color:d.text2}}>Discovery Calls <span className="section-label-count" style={{background:d.surface,color:d.text3}}>{bookings.length}</span></div>
+                  {bookings.length===0 ? <div className="empty-note" style={{color:d.text3}}>No calls scheduled yet.</div> : (
+                    <div className="booking-cards">
+                      {bookings.map((b,i)=>(
+                        <div key={b.id} className={'booking-card'+(focused?.type==='booking'&&focused.data.id===b.id?' selected':'')}
+                          style={{background:CARD_COLORS[i%CARD_COLORS.length]}} onClick={()=>setFocused({type:'booking',data:b})}>
+                          <div className="bc-type" style={{color:d.text2}}>{b.intake_submissions?.project_type}</div>
+                          <div className="bc-name" style={{color:d.text}}>{b.intake_submissions?.name}</div>
+                          <div className="bc-date" style={{color:d.text2}}>{fmtShort(b.scheduled_at)} · {new Date(b.scheduled_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
+                          <div className="bc-footer">
+                            <div className="bc-countdown">{countdown(b.scheduled_at)}</div>
+                            <div className="bc-arrow" style={{background:dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)',color:d.text2}}>→</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="section">
+                  <div className="section-label" style={{color:d.text2}}>Submitted, No Call Yet <span className="section-label-count" style={{background:d.surface,color:d.text3}}>{unbooked.length}</span></div>
+                  {unbooked.length===0 ? <div className="empty-note" style={{color:d.text3}}>No pending submissions.</div> : (
+                    <div className="sub-list">
+                      {unbooked.map(s=>(
+                        <div key={s.id} className="sub-item"
+                          style={{background:focused?.type==='submission'&&focused.data.id===s.id?d.accentBg:d.white,borderColor:focused?.type==='submission'&&focused.data.id===s.id?d.accent:d.border}}
+                          onClick={()=>setFocused({type:'submission',data:s})}>
+                          <div className="si-dot" style={{background:d.accent}}/>
+                          <div style={{flex:1}}>
+                            <div className="si-name" style={{color:d.text}}>{s.name}</div>
+                            <div className="si-type" style={{color:d.text2}}>{s.project_type}</div>
+                          </div>
+                          <div className="si-meta" style={{color:d.text3}}>{fmtRelative(s.submitted_at)}</div>
+                          <div className="si-meta" style={{color:d.accent}}>{s.budget||'TBD'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : view==='pipeline' ? (
+              <>
+                <div className="page-header">
+                  <div className="page-greeting" style={{color:d.text}}>Pipeline</div>
+                  <div className="page-sub" style={{color:d.text3}}>{clients.length} clients total</div>
+                </div>
+                <div style={{marginBottom:16}}>
+                  <button className="add-row-btn" style={{color:d.accent,background:d.accentBg,borderRadius:10}} onClick={()=>setShowAddClient(!showAddClient)}>
+                    + Add client manually
+                  </button>
+                </div>
+                {showAddClient && (
+                  <div className="form-card" style={{background:d.surface,borderColor:d.border,marginBottom:20}}>
+                    <div className="form-title" style={{color:d.text}}>New client</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Name</div><input style={inputStyle} value={nc.name} onChange={e=>setNc({...nc,name:e.target.value})} placeholder="Full name"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Email</div><input style={inputStyle} value={nc.email} onChange={e=>setNc({...nc,email:e.target.value})} placeholder="client@email.com"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Business (optional)</div><input style={inputStyle} value={nc.business} onChange={e=>setNc({...nc,business:e.target.value})} placeholder="Company name"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Platform</div><select style={inputStyle} value={nc.platform} onChange={e=>setNc({...nc,platform:e.target.value})}><option value="direct">Direct</option><option value="upwork">Upwork</option><option value="fiverr">Fiverr</option><option value="referral">Referral</option></select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Stage</div><select style={inputStyle} value={nc.pipeline_stage} onChange={e=>setNc({...nc,pipeline_stage:e.target.value})}>{PIPELINE_STAGES.map(s=><option key={s} value={s}>{STAGE_LABELS[s]}</option>)}</select></div>
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowAddClient(false)}>Cancel</button>
+                      <button className="btn-save" onClick={addClientManually}>Add Client</button>
+                    </div>
+                  </div>
+                )}
+                {PIPELINE_STAGES.map(stage=>(
+                  <div key={stage} className="stage-section">
+                    <div className="stage-header">
+                      <div className="stage-pill" style={{
+                        background:stage==='discovery_call'?d.sand:stage==='proposal_sent'?d.linen:stage==='active_project'?(dark?'#1E2C1E':'#E8F0E8'):d.surface,
+                        color:stage==='discovery_call'?(dark?'#C4944A':'#8a6a4a'):stage==='proposal_sent'?(dark?'#A49A6A':'#6a6a4a'):stage==='active_project'?(dark?'#6AAA6A':'#4a6a4a'):d.text3
+                      }}>{STAGE_LABELS[stage]}</div>
+                      <div className="stage-count" style={{color:d.text3}}>{clientsByStage[stage]?.length||0}</div>
+                    </div>
+                    {clientsByStage[stage]?.length===0
+                      ? <div className="empty-note" style={{textAlign:'left',paddingLeft:0,paddingTop:4,color:d.text3}}>Empty</div>
+                      : clientsByStage[stage].map(c=>(
+                        <div key={c.id} className="client-row" style={{background:d.white,borderColor:d.border}}
+                          onClick={()=>{setFocused({type:'client',data:c});setClientNotes(c.notes||'');setEditingNotes(false);setShowClientInvoice(false)}}>
+                          <div style={{flex:1}}>
+                            <div className="cr-name" style={{color:d.text}}>{c.name}</div>
+                            <div className="cr-meta" style={{color:d.text2}}>{c.email}{c.business?' · '+c.business:''}{c.platform&&c.platform!=='direct'?' · '+c.platform:''}</div>
+                          </div>
+                          {stage!=='closed'&&<button className="cr-btn" style={{background:d.surface,color:d.text2}} onClick={e=>{e.stopPropagation();moveToNextStage(c)}}>Advance</button>}
+                        </div>
+                      ))
+                    }
+                  </div>
+                ))}
+              </>
+            ) : view==='revenue' ? (
+              <>
+                <div className="page-header">
+                  <div className="page-greeting" style={{color:d.text}}>Revenue</div>
+                  <div className="page-sub" style={{color:d.text3}}>{new Date().getFullYear()} overview</div>
+                </div>
+                <div className="stat-row">
+                  {[
+                    {label:'Total earned',val:fmtMoney(totalEarned),sub:'All time paid',bg:d.sand},
+                    {label:'Outstanding',val:fmtMoney(totalOutstanding),sub:'Awaiting payment',bg:d.linen},
+                    {label:'This month',val:fmtMoney(thisMonth),sub:MONTHS[new Date().getMonth()],bg:d.blush},
+                    {label:'Avg project',val:fmtMoney(avgProject),sub:projects.length+' projects',bg:d.pebble},
+                  ].map((s,i)=>(
+                    <div key={i} className="stat-card" style={{background:s.bg,borderColor:d.border}}>
+                      <div className="sc-label" style={{color:d.text2}}>{s.label}</div>
+                      <div className="sc-num" style={{color:d.text,fontSize:20}}>{s.val}</div>
+                      <div className="sc-sub" style={{color:d.text3}}>{s.sub}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="chart-wrap" style={{background:d.white,borderColor:d.border}}>
+                  <div className="chart-title" style={{color:d.text}}>Monthly revenue</div>
+                  <div className="bar-chart">
+                    {monthlyData.map((m,i)=>(
+                      <div key={i} className="bar-col">
+                        <div className="bar-val" style={{color:d.text3}}>{m.value>0?fmtMoney(m.value):''}</div>
+                        <div className="bar" style={{height:Math.max((m.value/maxMonthly)*100,4)+'%',background:m.month===new Date().getMonth()&&m.year===new Date().getFullYear()?d.accent:(dark?'rgba(196,112,74,0.35)':'rgba(196,112,74,0.25)')}}/>
+                        <div className="bar-label" style={{color:d.text3}}>{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="platform-bars">
+                  {[
+                    {label:'Direct clients',val:directRevenue,pct:directRevenue/totalProjectValue*100},
+                    {label:'Referrals and Platforms',val:referralRevenue,pct:referralRevenue/totalProjectValue*100},
+                  ].map((p,i)=>(
+                    <div key={i} className="plat-card" style={{background:d.white,borderColor:d.border}}>
+                      <div className="plat-label" style={{color:d.text2}}>{p.label}</div>
+                      <div className="plat-num" style={{color:d.text}}>{fmtMoney(p.val)}</div>
+                      <div className="plat-bar-bg" style={{background:d.surface2}}>
+                        <div className="plat-bar-fill" style={{width:p.pct+'%',background:d.accent}}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="section-label" style={{color:d.text2,marginBottom:12}}>
+                  Projects
+                  <button className="add-row-btn" style={{color:d.accent,background:d.accentBg,marginLeft:'auto'}} onClick={()=>setShowNewProject(!showNewProject)}>+ Add project</button>
+                </div>
+                {showNewProject && (
+                  <div className="form-card" style={{background:d.surface,borderColor:d.border}}>
+                    <div className="form-title" style={{color:d.text}}>New project</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Name</div><input style={inputStyle} value={np.name} onChange={e=>setNp({...np,name:e.target.value})} placeholder="Project name"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Type</div><select style={inputStyle} value={np.type} onChange={e=>setNp({...np,type:e.target.value})}>{PROJECT_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Value ($)</div><input style={inputStyle} type="number" value={np.value} onChange={e=>setNp({...np,value:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Platform</div><select style={inputStyle} value={np.platform} onChange={e=>setNp({...np,platform:e.target.value})}><option value="direct">Direct</option><option value="referral">Referral</option><option value="upwork">Upwork</option><option value="fiverr">Fiverr</option></select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deadline</div><input style={inputStyle} type="date" value={np.end_date} onChange={e=>setNp({...np,end_date:e.target.value})}/></div>
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowNewProject(false)}>Cancel</button>
+                      <button className="btn-save" onClick={addProject}>Save</button>
+                    </div>
+                  </div>
+                )}
+                <div className="data-table" style={{borderColor:d.border}}>
+                  <div className="dt-header" style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 40px',background:d.surface,borderColor:d.border}}>
+                    {['Project','Type','Value','Platform','Deadline',''].map((h,i)=><div key={i} className="dt-cell hd" style={{color:d.text3}}>{h}</div>)}
+                  </div>
+                  {projects.length===0 ? <div className="empty-note" style={{color:d.text3}}>No projects yet.</div>
+                  : projects.map(p=>(
+                    <div key={p.id} className="dt-row" style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 40px',borderColor:d.border}}>
+                      <div className="dt-cell" style={{color:d.text}}>{p.name}</div>
+                      <div className="dt-cell" style={{color:d.text2}}>{p.type}</div>
+                      <div className="dt-cell" style={{color:d.accent,fontWeight:500}}>{fmtMoney(p.value)}</div>
+                      <div className="dt-cell"><span className="status-pill" style={{background:p.platform==='direct'?d.accentBg:d.surface2,color:p.platform==='direct'?d.accent:d.text2}}>{p.platform}</span></div>
+                      <div className="dt-cell" style={{color:d.text2}}>{p.end_date?fmtShort(p.end_date):'none'}</div>
+                      <div className="dt-cell"><button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteProject(p.id)}>x</button></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="section-label" style={{color:d.text2,marginBottom:12}}>All Invoices</div>
+                <div className="data-table" style={{borderColor:d.border}}>
+                  <div className="dt-header" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr 60px',background:d.surface,borderColor:d.border}}>
+                    {['Invoice #','Amount','Due','Status',''].map((h,i)=><div key={i} className="dt-cell hd" style={{color:d.text3}}>{h}</div>)}
+                  </div>
+                  {invoices.length===0 ? <div className="empty-note" style={{color:d.text3}}>No invoices yet.</div>
+                  : invoices.map(inv=>{
+                    const isPaid=inv.status==='paid', isPending=inv.status==='pending'
+                    const pillStyle = isPaid?{background:d.green,color:d.greenText}:isPending?{background:d.amber,color:d.amberText}:{background:d.red,color:d.redText}
+                    return (
+                      <div key={inv.id} className="dt-row" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr 60px',borderColor:d.border}}>
+                        <div className="dt-cell" style={{color:d.text}}>{inv.invoice_number}</div>
+                        <div className="dt-cell" style={{color:d.accent,fontWeight:500}}>{fmtMoney(inv.amount)}</div>
+                        <div className="dt-cell" style={{color:d.text2}}>{inv.due_date?fmtShort(inv.due_date):'none'}</div>
+                        <div className="dt-cell"><span className="status-pill" style={pillStyle}>{inv.status}</span></div>
+                        <div className="dt-cell" style={{display:'flex',gap:4}}>
+                          {!isPaid&&<button className="icon-btn" style={{color:d.greenText,fontSize:12}} onClick={()=>markInvoicePaid(inv.id)} title="Mark paid">ok</button>}
+                          <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteInvoice(inv.id)}>x</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            ) : view==='docs' ? (
+              <div style={{width:'100%'}}>
+                <div className="page-header">
+                  <div className="page-greeting" style={{color:d.text}}>Documents</div>
+                  <div className="page-sub" style={{color:d.text3}}>Templates and fill forms</div>
+                </div>
+                <div className="section-label" style={{color:d.text2,marginBottom:16}}>Fill and generate</div>
+                <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
+                  <div className="doc-card-header">
+                    <div className="doc-icon" style={{background:d.sand,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M5 5h6M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg></div>
+                    <div>
+                      <div className="doc-name" style={{color:d.text}}>Statement of Work</div>
+                      <div style={{fontSize:11,color:d.text3}}>Fill out and download a complete SOW</div>
+                    </div>
+                  </div>
+                  <div className="doc-actions">
+                    <button className="doc-btn fill" onClick={()=>setActiveFillForm(activeFillForm==='sow'?null:'sow')}>{activeFillForm==='sow'?'Close form':'Fill out SOW'}</button>
+                  </div>
+                </div>
+                {activeFillForm==='sow' && (
+                  <div className="fill-form-wrap" style={{background:d.surface,borderColor:d.border}}>
+                    <div className="fill-form-title" style={{color:d.text}}>Statement of Work</div>
+                    <div className="fill-form-sub" style={{color:d.text3}}>Fill in the details below and download a formatted SOW PDF</div>
+                    <div className="section-mini-label" style={{color:d.text3}}>Client info</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client name</div><input style={inputStyle} value={sowForm.client_name} onChange={e=>setSowForm({...sowForm,client_name:e.target.value})} placeholder="Full name or business"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client email</div><input style={inputStyle} value={sowForm.client_email} onChange={e=>setSowForm({...sowForm,client_email:e.target.value})} placeholder="client@email.com"/></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Project details</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project title</div><input style={inputStyle} value={sowForm.project_title} onChange={e=>setSowForm({...sowForm,project_title:e.target.value})} placeholder="Project name"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project type</div><select style={inputStyle} value={sowForm.project_type} onChange={e=>setSowForm({...sowForm,project_type:e.target.value})}>{PROJECT_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date</div><input style={inputStyle} type="date" value={sowForm.start_date} onChange={e=>setSowForm({...sowForm,start_date:e.target.value})}/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Delivery date</div><input style={inputStyle} type="date" value={sowForm.delivery_date} onChange={e=>setSowForm({...sowForm,delivery_date:e.target.value})}/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Project overview</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.description} onChange={e=>setSowForm({...sowForm,description:e.target.value})} placeholder="What are you building..."/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Deliverables</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.deliverables} onChange={e=>setSowForm({...sowForm,deliverables:e.target.value})} placeholder="List what will be delivered..."/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Out of scope</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.out_of_scope} onChange={e=>setSowForm({...sowForm,out_of_scope:e.target.value})} placeholder="What is explicitly not included..."/></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Payment</div>
+                    <div className="form-grid-3">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total fee ($)</div><input style={inputStyle} type="number" value={sowForm.total_fee} onChange={e=>setSowForm({...sowForm,total_fee:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit ($)</div><input style={inputStyle} type="number" value={sowForm.deposit} onChange={e=>setSowForm({...sowForm,deposit:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Balance ($)</div><input style={inputStyle} type="number" value={sowForm.balance} onChange={e=>setSowForm({...sowForm,balance:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Revisions included</div><input style={inputStyle} value={sowForm.revisions} onChange={e=>setSowForm({...sowForm,revisions:e.target.value})}/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Hourly rate ($)</div><input style={inputStyle} value={sowForm.hourly_rate} onChange={e=>setSowForm({...sowForm,hourly_rate:e.target.value})}/></div>
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
+                      <button className="btn-save" onClick={generateSOWDoc}>Download SOW</button>
+                    </div>
+                  </div>
+                )}
+                <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
+                  <div className="doc-card-header">
+                    <div className="doc-icon" style={{background:d.pebble,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V6L9 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/><path d="M9 1v5h5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg></div>
+                    <div>
+                      <div className="doc-name" style={{color:d.text}}>Freelance Contract</div>
+                      <div style={{fontSize:11,color:d.text3}}>Fill out and download a client ready contract</div>
+                    </div>
+                  </div>
+                  <div className="doc-actions">
+                    <button className="doc-btn fill" onClick={()=>setActiveFillForm(activeFillForm==='contract'?null:'contract')}>{activeFillForm==='contract'?'Close form':'Fill out contract'}</button>
+                  </div>
+                </div>
+                {activeFillForm==='contract' && (
+                  <div className="fill-form-wrap" style={{background:d.surface,borderColor:d.border}}>
+                    <div className="fill-form-title" style={{color:d.text}}>Freelance Contract</div>
+                    <div className="fill-form-sub" style={{color:d.text3}}>Standard terms are pre-filled. Add client and project details to generate.</div>
+                    <div className="section-mini-label" style={{color:d.text3}}>Client info</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client name</div><input style={inputStyle} value={contractForm.client_name} onChange={e=>setContractForm({...contractForm,client_name:e.target.value})} placeholder="Full name"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client email</div><input style={inputStyle} value={contractForm.client_email} onChange={e=>setContractForm({...contractForm,client_email:e.target.value})} placeholder="client@email.com"/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Business name (optional)</div><input style={inputStyle} value={contractForm.client_business} onChange={e=>setContractForm({...contractForm,client_business:e.target.value})} placeholder="Company or LLC name"/></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Project</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project title</div><input style={inputStyle} value={contractForm.project_title} onChange={e=>setContractForm({...contractForm,project_title:e.target.value})} placeholder="Project name"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project type</div><select style={inputStyle} value={contractForm.project_type} onChange={e=>setContractForm({...contractForm,project_type:e.target.value})}>{PROJECT_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date</div><input style={inputStyle} type="date" value={contractForm.start_date} onChange={e=>setContractForm({...contractForm,start_date:e.target.value})}/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Delivery date</div><input style={inputStyle} type="date" value={contractForm.delivery_date} onChange={e=>setContractForm({...contractForm,delivery_date:e.target.value})}/></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Payment</div>
+                    <div className="form-grid-3">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total fee ($)</div><input style={inputStyle} type="number" value={contractForm.total_fee} onChange={e=>setContractForm({...contractForm,total_fee:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit ($)</div><input style={inputStyle} type="number" value={contractForm.deposit} onChange={e=>setContractForm({...contractForm,deposit:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Balance ($)</div><input style={inputStyle} type="number" value={contractForm.balance} onChange={e=>setContractForm({...contractForm,balance:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Kill fee (%)</div><input style={inputStyle} value={contractForm.kill_fee_pct} onChange={e=>setContractForm({...contractForm,kill_fee_pct:e.target.value})}/></div>
+                      <div className="form-group" style={{gridColumn:'2/-1'}}><div className="form-label" style={{color:d.text3}}>Payment method</div><input style={inputStyle} value={contractForm.payment_method} onChange={e=>setContractForm({...contractForm,payment_method:e.target.value})}/></div>
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
+                      <button className="btn-save" onClick={generateContractDoc}>Download Contract</button>
+                    </div>
+                  </div>
+                )}
+                {templates.length > 0 && (
+                  <>
+                    <div className="section-label" style={{color:d.text2,marginBottom:12,marginTop:8}}>Uploaded files</div>
+                    {templates.map(t=>(
+                      <div key={t.id} className="doc-card" style={{background:d.white,borderColor:d.border}}>
+                        <div className="doc-card-header">
+                          <div className="doc-icon" style={{background:d.surface,color:d.text3}}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/></svg></div>
+                          <div className="doc-name" style={{color:d.text,flex:1}}>{t.name}</div>
+                          <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteDocument(t.id,t.storage_path)}>x</button>
+                        </div>
+                        <div className="doc-actions">
+                          <button className="doc-btn fill" onClick={()=>downloadDoc(t.storage_path,t.name)}>Download</button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                <label className="upload-zone" style={{borderColor:d.border,color:d.text3,background:d.surface}}>
+                  <div style={{fontSize:20,marginBottom:6}}>+</div>
+                  <div style={{fontSize:12}}>Upload any document</div>
+                  <div style={{fontSize:10,marginTop:3}}>Supports .docx, .pdf, .txt</div>
+                  <input type="file" accept=".docx,.pdf,.txt" style={{display:'none'}} onChange={e=>e.target.files&&uploadTemplate(e.target.files[0])}/>
+                </label>
+              </div>
+            ) : (
+              <>
+                <div className="page-header">
+                  <div className="page-greeting" style={{color:d.text}}>Schedule</div>
+                  <div className="page-sub" style={{color:d.text3}}>Click any day to block specific hours</div>
+                </div>
+                <div className="legend">
+                  {[{bg:d.text,label:'Today'},{bg:d.accentBg,border:d.accent,label:'Has booking'},{bg:d.surface2,label:'Full day blocked'},{bg:d.accent,label:'Has blocked hours'}].map((l,i)=>(
+                    <div key={i} className="legend-item" style={{color:d.text3}}>
+                      <div className="legend-dot" style={{background:l.bg,border:l.border?'1px solid '+l.border:'none'}}/>{l.label}
+                    </div>
+                  ))}
+                </div>
+                <div className="cal-wrap" style={{background:d.white,borderColor:d.border}}>
+                  <div className="cal-header">
+                    <div className="cal-month-label" style={{color:d.text}}>Next 14 days</div>
+                    <div style={{fontSize:11,color:d.text3}}>{new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})} to {new Date(Date.now()+13*86400000).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+                  </div>
+                  <div className="cal-days-row">{DAYS_SHORT.map(day=><div key={day} className="cal-day-label" style={{color:d.text3}}>{day}</div>)}</div>
+                  <div className="cal-grid">
+                    {(()=>{
+                      const cells=[], start=new Date(); start.setHours(0,0,0,0)
+                      for(let i=0;i<start.getDay();i++) cells.push(<div key={'e'+i} className="cal-cell empty"/>)
+                      for(let i=0;i<14;i++){
+                        const dt=new Date(start.getTime()+i*86400000)
+                        const ds=dt.toISOString().split('T')[0]
+                        const key=dt.getFullYear()+'-'+dt.getMonth()+'-'+dt.getDate()
+                        const isToday=i===0, hasB=bookedDays.has(key), isBlockedDay=blockedDaySet.has(ds)
+                        const hasBlockedSlots=blockedSlotDays.has(ds), isSelected=selectedDay===ds
+                        cells.push(
+                          <div key={ds} className="cal-cell"
+                            style={{background:isToday?d.text:isBlockedDay?d.surface2:isSelected?d.accentBg:hasB?d.accentBg:'transparent',color:isToday?d.white:isBlockedDay?d.text3:hasB?d.accent:d.text2,fontWeight:isToday||hasB?500:300,textDecoration:isBlockedDay?'line-through':'none',outline:isSelected?'2px solid '+d.accent:'none',outlineOffset:'1px'}}
+                            onClick={()=>!isBlockedDay&&setSelectedDay(isSelected?null:ds)}>
+                            {dt.getDate()}
+                            {hasBlockedSlots&&!isBlockedDay&&<div className="slot-indicator"/>}
+                          </div>
+                        )
+                      }
+                      return cells
+                    })()}
+                  </div>
+                </div>
+                {selectedDay && (
+                  <div className="day-block-panel" style={{background:d.surface,borderColor:d.border}}>
+                    <div className="dbp-title" style={{color:d.text}}>{fmtDayFull(selectedDay)}</div>
+                    {slotsForSelectedDay.length>0 && (
+                      <div className="dbp-slots">
+                        {slotsForSelectedDay.map(s=>(
+                          <div key={s.id} className="dbp-slot" style={{background:d.surface2}}>
+                            <div className="dbp-slot-time" style={{color:d.text}}>{fmt12(s.start_time)} to {fmt12(s.end_time)}</div>
+                            <button className="dbp-slot-rm" style={{color:d.text3}} onClick={()=>removeBlockedSlot(s.id)}>x</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="dbp-add">
+                      <input type="time" className="dbp-input" value={blockStart} style={{background:d.white,borderColor:d.border,color:d.text}} onChange={e=>setBlockStart(e.target.value)}/>
+                      <input type="time" className="dbp-input" value={blockEnd} style={{background:d.white,borderColor:d.border,color:d.text}} onChange={e=>setBlockEnd(e.target.value)}/>
+                      <button className="dbp-save" onClick={saveBlockedSlot} disabled={!blockStart||!blockEnd}>Block</button>
+                    </div>
+                    <div style={{fontSize:10,color:d.text3,marginTop:6}}>Selected hours will be hidden from client booking calendar</div>
+                  </div>
+                )}
+                <div className="section-label" style={{color:d.text2,marginBottom:10,marginTop:8}}>Weekly availability</div>
+                <div className="day-cards">
+                  {availability.map(a=>(
+                    <div key={a.id} className="day-card" style={{background:a.is_active?d.accentBg:d.white,borderColor:a.is_active?d.accent:d.border}} onClick={()=>toggleDay(a)}>
+                      <div className="dc-name" style={{color:a.is_active?d.accent:d.text3}}>{DAYS_SHORT[a.day_of_week]}</div>
+                      <div className="dc-dot" style={{background:a.is_active?d.accent:d.border}}/>
+                      <div className="dc-time" style={{color:a.is_active?d.text2:d.text3}}>{a.is_active?a.start_time.slice(0,5):'off'}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hours-card" style={{background:d.white,borderColor:d.border}}>
+                  {availability.map(a=>(
+                    <div key={a.id} className="hour-item" style={{borderColor:d.border,opacity:a.is_active?1:0.5}}>
+                      <div className="hi-day" style={{color:d.text2}}>{DAYS_FULL[a.day_of_week].slice(0,3)}</div>
+                      <label className="hi-toggle">
+                        <input type="checkbox" checked={a.is_active} onChange={()=>toggleDay(a)}/>
+                        <div className="hi-track" style={{background:a.is_active?d.accent:d.surface2,borderColor:a.is_active?d.accent:d.border}}/>
+                        <div className="hi-thumb"/>
+                      </label>
+                      {a.is_active&&(
+                        <div className="hi-times">
+                          <input type="time" className="hi-input" value={a.start_time.slice(0,5)} style={{background:d.surface,borderColor:d.border,color:d.text}} onChange={e=>updateHours(a,'start_time',e.target.value)}/>
+                          <span className="hi-sep" style={{color:d.text3}}>to</span>
+                          <input type="time" className="hi-input" value={a.end_time.slice(0,5)} style={{background:d.surface,borderColor:d.border,color:d.text}} onChange={e=>updateHours(a,'end_time',e.target.value)}/>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="blocked-card" style={{background:d.white,borderColor:d.border}}>
+                  <div className="blocked-card-title" style={{color:d.text2}}>Full day blocks</div>
+                  {blockedDates.length===0&&<div className="empty-note" style={{textAlign:'left',paddingLeft:0,paddingTop:0,paddingBottom:8,color:d.text3}}>None blocked.</div>}
+                  {blockedDates.map(b=>(
+                    <div key={b.id} className="bl-row" style={{background:d.surface}}>
+                      <div className="bl-d" style={{color:d.text}}>{b.blocked_date}</div>
+                      <div className="bl-r" style={{color:d.text2}}>{b.reason}</div>
+                      <button className="bl-x" style={{color:d.text3}} onClick={()=>removeBlockedDate(b.id)}>x</button>
+                    </div>
+                  ))}
+                  <div className="add-block-row">
+                    <input type="date" className="ab-input" value={newBlockedDate} style={{background:d.surface,borderColor:d.border,color:d.text}} onChange={e=>setNewBlockedDate(e.target.value)}/>
+                    <input type="text" className="ab-input" placeholder="Reason (optional)" value={newBlockedReason} style={{background:d.surface,borderColor:d.border,color:d.text}} onChange={e=>setNewBlockedReason(e.target.value)}/>
+                    <button className="ab-btn" onClick={addBlockedDate} disabled={!newBlockedDate}>Block Day</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="panel" style={{background:d.white,borderColor:d.border}}>
+            <div className="panel-inner">
+              {!focused ? (
+                <div className="rp-empty">
+                  <div className="rp-empty-icon">✦</div>
+                  <div className="rp-empty-text" style={{color:d.text3}}>Select a call or submission<br/>to see the details here</div>
+                </div>
+              ) : focusedBooking ? (
+                <>
+                  <div className="rp-card" style={{background:d.sand}}>
+                    <div className="rp-eyebrow">Discovery Call</div>
+                    <div className="rp-name" style={{color:d.text}}>{focusedBooking.intake_submissions?.name}</div>
+                    <div className="rp-meta" style={{color:d.text2}}>{focusedBooking.intake_submissions?.email}</div>
+                    {focusedBooking.intake_submissions?.business&&<div className="rp-meta" style={{color:d.text2}}>{focusedBooking.intake_submissions.business}</div>}
+                    <div className="rp-time-badge" style={{background:d.white}}>
+                      <div>
+                        <div style={{fontSize:12,color:d.text}}>{fmtDate(focusedBooking.scheduled_at)}</div>
+                        <div style={{fontSize:11,color:d.text2,marginTop:1}}>{fmtTime(focusedBooking.scheduled_at)}</div>
+                      </div>
+                      <div className="rtb-cd">{countdown(focusedBooking.scheduled_at)}</div>
+                    </div>
+                  </div>
+                  <div className="rp-fields">
+                    {[
+                      {label:'Project',val:focusedBooking.intake_submissions?.project_type},
+                      {label:'Description',val:focusedBooking.intake_submissions?.description},
+                      {label:'Budget',val:focusedBooking.intake_submissions?.budget||'Not provided'},
+                      {label:'Timeline',val:focusedBooking.intake_submissions?.timeline||'Not provided'},
+                      ...(focusedBooking.intake_submissions?.priority?[{label:'Priority',val:focusedBooking.intake_submissions.priority}]:[]),
+                      ...(focusedBooking.intake_submissions?.notes?[{label:'Notes',val:focusedBooking.intake_submissions.notes}]:[]),
+                      {label:'Found via',val:focusedBooking.intake_submissions?.heard_from},
+                    ].map((f,i)=>(
+                      <div key={i}><div className="rf-label">{f.label}</div><div className="rf-val" style={{color:d.text}}>{f.val}</div></div>
+                    ))}
+                  </div>
+                  <div className="rp-actions">
+                    {focusedBooking.zoom_host_url&&<a href={focusedBooking.zoom_host_url} target="_blank" className="ra-btn fill">Start Zoom Call</a>}
+                    <button className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}} onClick={()=>createClientFromBooking(focusedBooking)}>Add to Pipeline</button>
+                  </div>
+                </>
+              ) : focusedSub ? (
+                <>
+                  <div className="rp-card" style={{background:d.linen}}>
+                    <div className="rp-eyebrow">No Call Booked</div>
+                    <div className="rp-name" style={{color:d.text}}>{focusedSub.name}</div>
+                    <div className="rp-meta" style={{color:d.text2}}>{focusedSub.email}</div>
+                    {focusedSub.business&&<div className="rp-meta" style={{color:d.text2}}>{focusedSub.business}</div>}
+                    <div style={{marginTop:10,fontSize:11,color:d.text3}}>Submitted {fmtRelative(focusedSub.submitted_at)}</div>
+                  </div>
+                  <div className="rp-fields">
+                    {[
+                      {label:'Project',val:focusedSub.project_type},
+                      {label:'Description',val:focusedSub.description},
+                      {label:'Budget',val:focusedSub.budget||'Not provided'},
+                      {label:'Timeline',val:focusedSub.timeline||'Not provided'},
+                      ...(focusedSub.priority?[{label:'Priority',val:focusedSub.priority}]:[]),
+                      ...(focusedSub.notes?[{label:'Notes',val:focusedSub.notes}]:[]),
+                      {label:'Found via',val:focusedSub.heard_from},
+                    ].map((f,i)=>(
+                      <div key={i}><div className="rf-label">{f.label}</div><div className="rf-val" style={{color:d.text}}>{f.val}</div></div>
+                    ))}
+                  </div>
+                </>
+              ) : focusedClient ? (
+                <>
+                  <div className="rp-card" style={{background:d.pebble}}>
+                    <div className="rp-eyebrow">{STAGE_LABELS[focusedClient.pipeline_stage]}{focusedClient.platform&&focusedClient.platform!=='direct'?' · '+focusedClient.platform:''}</div>
+                    <div className="rp-name" style={{color:d.text}}>{focusedClient.name}</div>
+                    <div className="rp-meta" style={{color:d.text2}}>{focusedClient.email}</div>
+                    {focusedClient.business&&<div className="rp-meta" style={{color:d.text2}}>{focusedClient.business}</div>}
+                  </div>
+                  <div className="rp-actions" style={{marginBottom:16}}>
+                    {focusedClient.pipeline_stage!=='closed'&&(
+                      <button className="ra-btn fill" onClick={()=>moveToNextStage(focusedClient)}>
+                        Advance to {STAGE_LABELS[PIPELINE_STAGES[PIPELINE_STAGES.indexOf(focusedClient.pipeline_stage)+1]]}
+                      </button>
+                    )}
+                    <a href={'mailto:'+focusedClient.email} className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}}>
+                      Email {focusedClient.name.split(' ')[0]}
+                    </a>
+                    <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>setShowClientInvoice(!showClientInvoice)}>
+                      Create Invoice
+                    </button>
+                  </div>
+                  {showClientInvoice && (
+                    <div className="form-card" style={{background:d.surface,borderColor:d.border,marginBottom:16}}>
+                      <div className="form-title" style={{color:d.text}}>Invoice for {focusedClient.name}</div>
+                      <div className="form-grid">
+                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice #</div><input style={inputStyle} value={clientInvoiceForm.invoice_number} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,invoice_number:e.target.value})} placeholder="INV-001"/></div>
+                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Amount ($)</div><input style={inputStyle} type="number" value={clientInvoiceForm.amount} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,amount:e.target.value})} placeholder="0"/></div>
+                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Due date</div><input style={inputStyle} type="date" value={clientInvoiceForm.due_date} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,due_date:e.target.value})}/></div>
+                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Service</div><input style={inputStyle} value={clientInvoiceForm.service_desc} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,service_desc:e.target.value})} placeholder="Web development services"/></div>
+                      </div>
+                      <div className="form-actions">
+                        <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowClientInvoice(false)}>Cancel</button>
+                        <button className="btn-save" onClick={()=>addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email)}>Save and Download PDF</button>
+                      </div>
+                    </div>
+                  )}
+                  {clientInvoices.length > 0 && (
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Invoices</div>
+                      {clientInvoices.map(inv=>{
+                        const isPaid = inv.status==='paid'
+                        return (
+                          <div key={inv.id} className="inv-row" style={{background:d.surface}}>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:12,color:d.text,fontWeight:500}}>#{inv.invoice_number}</div>
+                              <div style={{fontSize:11,color:d.text2}}>{fmtMoney(inv.amount)}{inv.due_date?' · Due '+fmtShort(inv.due_date):''}</div>
+                            </div>
+                            <span className="status-pill" style={{background:isPaid?d.green:d.amber,color:isPaid?d.greenText:d.amberText}}>{inv.status}</span>
+                            {!isPaid&&<button className="icon-btn" style={{color:d.greenText,fontSize:12}} onClick={()=>markInvoicePaid(inv.id)}>ok</button>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8,display:'flex',alignItems:'center',gap:8}}>
+                      Notes
+                      <button className="icon-btn" style={{color:d.accent,fontSize:11}} onClick={()=>setEditingNotes(!editingNotes)}>{editingNotes?'cancel':'edit'}</button>
+                    </div>
+                    {editingNotes ? (
+                      <div>
+                        <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,marginBottom:8}} value={clientNotes} onChange={e=>setClientNotes(e.target.value)} placeholder="Notes from discovery call, client preferences, anything relevant..."/>
+                        <button className="btn-save" onClick={()=>saveClientNotes(focusedClient.id)}>Save Notes</button>
+                      </div>
+                    ) : (
+                      <div className="notes-box" style={{background:d.surface,borderColor:d.border,color:focusedClient.notes?d.text:d.text3}} onClick={()=>setEditingNotes(true)}>
+                        {focusedClient.notes || 'Click to add notes...'}
+                      </div>
+                    )}
+                  </div>
+                  {clientDocs.length > 0 && (
+                    <div>
+                      <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Documents</div>
+                      {clientDocs.map(doc=>(
+                        <div key={doc.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:d.surface,borderRadius:10,marginBottom:6}}>
+                          <span style={{fontSize:14,color:d.text3}}>doc</span>
+                          <span style={{flex:1,fontSize:12,color:d.text}}>{doc.name}</span>
+                          <button className="icon-btn" style={{color:d.accent,fontSize:12}} onClick={()=>downloadDoc(doc.storage_path,doc.name)}>down</button>
+                          <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteDocument(doc.id,doc.storage_path)}>x</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
