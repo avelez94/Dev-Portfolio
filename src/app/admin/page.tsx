@@ -54,8 +54,8 @@ type Document = {
 
 const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa']
 const DAYS_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-const PIPELINE_STAGES = ['discovery_call','proposal_sent','active_project','closed']
-const STAGE_LABELS: Record<string,string> = { discovery_call:'Discovery', proposal_sent:'Proposal Sent', active_project:'Active Project', closed:'Closed' }
+const PIPELINE_STAGES = ['discovery_call','proposal_sent','active_project','closed','lost']
+const STAGE_LABELS: Record<string,string> = { discovery_call:'Discovery', proposal_sent:'Proposal Sent', active_project:'Active Project', closed:'Closed', lost:'Lost' }
 const CARD_COLORS_LIGHT = ['#F5EDE4','#EDE8E0','#E8E4DC','#F0E8DC','#EAE0D8']
 const CARD_COLORS_DARK = ['#2C2018','#241E16','#201A14','#281E14','#2A2018']
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -248,13 +248,17 @@ export default function AdminDashboard() {
       return
     }
     await supabase.from('clients').update({pipeline_stage:nextStage}).eq('id',c.id)
-    if (nextStage === 'closed') {
-      await supabase.from('projects').update({status:'complete'}).eq('client_id',c.id)
-    }
     await fetchClients()
-    await fetchProjects()
     if (focused?.type==='client' && focused.data.id===c.id) setFocused({type:'client',data:{...c,pipeline_stage:nextStage}})
   }
+  async function markAsLost(c: Client) {
+    await supabase.from('clients').update({pipeline_stage:'lost'}).eq('id',c.id)
+    await supabase.from('projects').update({status:'lost'}).eq('client_id',c.id)
+    await fetchClients()
+    await fetchProjects()
+    if (focused?.type==='client' && focused.data.id===c.id) setFocused({type:'client',data:{...c,pipeline_stage:'lost'}})
+  }
+
   async function confirmActiveProject() {
     if (!pendingAdvanceClient) return
     const c = pendingAdvanceClient
@@ -966,8 +970,8 @@ export default function AdminDashboard() {
                   <div key={stage} className="stage-section">
                     <div className="stage-header">
                       <div className="stage-pill" style={{
-                        background:stage==='discovery_call'?d.sand:stage==='proposal_sent'?d.linen:stage==='active_project'?(dark?'#1E2C1E':'#E8F0E8'):d.surface,
-                        color:stage==='discovery_call'?(dark?'#C4944A':'#8a6a4a'):stage==='proposal_sent'?(dark?'#A49A6A':'#6a6a4a'):stage==='active_project'?(dark?'#6AAA6A':'#4a6a4a'):d.text3
+                        background:stage==='discovery_call'?d.sand:stage==='proposal_sent'?d.linen:stage==='active_project'?(dark?'#1E2C1E':'#E8F0E8'):stage==='lost'?d.red:d.surface,
+                        color:stage==='discovery_call'?(dark?'#C4944A':'#8a6a4a'):stage==='proposal_sent'?(dark?'#A49A6A':'#6a6a4a'):stage==='active_project'?(dark?'#6AAA6A':'#4a6a4a'):stage==='lost'?d.redText:d.text3
                       }}>{STAGE_LABELS[stage]}</div>
                       <div className="stage-count" style={{color:d.text3}}>{clientsByStage[stage]?.length||0}</div>
                     </div>
@@ -980,7 +984,7 @@ export default function AdminDashboard() {
                             <div className="cr-name" style={{color:d.text}}>{c.name}</div>
                             <div className="cr-meta" style={{color:d.text2}}>{c.email}{c.business?' · '+c.business:''}{c.platform&&c.platform!=='direct'?' · '+c.platform:''}</div>
                           </div>
-                          {stage!=='closed'&&<button className="cr-btn" style={{background:d.surface,color:d.text2}} onClick={e=>{e.stopPropagation();moveToNextStage(c)}}>Advance</button>}
+                          {stage!=='closed'&&stage!=='lost'&&<button className="cr-btn" style={{background:d.surface,color:d.text2}} onClick={e=>{e.stopPropagation();moveToNextStage(c)}}>Advance</button>}
                         </div>
                       ))
                     }
@@ -1436,9 +1440,19 @@ export default function AdminDashboard() {
                     {focusedClient.business&&<div className="rp-meta" style={{color:d.text2}}>{focusedClient.business}</div>}
                   </div>
                   <div className="rp-actions" style={{marginBottom:16}}>
-                    {focusedClient.pipeline_stage!=='closed'&&(
+                    {focusedClient.pipeline_stage!=='closed'&&focusedClient.pipeline_stage!=='lost'&&(
                       <button className="ra-btn fill" onClick={()=>moveToNextStage(focusedClient)}>
                         Advance to {STAGE_LABELS[PIPELINE_STAGES[PIPELINE_STAGES.indexOf(focusedClient.pipeline_stage)+1]]}
+                      </button>
+                    )}
+                    {focusedClient.pipeline_stage!=='closed'&&focusedClient.pipeline_stage!=='lost'&&(
+                      <button className="ra-btn" style={{background:d.red,color:d.redText,border:'1px solid '+d.redText+'44'}} onClick={()=>markAsLost(focusedClient)}>
+                        Mark as Lost
+                      </button>
+                    )}
+                    {focusedClient.pipeline_stage==='lost'&&(
+                      <button className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}} onClick={()=>moveToNextStage(focusedClient)}>
+                        Reactivate
                       </button>
                     )}
                     <a href={'mailto:'+focusedClient.email} className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}}>
