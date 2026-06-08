@@ -103,6 +103,10 @@ export default function AdminDashboard() {
   const [editingProjectNotes, setEditingProjectNotes] = useState(false)
   const [projectNotes, setProjectNotes] = useState('')
   const [sendingInvoice, setSendingInvoice] = useState(false)
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [emailForm, setEmailForm] = useState({ subject:'', message:'' })
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
   const [np, setNp] = useState({ name:'', type:'Landing Page', value:'', platform:'direct', status:'active', end_date:'' })
   const [nc, setNc] = useState({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
   const [clientInvoiceForm, setClientInvoiceForm] = useState({
@@ -378,6 +382,27 @@ export default function AdminDashboard() {
     }
     setSendingInvoice(false)
   }
+  async function sendClientEmail(clientName: string, clientEmail: string) {
+    if (!emailForm.subject || !emailForm.message) return
+    setSendingEmail(true)
+    try {
+      await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientEmail, clientName, subject: emailForm.subject, message: emailForm.message })
+      })
+      setEmailSent(true)
+      setTimeout(() => {
+        setShowEmailModal(false)
+        setEmailForm({ subject:'', message:'' })
+        setEmailSent(false)
+      }, 1500)
+    } catch(e) {
+      console.error(e)
+    }
+    setSendingEmail(false)
+  }
+
   async function saveProjectNotes(projectId: string) {
     await supabase.from('projects').update({notes:projectNotes}).eq('id',projectId)
     setEditingProjectNotes(false)
@@ -1455,9 +1480,9 @@ export default function AdminDashboard() {
                         Reactivate
                       </button>
                     )}
-                    <a href={'mailto:'+focusedClient.email} className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}}>
+                    <button className="ra-btn" style={{background:d.surface,color:d.text2,border:'1px solid '+d.border}} onClick={()=>{setShowEmailModal(true);setEmailSent(false)}}>
                       Email {focusedClient.name.split(' ')[0]}
-                    </a>
+                    </button>
                     <button className="ra-btn" style={{background:d.accentBg,color:d.accent,border:'1px solid '+d.border2}} onClick={()=>{setShowClientInvoice(!showClientInvoice);setInvoiceType(null)}}>
                       Create Invoice
                     </button>
@@ -1703,6 +1728,41 @@ export default function AdminDashboard() {
               )}
             </div>
             <button className="btn-cancel" style={{width:'100%',borderColor:d.border,color:d.text2}} onClick={()=>setViewingProject(null)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {showEmailModal && focusedClient && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setShowEmailModal(false)}>
+          <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:520,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+              <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text}}>Email {focusedClient.name.split(' ')[0]}</div>
+              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setShowEmailModal(false)}>x</button>
+            </div>
+            <div style={{fontSize:12,color:d.text3,marginBottom:20}}>{focusedClient.email}</div>
+            {emailSent ? (
+              <div style={{textAlign:'center',padding:'32px 0'}}>
+                <div style={{fontSize:32,marginBottom:12}}>✓</div>
+                <div style={{fontSize:14,color:d.greenText,fontWeight:500}}>Email sent</div>
+              </div>
+            ) : (
+              <>
+                <div className="form-group" style={{marginBottom:12}}>
+                  <div className="form-label" style={{color:d.text3}}>Subject</div>
+                  <input style={inputStyle} value={emailForm.subject} onChange={e=>setEmailForm({...emailForm,subject:e.target.value})} placeholder="Project update, quick question..."/>
+                </div>
+                <div className="form-group" style={{marginBottom:20}}>
+                  <div className="form-label" style={{color:d.text3}}>Message</div>
+                  <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:140}} value={emailForm.message} onChange={e=>setEmailForm({...emailForm,message:e.target.value})} placeholder={'Hi '+focusedClient.name.split(' ')[0]+','}/>
+                </div>
+                <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                  <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowEmailModal(false)}>Cancel</button>
+                  <button className="btn-save" disabled={sendingEmail||!emailForm.subject||!emailForm.message} onClick={()=>sendClientEmail(focusedClient.name,focusedClient.email)}>
+                    {sendingEmail?'Sending...':'Send Email'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
