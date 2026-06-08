@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
       // Email to client
       await resend.emails.send({
-        from: 'Alante Velez <onboarding@resend.dev>',
+        from: 'Alante Velez <alante@alantevelez.com>',
         to: intake.email,
         subject: `Reminder — your discovery call is coming up`,
         html: `<!DOCTYPE html>

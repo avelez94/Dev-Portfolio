@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     })
 
     await resend.emails.send({
-      from: 'Alante Velez <onboarding@resend.dev>',
+      from: 'Alante Velez <alante@alantevelez.com>',
       to: clientEmail,
       subject: `Meeting scheduled — ${formattedDate}`,
       html: `<!DOCTYPE html>

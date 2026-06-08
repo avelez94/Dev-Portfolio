@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
 
     // Send confirmation email to client
     await resend.emails.send({
-      from: 'Alante Velez <onboarding@resend.dev>',
+      from: 'Alante Velez <alante@alantevelez.com>',
       to: intake.email,
       subject: `Your discovery call is confirmed — ${formattedDate}`,
       html: getClientConfirmationHtml({
@@ -176,8 +176,8 @@ export async function POST(req: NextRequest) {
 
     // Send notification email to you
     await resend.emails.send({
-      from: 'Portfolio <onboarding@resend.dev>',
-      to: 'alante.v@gmail.com',
+      from: 'Portfolio <alante@alantevelez.com>',
+      to: 'alante@alantevelez.com',
       subject: `Discovery call booked — ${intake.name} on ${formattedDate}`,
       html: getAdminNotificationHtml({
         name: intake.name,
