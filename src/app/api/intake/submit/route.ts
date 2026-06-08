@@ -37,14 +37,14 @@ export async function POST(req: NextRequest) {
     const bookingUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/book?ref=${submission.id}`
 
     await resend.emails.send({
-      from: 'Alante Velez <onboarding@resend.dev>',
+      from: 'Alante Velez <alante@alantevelez.com>',
       to: email,
       subject: 'Got your project details — here is your next step',
       html: getClientEmailHtml({ name, bookingUrl }),
     })
 
     await resend.emails.send({
-      from: 'Alante Velez <onboarding@resend.dev>',
+      from: 'Alante Velez <alante@alantevelez.com>',
       to: 'alante.v@gmail.com',
       subject: `New intake submission from ${name}`,
       html: getAdminEmailHtml({ name, email, business, type, description, budget, timeline, heard, priority, anything, submissionId: submission.id }),

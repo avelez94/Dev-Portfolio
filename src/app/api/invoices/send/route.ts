@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
          <div class="detail-value" style="color:#C4704A;font-weight:500;">$${totalFee.toLocaleString()}</div>`
 
     await resend.emails.send({
-      from: 'Alante Velez <onboarding@resend.dev>',
+      from: 'Alante Velez <alante@alantevelez.com>',
       to: clientEmail,
       subject: `Invoice #${invoiceNumber} from Alante Velez`,
       html: `<!DOCTYPE html>
