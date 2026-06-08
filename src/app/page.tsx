@@ -360,6 +360,15 @@ export default function Home() {
               <a href="https://demos.alantevelez.com/demo-6-webhook-dashboard.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
+          <div className="demo-card green" data-observe="true">
+            <div className="demo-preview" style={{padding:0}}><img src="/demos/demo-7-delivery-tracker.png" alt="Live Delivery Tracker" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"top"}}/><span className="demo-label">Live Tracking</span></div>
+            <div className="demo-info">
+              <div className="demo-num">Demo 07</div>
+              <div className="demo-name">Live Delivery Tracker</div>
+              <p className="demo-desc">A real time delivery tracking dashboard with a live driver marker, animated route, ETA countdown, speed stats, and order progress tracking. Built with Google Maps API.</p>
+              <a href="https://demos.alantevelez.com/demo-7-delivery-tracker.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+            </div>
+          </div>
         </div>
       </section>
 
