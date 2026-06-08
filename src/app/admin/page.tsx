@@ -248,7 +248,11 @@ export default function AdminDashboard() {
       return
     }
     await supabase.from('clients').update({pipeline_stage:nextStage}).eq('id',c.id)
+    if (nextStage === 'closed') {
+      await supabase.from('projects').update({status:'complete'}).eq('client_id',c.id)
+    }
     await fetchClients()
+    await fetchProjects()
     if (focused?.type==='client' && focused.data.id===c.id) setFocused({type:'client',data:{...c,pipeline_stage:nextStage}})
   }
   async function confirmActiveProject() {
