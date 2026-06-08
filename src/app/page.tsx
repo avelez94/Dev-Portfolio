@@ -312,7 +312,7 @@ export default function Home() {
               <div className="demo-num">Demo 01</div>
               <div className="demo-name">AI Travel Chatbot</div>
               <p className="demo-desc">Ask about any destination and get a full itinerary with local tips, hidden gems, and food recommendations. Powered by Claude AI.</p>
-              <a href="https://demos-lilac.vercel.app/demo-1-travel-chatbot.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+              <a href="https://demos.alantevelez.com/demo-1-travel-chatbot.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
           <div className="demo-card purple" data-observe="true">
@@ -321,7 +321,7 @@ export default function Home() {
               <div className="demo-num">Demo 02</div>
               <div className="demo-name">SaaS Dashboard</div>
               <p className="demo-desc">A full product dashboard with animated revenue charts, customer table, donut plan distribution, and live stat counters.</p>
-              <a href="https://demos-lilac.vercel.app/demo-2-saas-dashboard.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+              <a href="https://demos.alantevelez.com/demo-2-saas-dashboard.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
           <div className="demo-card emerald" data-observe="true">
@@ -330,7 +330,7 @@ export default function Home() {
               <div className="demo-num">Demo 03</div>
               <div className="demo-name">AI Resume Builder</div>
               <p className="demo-desc">Fill in your details and generate a polished, formatted resume document instantly. Download as PDF when done.</p>
-              <a href="https://demos-lilac.vercel.app/demo-3-resume-builder.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+              <a href="https://demos.alantevelez.com/demo-3-resume-builder.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
           <div className="demo-card orange" data-observe="true">
@@ -339,7 +339,7 @@ export default function Home() {
               <div className="demo-num">Demo 04</div>
               <div className="demo-name">Stripe Checkout Flow</div>
               <p className="demo-desc">A full digital storefront with cart management, a 3 step checkout, card input formatting, and an order confirmation state.</p>
-              <a href="https://demos-lilac.vercel.app/demo-4-stripe-checkout.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+              <a href="https://demos.alantevelez.com/demo-4-stripe-checkout.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
           <div className="demo-card red" data-observe="true">
@@ -348,7 +348,7 @@ export default function Home() {
               <div className="demo-num">Demo 05</div>
               <div className="demo-name">Small Business Website</div>
               <p className="demo-desc">A fully designed local business site with services, testimonials, hero stats, a contact form, and mobile responsive layout.</p>
-              <a href="https://demos-lilac.vercel.app/demo-5-small-business-site.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+              <a href="https://demos.alantevelez.com/demo-5-small-business-site.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
           <div className="demo-card green" data-observe="true">
@@ -357,7 +357,7 @@ export default function Home() {
               <div className="demo-num">Demo 06</div>
               <div className="demo-name">Webhook Dashboard</div>
               <p className="demo-desc">A real time event stream dashboard showing live webhook events, payload inspector, latency metrics, and endpoint tracking.</p>
-              <a href="https://demos-lilac.vercel.app/demo-6-webhook-dashboard.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+              <a href="https://demos.alantevelez.com/demo-6-webhook-dashboard.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
         </div>
