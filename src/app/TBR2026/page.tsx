@@ -91,7 +91,6 @@ const filterBtn  = (active: boolean): React.CSSProperties => ({ background:activ
 
 // ─── TAB BAR ──────────────────────────────────────────────────────
 const TABS = [
-  { id:"screener",  label:"🌊 Flow Screener" },
   { id:"journal",   label:"📓 Trade Journal" },
   { id:"analytics", label:"🌸 Analytics"     },
 ];
@@ -155,7 +154,10 @@ function ScreenerTab() {
   const [filterType, setFilterType] = useState("all");
   const [minPremium, setMinPremium] = useState(500000);
   const [minVolOI, setMinVolOI] = useState(5);
+  const [minContracts, setMinContracts] = useState(1000);
   const [sweepOnly, setSweepOnly] = useState(true);
+  const [askSideOnly, setAskSideOnly] = useState(true);
+  const [above50MA, setAbove50MA] = useState(true);
   const [minDTE, setMinDTE] = useState(21);
   const [maxDTE, setMaxDTE] = useState(90);
   const [usingMock, setUsingMock] = useState(true);
@@ -195,11 +197,15 @@ function ScreenerTab() {
     const dte=getDTE(f.expiration);
     if (sweepOnly&&f.sweepType!=="SWEEP") return false;
     if (f.premium<minPremium) return false;
+    if (f.volume<minContracts) return false;
     if (f.openInterest>0&&(f.volume/f.openInterest)<minVolOI) return false;
     if (dte<minDTE||dte>maxDTE) return false;
     if (filterType!=="all"&&f.type!==filterType) return false;
+    // Ask side = bullish calls, bid side = bearish puts
+    if (askSideOnly&&f.type==="CALL"&&f.sentiment==="BEARISH") return false;
+    if (askSideOnly&&f.type==="PUT"&&f.sentiment==="BULLISH") return false;
     return true;
-  }),[flow,filterType,minPremium,minVolOI,sweepOnly,minDTE,maxDTE]);
+  }),[flow,filterType,minPremium,minVolOI,minContracts,sweepOnly,askSideOnly,minDTE,maxDTE]);
 
   const activeBtn = (active: boolean): React.CSSProperties => ({ background:active?C.pinkDim:C.surface, border:`1px solid ${active?C.pink:C.border}`, color:active?C.pink:C.muted, borderRadius:7, padding:"9px 14px", fontSize:12, cursor:"pointer", fontWeight:active?700:400 });
 
@@ -225,9 +231,10 @@ function ScreenerTab() {
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(148px,1fr))", gap:12 }}>
           {([
             ["Min Premium",[50000,100000,250000,500000,1000000,2000000],minPremium,(v:string)=>setMinPremium(Number(v)),fmtK],
-            ["Min Vol/OI", [1,2,3,5,10,20],minVolOI,(v:string)=>setMinVolOI(Number(v)),(v:number)=>v+"x"],
-            ["Min DTE",    [7,14,21,30,45],minDTE,(v:string)=>setMinDTE(Number(v)),(v:number)=>v+" days"],
-            ["Max DTE",    [30,45,60,90,120,180],maxDTE,(v:string)=>setMaxDTE(Number(v)),(v:number)=>v+" days"],
+            ["Min Vol/OI", [5,10,15,20],minVolOI,(v:string)=>setMinVolOI(Number(v)),(v:number)=>v+"x"],
+            ["Min Contracts",[500,1000,2000,5000],minContracts,(v:string)=>setMinContracts(Number(v)),(v:number)=>v.toLocaleString()],
+            ["Min DTE",    [21,30,45],minDTE,(v:string)=>setMinDTE(Number(v)),(v:number)=>v+" days"],
+            ["Max DTE",    [30,45,60,90,120],maxDTE,(v:string)=>setMaxDTE(Number(v)),(v:number)=>v+" days"],
           ] as any[]).map(([label,opts,val,setter,fmtFn])=>(
             <div key={label}>
               <label style={labelStyle}>{label}</label>
@@ -242,10 +249,18 @@ function ScreenerTab() {
               <option value="all">All</option><option value="CALL">Calls</option><option value="PUT">Puts</option>
             </select>
           </div>
-          <div style={{ display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             <button onClick={()=>setSweepOnly((s:boolean)=>!s)} style={activeBtn(sweepOnly)}>{sweepOnly?"Sweeps Only":"All Orders"}</button>
+            <button onClick={()=>setAskSideOnly((s:boolean)=>!s)} style={activeBtn(askSideOnly)}>{askSideOnly?"Ask/Bid Side ON":"Ask/Bid Side OFF"}</button>
+            <button onClick={()=>setAbove50MA((s:boolean)=>!s)} style={activeBtn(above50MA)}>{above50MA?"Above 50MA Only":"All Trends"}</button>
           </div>
         </div>
+        {above50MA&&<div style={{ marginTop:12, fontSize:11, color:C.muted, background:C.bg, borderRadius:7, padding:"8px 12px", border:`1px solid ${C.border}` }}>
+          🌸 Above 50MA filter is ON. Before entering any signal, manually confirm the stock and SPY are both trading above their 50 day moving average.
+        </div>}
+        {askSideOnly&&<div style={{ marginTop:8, fontSize:11, color:C.muted, background:C.bg, borderRadius:7, padding:"8px 12px", border:`1px solid ${C.border}` }}>
+          🌸 Ask/Bid side filter is ON. Bullish calls must be ask side. Bearish puts must be bid side. Mixed sentiment signals are filtered out.
+        </div>}
       </div>
 
       <div style={{ fontSize:12, color:C.muted, marginBottom:10 }}>{filtered.length} signal{filtered.length!==1?"s":""} matching your criteria</div>
@@ -634,7 +649,7 @@ function AnalyticsTab({ trades }: { trades: any[] }) {
 // ─── MAIN PAGE ────────────────────────────────────────────────────
 export default function BloomRoom() {
   const [unlocked, setUnlocked] = useState(false);
-  const [tab, setTab] = useState("screener");
+  const [tab, setTab] = useState("journal");
   const [trades, setTrades] = useState<any[]>([]);
   const [loadingTrades, setLoadingTrades] = useState(true);
 
@@ -667,7 +682,6 @@ export default function BloomRoom() {
           <div style={{ textAlign:"center", padding:60, color:C.muted }}>Loading your trades...</div>
         ) : (
           <>
-            {tab==="screener"  && <ScreenerTab />}
             {tab==="journal"   && <JournalTab trades={trades} setTrades={setTrades} />}
             {tab==="analytics" && <AnalyticsTab trades={trades} />}
           </>
