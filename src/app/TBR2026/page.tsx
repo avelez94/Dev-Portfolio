@@ -93,6 +93,7 @@ const filterBtn  = (active: boolean): React.CSSProperties => ({ background:activ
 const TABS = [
   { id:"journal",   label:"📓 Trade Journal" },
   { id:"analytics", label:"🌸 Analytics"     },
+  { id:"charts",    label:"📈 Charts"        },
 ];
 const TabBar = ({ tab, setTab }: { tab: string; setTab: (t: string) => void }) => (
   <div style={{ display:"flex", borderBottom:`1px solid ${C.border}`, marginBottom:24 }}>
@@ -646,6 +647,76 @@ function AnalyticsTab({ trades }: { trades: any[] }) {
   );
 }
 
+// ─── CHARTS TAB ───────────────────────────────────────────────────
+function ChartsTab({ trades }: { trades: any[] }) {
+  const [ticker, setTicker] = useState("NVDA");
+  const [input, setInput] = useState("NVDA");
+  const [interval, setInterval] = useState("D");
+  const openTickers = [...new Set(trades.filter(t => tradeStatus(t) === "open").map(t => t.ticker.toUpperCase()))];
+
+  const intervals = [
+    { label:"1H",  value:"60" },
+    { label:"4H",  value:"240" },
+    { label:"1D",  value:"D" },
+    { label:"1W",  value:"W" },
+  ];
+
+  const chartSrc = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${ticker}&interval=${interval}&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=1&saveimage=0&toolbarbg=1a1418&studies=EMA%40tv-basicstudies%1F%1F%7B%22length%22%3A50%7D%1FEMA%40tv-basicstudies%1F%1F%7B%22length%22%3A200%7D&theme=dark&style=1&timezone=America%2FNew_York&withdateranges=1&showpopupbutton=0&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=bloomroom&utm_medium=widget`;
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
+        <div style={{ display:"flex", flex:1, minWidth:200, gap:8 }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === "Enter" && setTicker(input)}
+            placeholder="Search ticker..."
+            style={{ flex:1, background:C.surface, border:`1px solid ${C.border}`, borderRadius:7, padding:"9px 12px", color:C.text, fontSize:14, outline:"none", letterSpacing:1, fontWeight:700 }}
+          />
+          <button onClick={() => setTicker(input)}
+            style={{ background:C.pink, color:C.bg, border:"none", borderRadius:7, padding:"9px 18px", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+            Go
+          </button>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          {intervals.map(i => (
+            <button key={i.value} onClick={() => setInterval(i.value)}
+              style={{ background:interval===i.value?C.pinkDim:C.surface, border:`1px solid ${interval===i.value?C.pink:C.border}`, color:interval===i.value?C.pink:C.muted, borderRadius:6, padding:"8px 14px", fontSize:12, cursor:"pointer", fontWeight:interval===i.value?700:400 }}>
+              {i.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {openTickers.length > 0 && (
+        <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+          <span style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:0.5, paddingTop:6 }}>Open Trades:</span>
+          {openTickers.map(t => (
+            <button key={t} onClick={() => { setTicker(t); setInput(t); }}
+              style={{ background:ticker===t?C.pinkDim:C.surface, border:`1px solid ${ticker===t?C.pink:C.border}`, color:ticker===t?C.pink:C.textSub, borderRadius:6, padding:"5px 12px", fontSize:12, cursor:"pointer", fontWeight:ticker===t?700:400, letterSpacing:0.5 }}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden" }}>
+        <div style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:14, fontWeight:700, color:C.text, letterSpacing:1 }}>{ticker}</div>
+          <div style={{ fontSize:11, color:C.muted }}>50 EMA + 200 EMA loaded by default</div>
+        </div>
+        <iframe
+          key={`${ticker}-${interval}`}
+          src={chartSrc}
+          style={{ width:"100%", height:580, border:"none", display:"block" }}
+          allowFullScreen
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────
 export default function BloomRoom() {
   const [unlocked, setUnlocked] = useState(()=>{
@@ -712,6 +783,7 @@ export default function BloomRoom() {
           <>
             {tab==="journal"   && <JournalTab trades={trades} setTrades={setTrades} />}
             {tab==="analytics" && <AnalyticsTab trades={trades} />}
+            {tab==="charts"    && <ChartsTab trades={trades} />}
           </>
         )}
       </div>
