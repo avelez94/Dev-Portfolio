@@ -9,7 +9,7 @@ import {
 
 // ─── SUPABASE ─────────────────────────────────────────────────────
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxempodGRxamNkaW10c2lwcXpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3OTIzMTUsImV4cCI6MjA5NjM2ODMxNX0.IJQBeTxG78MbpuaQCyNHjIGjH6X3agYZkmEwig4uKwk";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─── PASSWORD ─────────────────────────────────────────────────────
@@ -648,22 +648,43 @@ function AnalyticsTab({ trades }: { trades: any[] }) {
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────
 export default function BloomRoom() {
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(()=>{
+    if (typeof window !== "undefined") return sessionStorage.getItem("tbr_unlocked") === "true";
+    return false;
+  });
   const [tab, setTab] = useState("journal");
   const [trades, setTrades] = useState<any[]>([]);
   const [loadingTrades, setLoadingTrades] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadTrades = async () => {
+    const { data } = await supabase.from("trades").select("*").order("created_at", { ascending:false });
+    if (data) setTrades(data);
+    setLoadingTrades(false);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadTrades();
+    setRefreshing(false);
+  };
+
+  const handleUnlock = () => {
+    sessionStorage.setItem("tbr_unlocked", "true");
+    setUnlocked(true);
+  };
+
+  const handleLock = () => {
+    sessionStorage.removeItem("tbr_unlocked");
+    setUnlocked(false);
+  };
 
   useEffect(()=>{
     if (!unlocked) return;
-    const load = async () => {
-      const { data } = await supabase.from("trades").select("*").order("created_at", { ascending:false });
-      if (data) setTrades(data);
-      setLoadingTrades(false);
-    };
-    load();
+    loadTrades();
   },[unlocked]);
 
-  if (!unlocked) return <PasswordGate onUnlock={()=>setUnlocked(true)} />;
+  if (!unlocked) return <PasswordGate onUnlock={handleUnlock} />;
 
   return (
     <div style={{ background:C.bg, minHeight:"100vh", fontFamily:"'Inter','SF Pro Display',system-ui,sans-serif", color:C.text, padding:"20px 16px" }}>
@@ -673,9 +694,16 @@ export default function BloomRoom() {
             <div style={{ fontSize:10, letterSpacing:3, color:C.pink, textTransform:"uppercase", marginBottom:3 }}>Your Private Trading Sanctuary</div>
             <div style={{ fontSize:26, fontWeight:800, letterSpacing:-0.5 }}>🌸 The Bloom Room</div>
           </div>
-          <button onClick={()=>setUnlocked(false)} style={{ background:"transparent", border:`1px solid ${C.border}`, color:C.muted, borderRadius:7, padding:"7px 14px", fontSize:12, cursor:"pointer" }}>
-            Lock
-          </button>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={handleRefresh}
+              style={{ background:C.sageDim, border:`1px solid ${C.sage}`, color:C.sage, borderRadius:7, padding:"7px 14px", fontSize:12, cursor:"pointer", fontWeight:600 }}>
+              {refreshing ? "Refreshing..." : "↻ Refresh"}
+            </button>
+            <button onClick={handleLock}
+              style={{ background:"transparent", border:`1px solid ${C.border}`, color:C.muted, borderRadius:7, padding:"7px 14px", fontSize:12, cursor:"pointer" }}>
+              Lock
+            </button>
+          </div>
         </div>
         <TabBar tab={tab} setTab={setTab} />
         {loadingTrades ? (
