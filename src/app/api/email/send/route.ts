@@ -5,11 +5,11 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(req: NextRequest) {
   try {
-    const { clientEmail, clientName, subject, message } = await req.json()
+    const { clientEmail, clientName, subject, message, attachment } = await req.json()
 
     const formattedMessage = message.replace(/\n/g, '<br/>')
 
-    await resend.emails.send({
+    const emailPayload: any = {
       from: 'Alante Velez <alante@alantevelez.com>',
       to: clientEmail,
       subject,
@@ -36,7 +36,16 @@ export async function POST(req: NextRequest) {
   </div>
 </div>
 </body></html>`
-    })
+    }
+
+    if (attachment) {
+      emailPayload.attachments = [{
+        filename: attachment.name,
+        content: attachment.data,
+      }]
+    }
+
+    await resend.emails.send(emailPayload)
 
     return NextResponse.json({ success: true })
   } catch (err) {
