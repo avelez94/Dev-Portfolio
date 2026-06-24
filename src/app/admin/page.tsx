@@ -107,6 +107,7 @@ export default function AdminDashboard() {
   const [emailForm, setEmailForm] = useState({ subject:'', message:'' })
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+  const [emailAttachment, setEmailAttachment] = useState<{name:string,data:string,type:string}|null>(null)
   const [np, setNp] = useState({ name:'', type:'Landing Page', value:'', platform:'direct', status:'active', end_date:'' })
   const [nc, setNc] = useState({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
   const [clientInvoiceForm, setClientInvoiceForm] = useState({
@@ -389,18 +390,28 @@ export default function AdminDashboard() {
       await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientEmail, clientName, subject: emailForm.subject, message: emailForm.message })
+        body: JSON.stringify({ clientEmail, clientName, subject: emailForm.subject, message: emailForm.message, attachment: emailAttachment })
       })
       setEmailSent(true)
       setTimeout(() => {
         setShowEmailModal(false)
         setEmailForm({ subject:'', message:'' })
+        setEmailAttachment(null)
         setEmailSent(false)
       }, 1500)
     } catch(e) {
       console.error(e)
     }
     setSendingEmail(false)
+  }
+
+  async function handleEmailAttachment(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1]
+      setEmailAttachment({ name: file.name, data: base64, type: file.type })
+    }
+    reader.readAsDataURL(file)
   }
 
   async function saveProjectNotes(projectId: string) {
@@ -1754,6 +1765,15 @@ export default function AdminDashboard() {
                 <div className="form-group" style={{marginBottom:20}}>
                   <div className="form-label" style={{color:d.text3}}>Message</div>
                   <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:140}} value={emailForm.message} onChange={e=>setEmailForm({...emailForm,message:e.target.value})} placeholder={'Hi '+focusedClient.name.split(' ')[0]+','}/>
+                </div>
+                <div style={{marginBottom:12}}>
+                  <div className="form-label" style={{color:d.text3,marginBottom:6}}>Attachment (optional)</div>
+                  <label style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:d.surface,borderRadius:8,border:'1px solid '+d.border,cursor:'pointer'}}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 7l-5 5a3.5 3.5 0 01-5-5l5-5a2 2 0 013 3L5 10a.5.5 0 01-1-1l5-5" stroke={d.accent} strokeWidth="1.3" strokeLinecap="round"/></svg>
+                    <span style={{fontSize:12,color:emailAttachment?d.text:d.text3}}>{emailAttachment?emailAttachment.name:'Attach a file...'}</span>
+                    {emailAttachment&&<button style={{marginLeft:'auto',background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:14}} onClick={e=>{e.preventDefault();setEmailAttachment(null)}}>x</button>}
+                    <input type="file" accept=".pdf,.doc,.docx,.png,.jpg" style={{display:'none'}} onChange={e=>e.target.files&&handleEmailAttachment(e.target.files[0])}/>
+                  </label>
                 </div>
                 <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
                   <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowEmailModal(false)}>Cancel</button>
