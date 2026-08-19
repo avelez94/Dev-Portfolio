@@ -26,7 +26,7 @@ export default function Home() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&family=Caveat:wght@400;700&display=swap');
         :root {
           --terracotta: #C4704A; --terracotta-light: #d4855f;
           --cream: #FAF6F0; --espresso: #2C1A0E;
@@ -54,6 +54,7 @@ export default function Home() {
         .hero { min-height: 100vh; display: flex; align-items: center; padding: 120px 48px 80px; position: relative; overflow: hidden; z-index: 2; }
         .hero-bg-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Playfair Display', serif; font-size: clamp(100px, 18vw, 240px); font-weight: 900; color: transparent; -webkit-text-stroke: 1px rgba(196,112,74,0.07); white-space: nowrap; pointer-events: none; user-select: none; letter-spacing: -0.02em; transition: transform 0.1s ease-out; }
         .hero-content { position: relative; z-index: 2; max-width: 820px; }
+        .hero-greeting { font-family: 'Caveat', cursive; font-size: 2.2rem; font-weight: 700; color: var(--terracotta); margin-bottom: 16px; opacity: 0; animation: fadeUp 0.9s 0.3s forwards; }
         .hero-tag { display: inline-flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--terracotta); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 28px; opacity: 0; animation: fadeUp 0.9s 0.4s forwards; }
         .hero-tag::before { content: ''; width: 32px; height: 1px; background: var(--terracotta); }
         .hero-name { font-family: 'Playfair Display', serif; font-size: clamp(52px, 8vw, 96px); font-weight: 900; line-height: 0.95; letter-spacing: -0.02em; margin-bottom: 32px; opacity: 0; animation: fadeUp 0.9s 0.55s forwards; }
@@ -223,14 +224,15 @@ export default function Home() {
       <section className="hero">
         <div className="hero-bg-text" id="heroBgText">DEVELOPER</div>
         <div className="hero-content">
+          <div className="hero-greeting">Hey there</div>
           <div className="hero-tag">Full Stack Developer</div>
-          <h1 className="hero-name">From idea<br />to <em>production.</em></h1>
+          <h1 className="hero-name">From idea to <em>revenue generating product.</em><br />Then I stay.</h1>
           <div className="typewriter-wrap">
             <span className="typewriter-prefix">~/</span>
             <span id="typewriterText"></span>
             <span className="cursor-blink"></span>
           </div>
-          <p className="hero-desc">I design and ship production ready web applications using modern tools. From SaaS platforms to mission driven organizations, every project I take on is built to last.</p>
+          <p className="hero-desc">Fast shipping matters. Reliable code matters more. Every project gets documentation, post launch support, and a developer who's actually there when you need them.</p>
           <div className="hero-btns">
             <a href="#hire" className="hero-cta magnetic">Start a Project <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
           </div>
@@ -360,15 +362,6 @@ export default function Home() {
               <a href="https://demos.alantevelez.com/demo-6-webhook-dashboard.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
             </div>
           </div>
-          <div className="demo-card green" data-observe="true">
-            <div className="demo-preview" style={{padding:0}}><img src="/demos/demo-7-delivery-tracker.png" alt="Live Delivery Tracker" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"top"}}/><span className="demo-label">Live Tracking</span></div>
-            <div className="demo-info">
-              <div className="demo-num">Demo 07</div>
-              <div className="demo-name">Live Delivery Tracker</div>
-              <p className="demo-desc">A real time delivery tracking dashboard with a live driver marker, animated route, ETA countdown, speed stats, and order progress tracking. Built with Google Maps API.</p>
-              <a href="https://demos.alantevelez.com/demo-7-delivery-tracker.html" target="_blank" className="demo-link">Try It Live <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -402,7 +395,7 @@ export default function Home() {
       <section className="cta-section">
         <div className="section-label">Ready?</div>
         <h2 className="section-title">Your project starts<br /><em style={{fontStyle: 'italic', color: 'var(--terracotta)'}}>with one form.</em></h2>
-        <p className="cta-subtitle">Ready to build? Fill out the intake form and book your discovery call in one shot. Have a question first? Use the same form — just tell me what's on your mind.</p>
+        <p className="cta-subtitle">Ready to build? Fill out the intake form and book your discovery call in one shot. Have a question first? Use the same form—just tell me what's on your mind.</p>
         <a href="/intake" className="cta-btn magnetic">Start the Intake Form <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
         <a href="/intake" className="hero-cta-ghost magnetic" style={{marginTop:16,display:"inline-flex",alignItems:"center",gap:14,padding:"16px 32px",border:"1px solid var(--border)",color:"var(--cream)",fontFamily:"DM Mono,monospace",fontSize:"0.78rem",letterSpacing:"0.1em",textTransform:"uppercase",textDecoration:"none",transition:"border-color 0.25s,color 0.25s,transform 0.25s"}}>Have a question first? <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
       </section>
