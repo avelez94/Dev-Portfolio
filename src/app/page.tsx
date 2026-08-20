@@ -42,9 +42,9 @@ export default function Home() {
         .nav-cta { background: var(--dark); color: var(--cream); padding: 12px 24px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.2s; }
         .nav-cta:hover { background: var(--pink); }
 
-        .hero { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; align-items: center; padding: 140px 48px; position: relative; overflow: hidden; z-index: 2; gap: 60px; }
+        .hero { min-height: 100vh; display: grid; grid-template-columns: 0.7fr 1.3fr; align-items: center; padding: 140px 48px; position: relative; overflow: hidden; z-index: 2; gap: 40px; }
         
-        .hero::before { content: ''; position: absolute; right: -10%; top: 50%; transform: translateY(-50%); width: 50%; height: 130%; background: url('/plant_shadow.jpg') center/cover no-repeat; pointer-events: none; opacity: 0.6; -webkit-mask-image: linear-gradient(to right, transparent 0%, white 40%); mask-image: linear-gradient(to right, transparent 0%, white 40%); }
+        .hero::before { content: ''; position: absolute; right: -10%; top: 50%; transform: translateY(-50%); width: 50%; height: 130%; background: url('/plante_shadow.jpg') center/cover no-repeat; pointer-events: none; opacity: 0.6; -webkit-mask-image: linear-gradient(to right, transparent 0%, white 40%); mask-image: linear-gradient(to right, transparent 0%, white 40%); }
 
         .hero-left { position: relative; z-index: 2; }
         .hero-photo { width: 100%; max-width: 420px; border-radius: 8px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.08); }
