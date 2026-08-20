@@ -44,7 +44,7 @@ export default function Home() {
 
         .hero { min-height: 100vh; display: grid; grid-template-columns: 0.7fr 1.3fr; align-items: center; padding: 140px 48px; position: relative; overflow: hidden; z-index: 2; gap: 40px; }
         
-        .hero::before { content: ''; position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 55%; height: 140%; background: url('/plante_shadow.jpg') right center/contain no-repeat; pointer-events: none; opacity: 0.5; }
+        .hero::before { content: ''; position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 55%; height: 140%; background: url('/plant_shadow.jpg') right center/contain no-repeat; pointer-events: none; opacity: 0.5; }
 
         .hero-left { position: relative; z-index: 2; }
         .hero-photo { width: 100%; max-width: 420px; border-radius: 8px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.08); }
