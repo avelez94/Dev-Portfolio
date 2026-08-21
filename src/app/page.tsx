@@ -44,7 +44,7 @@ export default function Home() {
 
         .hero { min-height: 100vh; display: grid; grid-template-columns: 0.7fr 1.3fr; align-items: center; padding: 140px 48px; position: relative; overflow: hidden; z-index: 2; gap: 40px; }
         
-        .hero::before { content: ''; position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 55%; height: 140%; background: url('/plant_shadow.jpg') right center/contain no-repeat; pointer-events: none; opacity: 0.5; }
+        .hero::before { content: ''; position: absolute; right: -5%; top: 50%; transform: translateY(-50%); width: 60%; height: 150%; background: url('/plante_shadow.jpg') center/cover no-repeat; pointer-events: none; opacity: 0.8; z-index: 1; }
 
         .hero-left { position: relative; z-index: 2; }
         .hero-photo { width: 100%; max-width: 420px; border-radius: 8px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.08); }
@@ -87,13 +87,19 @@ export default function Home() {
         .project-card { background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: all 0.3s; box-shadow: 0 4px 16px rgba(0,0,0,0.04); }
         .project-card:hover { border-color: var(--pink); box-shadow: 0 12px 32px rgba(169,104,96,0.12); }
 
-        .project-image { width: 100%; height: 200px; background: linear-gradient(135deg, rgba(212,165,116,0.1), rgba(169,104,96,0.1)); display: flex; align-items: center; justify-content: center; font-size: 3.5rem; border-bottom: 1px solid var(--border); }
+        .project-image { width: 100%; height: 280px; background: linear-gradient(135deg, rgba(212,165,116,0.1), rgba(169,104,96,0.1)); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); }
+
+        .image-placeholder { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
 
         .project-body { padding: 32px 28px; }
         .project-icon { font-size: 2rem; margin-bottom: 12px; }
         .project-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; color: var(--dark); }
         .project-subtitle { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); letter-spacing: 0.1em; margin-bottom: 14px; text-transform: uppercase; font-weight: 500; }
-        .project-desc { font-size: 0.9rem; line-height: 1.6; color: rgba(42,36,32,0.7); margin-bottom: 20px; }
+        .project-desc { font-size: 0.9rem; line-height: 1.6; color: rgba(42,36,32,0.7); margin-bottom: 18px; }
+
+        .tech-stack { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+        
+        .tech-badge { font-family: var(--mono); font-size: 0.7rem; color: var(--pink); background: rgba(169,104,96,0.08); padding: 6px 12px; border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
 
         .project-link { display: inline-flex; align-items: center; gap: 8px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pink); text-decoration: none; transition: gap 0.2s; font-weight: 500; }
         .project-link:hover { gap: 14px; }
@@ -200,31 +206,54 @@ export default function Home() {
         </div>
         <div className="projects-grid">
           <div className="project-card">
-            <div className="project-image">✈️</div>
+            <div className="project-image">
+              <div className="image-placeholder">Image Placeholder</div>
+            </div>
             <div className="project-body">
               <div className="project-name">Planary</div>
               <div className="project-subtitle">AI-Powered Travel Platform</div>
               <p className="project-desc">Custom travel planning platform with AI recommendations, interactive itineraries, Stripe payments, customer dashboard, and admin panel.</p>
+              <div className="tech-stack">
+                <span className="tech-badge">Next.js</span>
+                <span className="tech-badge">Supabase</span>
+                <span className="tech-badge">Stripe</span>
+                <span className="tech-badge">AI</span>
+              </div>
               <a href="https://planarytravel.com" target="_blank" className="project-link">View Case Study →</a>
             </div>
           </div>
 
           <div className="project-card">
-            <div className="project-image">🎓</div>
+            <div className="project-image">
+              <div className="image-placeholder">Image Placeholder</div>
+            </div>
             <div className="project-body">
               <div className="project-name">Rising Sons Leadership Academy</div>
               <div className="project-subtitle">Custom Learning Management System</div>
               <p className="project-desc">Full-stack LMS with custom video player, per-student access control, progress tracking, PayPal payments, and Zoom integration.</p>
+              <div className="tech-stack">
+                <span className="tech-badge">Next.js</span>
+                <span className="tech-badge">Supabase</span>
+                <span className="tech-badge">PayPal</span>
+                <span className="tech-badge">Zoom API</span>
+              </div>
               <a href="https://risingsonsacademy.org" target="_blank" className="project-link">View Case Study →</a>
             </div>
           </div>
 
           <div className="project-card">
-            <div className="project-image">💼</div>
+            <div className="project-image">
+              <div className="image-placeholder">Image Placeholder</div>
+            </div>
             <div className="project-body">
               <div className="project-name">Tramaine Crawford</div>
               <div className="project-subtitle">Professional Development Platform</div>
               <p className="project-desc">Coaching and consulting booking platform. Allows clients to schedule sessions, manage availability, and track coaching relationships.</p>
+              <div className="tech-stack">
+                <span className="tech-badge">Next.js</span>
+                <span className="tech-badge">Supabase</span>
+                <span className="tech-badge">Calendly</span>
+              </div>
               <a href="https://tramainecrawford.com" target="_blank" className="project-link">View Live Site →</a>
             </div>
           </div>
