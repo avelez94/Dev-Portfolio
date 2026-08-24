@@ -12,8 +12,12 @@ export default function Home() {
   return (
     <>
       <style>{`
+<<<<<<< HEAD
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
         
+=======
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&family=Caveat:wght@400;700&display=swap');
+>>>>>>> 3d49bdf (Update hero section with new copy and cursive greeting)
         :root {
           --pink: #A96860;
           --pink-light: #C18078;
@@ -36,6 +40,7 @@ export default function Home() {
         .nav-logo-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
         
         .nav-links { display: flex; gap: 36px; }
+<<<<<<< HEAD
         .nav-links a { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; }
         .nav-links a:hover { color: var(--pink); }
 
@@ -73,6 +78,47 @@ export default function Home() {
         .ticker-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 10px; font-weight: 500; }
         .ticker-items { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted); letter-spacing: 0.06em; display: flex; flex-wrap: wrap; gap: 20px; }
 
+=======
+        .nav-links a { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; opacity: 0; animation: fadeUp 0.8s forwards; position: relative; }
+        .nav-links a::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 1px; background: var(--terracotta); transition: width 0.3s; }
+        .nav-links a:hover::after { width: 100%; }
+        .nav-links a:nth-child(1) { animation-delay: 0.3s; }
+        .nav-links a:nth-child(2) { animation-delay: 0.4s; }
+        .nav-links a:nth-child(3) { animation-delay: 0.5s; }
+        .nav-links a:nth-child(4) { animation-delay: 0.6s; }
+        .nav-links a:nth-child(5) { animation-delay: 0.7s; }
+        .nav-links a:hover { color: var(--cream); }
+        .hero { min-height: 100vh; display: flex; align-items: center; padding: 120px 48px 80px; position: relative; overflow: hidden; z-index: 2; }
+        .hero-bg-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Playfair Display', serif; font-size: clamp(100px, 18vw, 240px); font-weight: 900; color: transparent; -webkit-text-stroke: 1px rgba(196,112,74,0.07); white-space: nowrap; pointer-events: none; user-select: none; letter-spacing: -0.02em; transition: transform 0.1s ease-out; }
+        .hero-content { position: relative; z-index: 2; max-width: 820px; }
+        .hero-greeting { font-family: 'Caveat', cursive; font-size: 2.2rem; font-weight: 700; color: var(--terracotta); margin-bottom: 16px; opacity: 0; animation: fadeUp 0.9s 0.3s forwards; }
+        .hero-tag { display: inline-flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--terracotta); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 28px; opacity: 0; animation: fadeUp 0.9s 0.4s forwards; }
+        .hero-tag::before { content: ''; width: 32px; height: 1px; background: var(--terracotta); }
+        .hero-name { font-family: 'Playfair Display', serif; font-size: clamp(52px, 8vw, 96px); font-weight: 900; line-height: 0.95; letter-spacing: -0.02em; margin-bottom: 32px; opacity: 0; animation: fadeUp 0.9s 0.55s forwards; }
+        .hero-name em { font-style: italic; color: var(--terracotta); }
+        .typewriter-wrap { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 28px; opacity: 0; animation: fadeUp 0.9s 0.65s forwards; display: flex; align-items: center; gap: 8px; }
+        .typewriter-prefix { color: var(--terracotta); }
+        #typewriterText { color: var(--cream); }
+        .cursor-blink { display: inline-block; width: 2px; height: 14px; background: var(--terracotta); animation: blink 0.8s infinite; vertical-align: middle; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        .hero-desc { font-size: 1.05rem; line-height: 1.7; color: rgba(250,246,240,0.6); max-width: 520px; margin-bottom: 48px; font-weight: 300; opacity: 0; animation: fadeUp 0.9s 0.7s forwards; }
+        .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; opacity: 0; animation: fadeUp 0.9s 0.85s forwards; }
+        .hero-cta { display: inline-flex; align-items: center; gap: 14px; background: var(--terracotta); color: var(--cream); padding: 16px 32px; font-family: 'DM Mono', monospace; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: background 0.25s, transform 0.25s, box-shadow 0.25s; position: relative; overflow: hidden; }
+        .hero-cta::before { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.08); transform: translateX(-100%); transition: transform 0.3s; }
+        .hero-cta:hover::before { transform: translateX(0); }
+        .hero-cta:hover { background: var(--terracotta-light); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(196,112,74,0.3); }
+        .hero-cta-ghost { display: inline-flex; align-items: center; gap: 14px; background: transparent; color: var(--cream); padding: 16px 32px; border: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: border-color 0.25s, color 0.25s, transform 0.25s; }
+        .hero-cta-ghost:hover { border-color: var(--terracotta); color: var(--terracotta); transform: translateY(-2px); }
+        .hero-scroll { position: absolute; bottom: 40px; right: 48px; font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; writing-mode: vertical-rl; display: flex; align-items: center; gap: 12px; opacity: 0; animation: fadeUp 1s 1.2s forwards; }
+        .hero-scroll::after { content: ''; width: 1px; height: 48px; background: var(--terracotta); animation: lineGrow 1.5s 1.5s ease forwards; transform-origin: top; transform: scaleY(0); }
+        @keyframes lineGrow { to { transform: scaleY(1); } }
+        .marquee-wrap { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 16px 0; overflow: hidden; background: rgba(196,112,74,0.04); position: relative; z-index: 2; }
+        .marquee-track { display: flex; animation: marqueeScroll 22s linear infinite; width: max-content; }
+        .marquee-track:hover { animation-play-state: paused; }
+        @keyframes marqueeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .marquee-item { display: flex; align-items: center; gap: 28px; padding: 0 28px; white-space: nowrap; font-family: 'DM Mono', monospace; font-size: 0.75rem; color: rgba(250,246,240,0.35); letter-spacing: 0.08em; }
+        .marquee-sep { color: var(--terracotta); opacity: 0.4; }
+>>>>>>> 3d49bdf (Update hero section with new copy and cursive greeting)
         section { padding: 100px 48px; position: relative; z-index: 2; }
         section.light { background: var(--cream); }
         section.featured { background: linear-gradient(135deg, rgba(245,230,211,0.5), rgba(250,243,232,0.5)); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -173,6 +219,7 @@ export default function Home() {
         <a href="#hire" className="nav-cta">Start a Project</a>
       </nav>
 
+<<<<<<< HEAD
       <section className="hero light">
         <div className="hero-left">
           <div className="hero-photo">
@@ -183,6 +230,20 @@ export default function Home() {
           <div className="hero-tag">Full Stack Product Development</div>
           <h1 className="hero-name">I turn ideas into <em>products that work.</em><br />Then I stay.</h1>
           <p className="hero-desc">I design, build, launch, and maintain custom web applications for businesses — from SaaS platforms and client portals to AI workflows, payments, and automation.</p>
+=======
+      <section className="hero">
+        <div className="hero-bg-text" id="heroBgText">DEVELOPER</div>
+        <div className="hero-content">
+          <div className="hero-greeting">Hey there</div>
+          <div className="hero-tag">Full Stack Developer</div>
+          <h1 className="hero-name">From idea to <em>revenue generating product.</em><br />Then I stay.</h1>
+          <div className="typewriter-wrap">
+            <span className="typewriter-prefix">~/</span>
+            <span id="typewriterText"></span>
+            <span className="cursor-blink"></span>
+          </div>
+          <p className="hero-desc">Fast shipping matters. Reliable code matters more. Every project gets documentation, post launch support, and a developer who's actually there when you need them.</p>
+>>>>>>> 3d49bdf (Update hero section with new copy and cursive greeting)
           <div className="hero-btns">
             <a href="#hire" className="btn btn-primary">Start a Project →</a>
             <a href="#work" className="btn btn-secondary">View My Work →</a>
@@ -367,12 +428,12 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="hire" className="light">
-        <div className="cta-block">
-          <h2 className="cta-title">Let's build something<br /><em style={{color: 'var(--pink)', fontStyle: 'italic'}}>that lasts.</em></h2>
-          <p className="cta-subtitle">Have an idea but unsure what you need? That's okay. Tell me what you're trying to accomplish and I'll help determine the technical approach.</p>
-          <a href="/intake" className="btn btn-primary" style={{marginRight: '12px'}}>Start the Intake Form →</a>
-        </div>
+      <section className="cta-section">
+        <div className="section-label">Ready?</div>
+        <h2 className="section-title">Your project starts<br /><em style={{fontStyle: 'italic', color: 'var(--terracotta)'}}>with one form.</em></h2>
+        <p className="cta-subtitle">Ready to build? Fill out the intake form and book your discovery call in one shot. Have a question first? Use the same form—just tell me what's on your mind.</p>
+        <a href="/intake" className="cta-btn magnetic">Start the Intake Form <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+        <a href="/intake" className="hero-cta-ghost magnetic" style={{marginTop:16,display:"inline-flex",alignItems:"center",gap:14,padding:"16px 32px",border:"1px solid var(--border)",color:"var(--cream)",fontFamily:"DM Mono,monospace",fontSize:"0.78rem",letterSpacing:"0.1em",textTransform:"uppercase",textDecoration:"none",transition:"border-color 0.25s,color 0.25s,transform 0.25s"}}>Have a question first? <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
       </section>
 
       <footer>

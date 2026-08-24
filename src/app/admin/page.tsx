@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import jsPDF from 'jspdf'
@@ -47,9 +46,14 @@ type Meeting = {
   zoom_join_url: string | null; zoom_host_url: string | null
   title: string; status: string; created_at: string
 }
-
 type Document = {
   id: string; client_id: string | null; name: string; type: string; storage_path: string; created_at: string
+}
+
+// Preview types for document preview modal
+type PreviewDoc = {
+  title: string
+  sections: { label: string; value: string }[]
 }
 
 const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa']
@@ -60,6 +64,7 @@ const CARD_COLORS_LIGHT = ['#F5EDE4','#EDE8E0','#E8E4DC','#F0E8DC','#EAE0D8']
 const CARD_COLORS_DARK = ['#2C2018','#241E16','#201A14','#281E14','#2A2018']
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const PROJECT_TYPES = ['Landing Page','Booking + Payments','Web Application','AI Workflow','Other']
+const MY_EMAIL = 'alante@alantevelez.com'
 
 export default function AdminDashboard() {
   const [view, setView] = useState<'home'|'pipeline'|'revenue'|'docs'|'schedule'>('home')
@@ -97,7 +102,7 @@ export default function AdminDashboard() {
   const [activeProjectForm, setActiveProjectForm] = useState({ value:'', end_date:'' })
   const [editingNotes, setEditingNotes] = useState(false)
   const [clientNotes, setClientNotes] = useState('')
-  const [activeFillForm, setActiveFillForm] = useState<'sow'|'contract'|null>(null)
+  const [activeFillForm, setActiveFillForm] = useState<'proposal'|'sow'|'contract'|null>(null)
   const [viewingInvoice, setViewingInvoice] = useState<Invoice|null>(null)
   const [viewingProject, setViewingProject] = useState<Project|null>(null)
   const [editingProjectNotes, setEditingProjectNotes] = useState(false)
@@ -107,7 +112,12 @@ export default function AdminDashboard() {
   const [emailForm, setEmailForm] = useState({ subject:'', message:'' })
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
-  const [emailAttachment, setEmailAttachment] = useState<{name:string,data:string,type:string}|null>(null)
+
+  // Document preview modal
+  const [previewDoc, setPreviewDoc] = useState<PreviewDoc|null>(null)
+  const [previewOnConfirm, setPreviewOnConfirm] = useState<(() => void)|null>(null)
+  const [previewAction, setPreviewAction] = useState<'download'|'send'>('download')
+
   const [np, setNp] = useState({ name:'', type:'Landing Page', value:'', platform:'direct', status:'active', end_date:'' })
   const [nc, setNc] = useState({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
   const [clientInvoiceForm, setClientInvoiceForm] = useState({
@@ -132,6 +142,22 @@ export default function AdminDashboard() {
     description:'', deliverables:'', out_of_scope:'', revisions:'2', hourly_rate:'65',
     payment_method:'Stripe, PayPal, Zelle, or Wise',
   })
+  const [proposalForm, setProposalForm] = useState({
+    client_name: '',
+    client_email: '',
+    client_business: '',
+    project_title: '',
+    project_type: 'Landing Page',
+    understood: '',
+    deliverables: '',
+    out_of_scope: '',
+    price_low: '',
+    price_high: '',
+    deposit_pct: '50',
+    timeline: '',
+    next_steps: 'Sign the proposal and submit your 50% deposit to officially kick off the project.',
+  })
+
   const clockRef = useRef<ReturnType<typeof setInterval>|null>(null)
 
   useEffect(() => {
@@ -198,14 +224,12 @@ export default function AdminDashboard() {
       await fetch('/api/meetings/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, clientName, clientEmail, scheduledAt, title: meetingForm.title })
+        body: JSON.stringify({ clientId, clientName, clientEmail, scheduledAt, title: meetingForm.title, cc: MY_EMAIL })
       })
       setMeetingForm({ title:'Project Check-in', date:'', time:'' })
       setShowScheduleMeeting(false)
       await fetchMeetings()
-    } catch (e) {
-      console.error(e)
-    }
+    } catch (e) { console.error(e) }
     setSchedulingMeeting(false)
   }
 
@@ -220,7 +244,6 @@ export default function AdminDashboard() {
     await fetch('/api/admin/auth', { method: 'DELETE' })
     window.location.href = '/admin/login'
   }
-
   async function toggleDay(a: Availability) {
     await supabase.from('availability').update({is_active:!a.is_active}).eq('id',a.id); await fetchAvailability()
   }
@@ -248,9 +271,7 @@ export default function AdminDashboard() {
     if (i === PIPELINE_STAGES.length-1) return
     const nextStage = PIPELINE_STAGES[i+1]
     if (nextStage === 'active_project') {
-      setPendingAdvanceClient(c)
-      setShowActiveProjectPopup(true)
-      return
+      setPendingAdvanceClient(c); setShowActiveProjectPopup(true); return
     }
     await supabase.from('clients').update({pipeline_stage:nextStage}).eq('id',c.id)
     await fetchClients()
@@ -259,11 +280,9 @@ export default function AdminDashboard() {
   async function markAsLost(c: Client) {
     await supabase.from('clients').update({pipeline_stage:'lost'}).eq('id',c.id)
     await supabase.from('projects').update({status:'lost'}).eq('client_id',c.id)
-    await fetchClients()
-    await fetchProjects()
+    await fetchClients(); await fetchProjects()
     if (focused?.type==='client' && focused.data.id===c.id) setFocused({type:'client',data:{...c,pipeline_stage:'lost'}})
   }
-
   async function confirmActiveProject() {
     if (!pendingAdvanceClient) return
     const c = pendingAdvanceClient
@@ -279,8 +298,7 @@ export default function AdminDashboard() {
         end_date: activeProjectForm.end_date || null,
       })
     }
-    setShowActiveProjectPopup(false)
-    setPendingAdvanceClient(null)
+    setShowActiveProjectPopup(false); setPendingAdvanceClient(null)
     setActiveProjectForm({ value:'', end_date:'' })
     await fetchClients(); await fetchProjects()
     if (focused?.type==='client' && focused.data.id===c.id) setFocused({type:'client',data:{...c,pipeline_stage:'active_project'}})
@@ -340,8 +358,7 @@ export default function AdminDashboard() {
       await sendInvoiceEmail(clientName, clientEmail, insertedInv)
     }
     setClientInvoiceForm({ invoice_number:'', total_fee:'', deposit_amount:'', due_date:'', service_desc:'', hours:'', hourly_rate:'65' })
-    setShowClientInvoice(false)
-    setInvoiceType(null)
+    setShowClientInvoice(false); setInvoiceType(null)
     await fetchInvoices()
   }
   async function sendInvoiceEmail(clientName: string, clientEmail: string, inv: Invoice) {
@@ -349,38 +366,21 @@ export default function AdminDashboard() {
     try {
       const totalFee = inv.total_fee || inv.amount
       const depositAmount = inv.deposit_amount || totalFee * 0.5
-      const isProject = inv.invoice_type === 'project'
-      const isRevision = inv.invoice_type === 'revision'
-
-      const paymentSection = isProject
-        ? `<div class="detail-label">Total project fee</div>
-           <div class="detail-value">$${totalFee.toLocaleString()}</div>
-           <div class="detail-label">Deposit due now</div>
-           <div class="detail-value" style="color:#C4704A;font-weight:500;">$${depositAmount.toLocaleString()}</div>
-           <div class="detail-label">Balance due on delivery</div>
-           <div class="detail-value">$${(totalFee - depositAmount).toLocaleString()}</div>`
-        : `<div class="detail-label">Amount due</div>
-           <div class="detail-value" style="color:#C4704A;font-weight:500;">$${totalFee.toLocaleString()}</div>`
-
       await fetch('/api/invoices/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clientEmail,
-          clientName,
+          clientEmail, clientName, cc: MY_EMAIL,
           invoiceNumber: inv.invoice_number,
           invoiceType: inv.invoice_type,
-          totalFee,
-          depositAmount,
+          totalFee, depositAmount,
           dueDate: inv.due_date,
           serviceDesc: inv.service_desc,
           hours: inv.hours,
           hourlyRate: inv.hourly_rate,
         })
       })
-    } catch(e) {
-      console.error(e)
-    }
+    } catch(e) { console.error(e) }
     setSendingInvoice(false)
   }
   async function sendClientEmail(clientName: string, clientEmail: string) {
@@ -390,37 +390,18 @@ export default function AdminDashboard() {
       await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientEmail, clientName, subject: emailForm.subject, message: emailForm.message, attachment: emailAttachment })
+        body: JSON.stringify({ clientEmail, clientName, cc: MY_EMAIL, subject: emailForm.subject, message: emailForm.message })
       })
       setEmailSent(true)
-      setTimeout(() => {
-        setShowEmailModal(false)
-        setEmailForm({ subject:'', message:'' })
-        setEmailAttachment(null)
-        setEmailSent(false)
-      }, 1500)
-    } catch(e) {
-      console.error(e)
-    }
+      setTimeout(() => { setShowEmailModal(false); setEmailForm({ subject:'', message:'' }); setEmailSent(false) }, 1500)
+    } catch(e) { console.error(e) }
     setSendingEmail(false)
   }
-
-  async function handleEmailAttachment(file: File) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(',')[1]
-      setEmailAttachment({ name: file.name, data: base64, type: file.type })
-    }
-    reader.readAsDataURL(file)
-  }
-
   async function saveProjectNotes(projectId: string) {
     await supabase.from('projects').update({notes:projectNotes}).eq('id',projectId)
-    setEditingProjectNotes(false)
-    await fetchProjects()
+    setEditingProjectNotes(false); await fetchProjects()
     if (viewingProject) setViewingProject({...viewingProject,notes:projectNotes})
   }
-
   async function markInvoicePaid(inv: Invoice) {
     const today = new Date().toISOString().split('T')[0]
     if (inv.invoice_type === 'project') {
@@ -483,6 +464,142 @@ export default function AdminDashboard() {
     return { doc, addLine, addSpace, addDivider, save: (name: string) => doc.save(name) }
   }
 
+  // ─── Preview helpers ────────────────────────────────────────────────────────
+  function openPreview(doc: PreviewDoc, action: 'download'|'send', onConfirm: () => void) {
+    setPreviewDoc(doc)
+    setPreviewAction(action)
+    setPreviewOnConfirm(() => onConfirm)
+  }
+
+  function buildProposalPreview(): PreviewDoc {
+    const f = proposalForm
+    const hasRange = f.price_low && f.price_high && f.price_low !== f.price_high
+    return {
+      title: 'Project Proposal — ' + (f.project_title || 'Untitled'),
+      sections: [
+        { label: 'Prepared for', value: [f.client_name, f.client_email, f.client_business].filter(Boolean).join('\n') },
+        { label: 'Project', value: f.project_title + ' (' + f.project_type + ')' },
+        { label: 'What I understood', value: f.understood || 'See attached notes.' },
+        { label: 'What is included', value: f.deliverables || 'To be defined.' },
+        ...(f.out_of_scope ? [{ label: 'What is not included', value: f.out_of_scope }] : []),
+        { label: 'Investment', value: hasRange ? '$' + f.price_low + ' to $' + f.price_high : f.price_low ? '$' + f.price_low : 'TBD' },
+        { label: 'Deposit required', value: f.deposit_pct + '% upfront to begin' },
+        { label: 'Timeline', value: f.timeline || 'To be confirmed in SOW.' },
+        { label: 'Next steps', value: f.next_steps },
+      ]
+    }
+  }
+
+  function buildSOWPreview(): PreviewDoc {
+    const f = sowForm
+    return {
+      title: 'Statement of Work — ' + (f.project_title || 'Untitled'),
+      sections: [
+        { label: 'Client', value: [f.client_name, f.client_email].filter(Boolean).join('\n') },
+        { label: 'Project', value: f.project_title + ' (' + f.project_type + ')' },
+        { label: 'Dates', value: 'Start: ' + (f.start_date || 'TBD') + '  |  Delivery: ' + (f.delivery_date || 'TBD') },
+        { label: 'Overview', value: f.description || 'See attached.' },
+        { label: 'Deliverables', value: f.deliverables || 'To be defined.' },
+        { label: 'Out of scope', value: f.out_of_scope || 'Anything not listed above.' },
+        { label: 'Total fee', value: f.total_fee ? '$' + f.total_fee : 'TBD' },
+        { label: 'Deposit', value: f.deposit ? '$' + f.deposit : 'TBD' },
+        { label: 'Balance', value: f.balance ? '$' + f.balance : 'TBD' },
+        { label: 'Revisions', value: f.revisions + ' rounds included. Additional at $' + f.hourly_rate + '/hr.' },
+      ]
+    }
+  }
+
+  function buildContractPreview(): PreviewDoc {
+    const f = contractForm
+    return {
+      title: 'Freelance Contract — ' + (f.project_title || 'Untitled'),
+      sections: [
+        { label: 'Client', value: [f.client_name, f.client_email, f.client_business].filter(Boolean).join('\n') },
+        { label: 'Project', value: f.project_title + ' (' + f.project_type + ')' },
+        { label: 'Dates', value: 'Start: ' + (f.start_date || 'TBD') + '  |  Delivery: ' + (f.delivery_date || 'TBD') },
+        { label: 'Total fee', value: f.total_fee ? '$' + f.total_fee : 'TBD' },
+        { label: 'Deposit', value: f.deposit ? '$' + f.deposit : 'TBD' },
+        { label: 'Balance', value: f.balance ? '$' + f.balance : 'TBD' },
+        { label: 'Kill fee', value: f.kill_fee_pct + '% of total fee if cancelled after work begins' },
+        { label: 'Payment method', value: f.payment_method },
+        { label: 'Revisions', value: '2 rounds included. Additional at $65/hr.' },
+        { label: 'Governing law', value: 'State of Indiana' },
+      ]
+    }
+  }
+
+  function buildInvoicePreview(clientName: string, clientEmail: string, type: string, totalFee: number, depositAmount: number): PreviewDoc {
+    const f = clientInvoiceForm
+    const isProject = type === 'project'
+    return {
+      title: 'Invoice #' + f.invoice_number + ' — ' + clientName,
+      sections: [
+        { label: 'Bill to', value: clientName + '\n' + clientEmail },
+        { label: 'Service', value: f.service_desc || 'Web development services' },
+        { label: 'Invoice type', value: isProject ? 'Project Invoice' : 'Revision Invoice' },
+        ...(isProject ? [
+          { label: 'Total fee', value: '$' + totalFee.toLocaleString() },
+          { label: 'Deposit due now (50%)', value: '$' + depositAmount.toLocaleString() },
+          { label: 'Balance due on delivery', value: '$' + (totalFee - depositAmount).toLocaleString() },
+        ] : [
+          { label: 'Hours', value: f.hours + 'h x $' + f.hourly_rate + '/hr' },
+          { label: 'Total due', value: '$' + totalFee.toLocaleString() },
+        ]),
+        { label: 'Due date', value: f.due_date || 'Upon receipt' },
+        { label: 'Payment', value: 'Stripe, PayPal, Zelle, or Wise' },
+      ]
+    }
+  }
+  // ─── End preview helpers ────────────────────────────────────────────────────
+
+  function generateProposalDoc() {
+    const f = proposalForm
+    const { addLine, addSpace, addDivider, save } = makePDF()
+    addLine('PROJECT PROPOSAL', 16, true, true)
+    addLine('Alante Velez  |  Full Stack Web Developer', 10)
+    addLine('alante@alantevelez.com  |  alantevelez.com', 10)
+    addLine('Prepared: ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), 10)
+    addDivider(); addSpace()
+    addLine('PREPARED FOR', 10, true, true); addSpace(0.5)
+    addLine(f.client_name); addLine(f.client_email)
+    if (f.client_business) addLine(f.client_business)
+    addSpace(); addDivider()
+    addLine('PROJECT', 10, true, true); addSpace(0.5)
+    addLine('Title: ' + f.project_title)
+    addLine('Type: ' + f.project_type)
+    addSpace(); addDivider()
+    addLine('WHAT I UNDERSTOOD', 10, true, true); addSpace(0.5)
+    addLine(f.understood || 'See attached notes.')
+    addSpace(); addDivider()
+    addLine('WHAT IS INCLUDED', 10, true, true); addSpace(0.5)
+    addLine(f.deliverables || 'To be defined in the Statement of Work.')
+    addSpace(); addDivider()
+    if (f.out_of_scope) {
+      addLine('WHAT IS NOT INCLUDED', 10, true, true); addSpace(0.5)
+      addLine(f.out_of_scope); addSpace(); addDivider()
+    }
+    addLine('INVESTMENT', 10, true, true); addSpace(0.5)
+    const hasRange = f.price_low && f.price_high && f.price_low !== f.price_high
+    if (hasRange) { addLine('Estimated project investment: $' + f.price_low + ' to $' + f.price_high) }
+    else if (f.price_low) { addLine('Project investment: $' + f.price_low) }
+    addLine('A ' + f.deposit_pct + '% deposit is required to begin. The remaining balance is due upon final delivery.')
+    addLine('Work is structured in milestones. Payment is tied to each milestone completion.')
+    addLine('Change orders and additional revisions are billed at $65/hr.')
+    addSpace(); addDivider()
+    addLine('TIMELINE', 10, true, true); addSpace(0.5)
+    addLine(f.timeline || 'Estimated timeline will be confirmed in the Statement of Work once content and scope are finalized.')
+    addSpace(); addDivider()
+    addLine('NEXT STEPS', 10, true, true); addSpace(0.5)
+    addLine(f.next_steps)
+    addSpace(); addDivider()
+    addLine('SIGNATURES', 10, true, true); addSpace()
+    addLine('Freelancer: Alante Velez'); addSpace()
+    addLine('Date: ___________'); addSpace()
+    addLine('Client: ' + f.client_name); addSpace()
+    addLine('Date: ___________')
+    save('Proposal_' + f.client_name.replace(/\s+/g,'_') + '_' + f.project_title.replace(/\s+/g,'_') + '.pdf')
+  }
+
   function generateSOWDoc() {
     const f = sowForm
     const { addLine, addSpace, addDivider, save } = makePDF()
@@ -540,8 +657,7 @@ export default function AdminDashboard() {
     addSpace(); addDivider()
     if (type === 'project') {
       addLine('PAYMENT BREAKDOWN', 10, true, true); addSpace(0.5)
-      addLine('Total Project Fee: $' + totalFee.toLocaleString())
-      addSpace(0.5)
+      addLine('Total Project Fee: $' + totalFee.toLocaleString()); addSpace(0.5)
       addLine('Deposit Due Now (50%): $' + depositAmount.toLocaleString(), 11, true)
       addLine('Balance Due on Delivery (50%): $' + (totalFee - depositAmount).toLocaleString(), 11, true)
       addSpace(0.5)
@@ -850,10 +966,12 @@ export default function AdminDashboard() {
         .section-mini-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
         .notes-box{border-radius:10px;border-width:1px;border-style:solid;padding:12px;font-size:12px;line-height:1.6;min-height:60px;cursor:pointer}
         .inv-row{display:flex;align-items:flex-start;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;margin-bottom:6px}
-        .process-step{background:var(--espresso-mid);padding:36px 32px;position:relative;opacity:0;transform:translateY(20px);transition:opacity 0.6s,transform 0.6s,scale 0.25s,background 0.25s,box-shadow 0.25s;cursor:default}
-        .process-step.visible{opacity:1;transform:translateY(0)}
-        .process-step.visible:hover{scale:1.04;background:#4a3220;box-shadow:0 16px 48px rgba(0,0,0,0.3);z-index:2}
+        .preview-section{padding:12px 0;border-bottom-width:1px;border-bottom-style:solid}
+        .preview-section:last-child{border-bottom:none}
+        .preview-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+        .preview-value{font-size:13px;line-height:1.6;white-space:pre-wrap}
       `}</style>
+
       <div className="shell" style={{background:d.bg,color:d.text,display:'grid',gridTemplateColumns:'80px 1fr',height:'100vh',overflow:'hidden'}}>
         <div className="sidebar" style={{background:d.white,borderColor:d.border}}>
           <div className="sb-logo">A</div>
@@ -1175,7 +1293,79 @@ export default function AdminDashboard() {
                     )
                   })}
                 </div>
+
                 <div className="section-label" style={{color:d.text2,marginBottom:16}}>Fill and generate</div>
+
+                {/* PROPOSAL CARD */}
+                <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
+                  <div className="doc-card-header">
+                    <div className="doc-icon" style={{background:d.blush,color:d.accent}}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+                        <path d="M5 4h6M5 6.5h6M5 9h4M5 11.5h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="doc-name" style={{color:d.text}}>Project Proposal</div>
+                      <div style={{fontSize:11,color:d.text3}}>Send before the contract to present scope and price</div>
+                    </div>
+                  </div>
+                  <div className="doc-actions">
+                    <button className="doc-btn fill" onClick={()=>setActiveFillForm(activeFillForm==='proposal'?null:'proposal')}>
+                      {activeFillForm==='proposal'?'Close form':'Fill out Proposal'}
+                    </button>
+                  </div>
+                </div>
+
+                {activeFillForm==='proposal' && (
+                  <div className="fill-form-wrap" style={{background:d.surface,borderColor:d.border}}>
+                    <div className="fill-form-title" style={{color:d.text}}>Project Proposal</div>
+                    <div className="fill-form-sub" style={{color:d.text3}}>Fill in the details and download a professional proposal PDF to send before the contract.</div>
+                    <div className="section-mini-label" style={{color:d.text3}}>Client info</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client name</div><input style={inputStyle} value={proposalForm.client_name} onChange={e=>setProposalForm({...proposalForm,client_name:e.target.value})} placeholder="Full name"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client email</div><input style={inputStyle} value={proposalForm.client_email} onChange={e=>setProposalForm({...proposalForm,client_email:e.target.value})} placeholder="client@email.com"/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Business name (optional)</div><input style={inputStyle} value={proposalForm.client_business} onChange={e=>setProposalForm({...proposalForm,client_business:e.target.value})} placeholder="Company or LLC name"/></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Project</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project title</div><input style={inputStyle} value={proposalForm.project_title} onChange={e=>setProposalForm({...proposalForm,project_title:e.target.value})} placeholder="Beyond the Horizon Website"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project type</div><select style={inputStyle} value={proposalForm.project_type} onChange={e=>setProposalForm({...proposalForm,project_type:e.target.value})}>{PROJECT_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Scope</div>
+                    <div className="form-grid">
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>What I understood about the project</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:80}} value={proposalForm.understood} onChange={e=>setProposalForm({...proposalForm,understood:e.target.value})} placeholder="Based on our conversation, you are looking for a professional website that..."/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>What is included</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:80}} value={proposalForm.deliverables} onChange={e=>setProposalForm({...proposalForm,deliverables:e.target.value})} placeholder="Landing page, Business services page, Individual services page, Contact page, Scheduling integration, Domain and email setup, 2 rounds of revisions..."/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>What is not included (optional)</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={proposalForm.out_of_scope} onChange={e=>setProposalForm({...proposalForm,out_of_scope:e.target.value})} placeholder="Logo design, copywriting, photography, ongoing maintenance..."/></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Investment and timeline</div>
+                    <div className="form-grid-3">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Price low ($)</div><input style={inputStyle} type="number" value={proposalForm.price_low} onChange={e=>setProposalForm({...proposalForm,price_low:e.target.value})} placeholder="1000"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Price high ($) <span style={{fontSize:9,color:d.text3}}>blank for fixed</span></div><input style={inputStyle} type="number" value={proposalForm.price_high} onChange={e=>setProposalForm({...proposalForm,price_high:e.target.value})} placeholder="1800"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit (%)</div><input style={inputStyle} value={proposalForm.deposit_pct} onChange={e=>setProposalForm({...proposalForm,deposit_pct:e.target.value})}/></div>
+                    </div>
+                    <div className="form-group" style={{marginBottom:12}}>
+                      <div className="form-label" style={{color:d.text3}}>Timeline estimate</div>
+                      <input style={inputStyle} value={proposalForm.timeline} onChange={e=>setProposalForm({...proposalForm,timeline:e.target.value})} placeholder="4 to 6 weeks from deposit and content delivery"/>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Next steps</div>
+                    <div className="form-group" style={{marginBottom:16}}>
+                      <div className="form-label" style={{color:d.text3}}>Next steps message</div>
+                      <textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={proposalForm.next_steps} onChange={e=>setProposalForm({...proposalForm,next_steps:e.target.value})}/>
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
+                      <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>openPreview(buildProposalPreview(),'download',generateProposalDoc)}>Preview</button>
+                      <button className="btn-save" onClick={generateProposalDoc}>Download PDF</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* SOW CARD */}
                 <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
                   <div className="doc-card-header">
                     <div className="doc-icon" style={{background:d.sand,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M5 5h6M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg></div>
@@ -1219,10 +1409,13 @@ export default function AdminDashboard() {
                     </div>
                     <div className="form-actions">
                       <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
+                      <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>openPreview(buildSOWPreview(),'download',generateSOWDoc)}>Preview</button>
                       <button className="btn-save" onClick={generateSOWDoc}>Download SOW</button>
                     </div>
                   </div>
                 )}
+
+                {/* CONTRACT CARD */}
                 <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
                   <div className="doc-card-header">
                     <div className="doc-icon" style={{background:d.pebble,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V6L9 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/><path d="M9 1v5h5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg></div>
@@ -1264,10 +1457,12 @@ export default function AdminDashboard() {
                     </div>
                     <div className="form-actions">
                       <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
+                      <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>openPreview(buildContractPreview(),'download',generateContractDoc)}>Preview</button>
                       <button className="btn-save" onClick={generateContractDoc}>Download Contract</button>
                     </div>
                   </div>
                 )}
+
                 {templates.length > 0 && (
                   <>
                     <div className="section-label" style={{color:d.text2,marginBottom:12,marginTop:8}}>Uploaded files</div>
@@ -1523,7 +1718,11 @@ export default function AdminDashboard() {
                           <div className="form-actions">
                             <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
                             <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-                              <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
+                              <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>{
+                                const total = parseFloat(clientInvoiceForm.total_fee)||0
+                                const dep = parseFloat(clientInvoiceForm.deposit_amount||String(total*0.5))||0
+                                openPreview(buildInvoicePreview(focusedClient.name,focusedClient.email,'project',total,dep),'download',()=>addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'download'))
+                              }}>Preview</button>
                               <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'download')}}>Download PDF</button>
                               <button className="btn-save" onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'send')}}>Send to Client</button>
                             </div>
@@ -1542,7 +1741,6 @@ export default function AdminDashboard() {
                           <div className="form-actions">
                             <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
                             <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-                              <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
                               <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'download')}}>Download PDF</button>
                               <button className="btn-save" onClick={async()=>{await addClientInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'send')}}>Send to Client</button>
                             </div>
@@ -1570,7 +1768,6 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   )}
-
                   {clientMeetings.length > 0 && (
                     <div style={{marginBottom:16}}>
                       <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Meetings</div>
@@ -1589,7 +1786,6 @@ export default function AdminDashboard() {
                       })}
                     </div>
                   )}
-
                   {clientInvoices.length > 0 && (
                     <div style={{marginBottom:16}}>
                       <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Invoices</div>
@@ -1666,6 +1862,36 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* ─── DOCUMENT PREVIEW MODAL ──────────────────────────────────────────── */}
+      {previewDoc && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1100,padding:24}} onClick={()=>setPreviewDoc(null)}>
+          <div style={{background:d.white,borderRadius:20,width:'100%',maxWidth:560,maxHeight:'85vh',display:'flex',flexDirection:'column',border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:'20px 24px 16px',borderBottom:'1px solid '+d.border,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+              <div>
+                <div style={{fontFamily:'Playfair Display,serif',fontSize:17,fontWeight:600,color:d.text}}>{previewDoc.title}</div>
+                <div style={{fontSize:11,color:d.text3,marginTop:2}}>Review before {previewAction === 'send' ? 'sending' : 'downloading'}</div>
+              </div>
+              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setPreviewDoc(null)}>x</button>
+            </div>
+            <div style={{overflowY:'auto',padding:'8px 24px 16px',flex:1}}>
+              {previewDoc.sections.map((s,i)=>(
+                <div key={i} className="preview-section" style={{borderColor:d.border}}>
+                  <div className="preview-label" style={{color:d.accent}}>{s.label}</div>
+                  <div className="preview-value" style={{color:d.text}}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:'16px 24px',borderTop:'1px solid '+d.border,display:'flex',gap:8,justifyContent:'flex-end',flexShrink:0}}>
+              <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setPreviewDoc(null)}>Back to edit</button>
+              <button className="btn-save" onClick={()=>{previewOnConfirm&&previewOnConfirm();setPreviewDoc(null);setPreviewOnConfirm(null)}}>
+                {previewAction==='send'?'Confirm and Send':'Confirm and Download'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── INVOICE DETAIL MODAL ────────────────────────────────────────────── */}
       {viewingInvoice && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingInvoice(null)}>
           <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
@@ -1701,6 +1927,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* ─── PROJECT DETAIL MODAL ────────────────────────────────────────────── */}
       {viewingProject && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingProject(null)}>
           <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
@@ -1743,6 +1970,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* ─── EMAIL MODAL ─────────────────────────────────────────────────────── */}
       {showEmailModal && focusedClient && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setShowEmailModal(false)}>
           <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:520,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
@@ -1750,7 +1978,7 @@ export default function AdminDashboard() {
               <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text}}>Email {focusedClient.name.split(' ')[0]}</div>
               <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setShowEmailModal(false)}>x</button>
             </div>
-            <div style={{fontSize:12,color:d.text3,marginBottom:20}}>{focusedClient.email}</div>
+            <div style={{fontSize:12,color:d.text3,marginBottom:20}}>{focusedClient.email} · CC: {MY_EMAIL}</div>
             {emailSent ? (
               <div style={{textAlign:'center',padding:'32px 0'}}>
                 <div style={{fontSize:32,marginBottom:12}}>✓</div>
@@ -1766,15 +1994,6 @@ export default function AdminDashboard() {
                   <div className="form-label" style={{color:d.text3}}>Message</div>
                   <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:140}} value={emailForm.message} onChange={e=>setEmailForm({...emailForm,message:e.target.value})} placeholder={'Hi '+focusedClient.name.split(' ')[0]+','}/>
                 </div>
-                <div style={{marginBottom:12}}>
-                  <div className="form-label" style={{color:d.text3,marginBottom:6}}>Attachment (optional)</div>
-                  <label style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:d.surface,borderRadius:8,border:'1px solid '+d.border,cursor:'pointer'}}>
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 7l-5 5a3.5 3.5 0 01-5-5l5-5a2 2 0 013 3L5 10a.5.5 0 01-1-1l5-5" stroke={d.accent} strokeWidth="1.3" strokeLinecap="round"/></svg>
-                    <span style={{fontSize:12,color:emailAttachment?d.text:d.text3}}>{emailAttachment?emailAttachment.name:'Attach a file...'}</span>
-                    {emailAttachment&&<button style={{marginLeft:'auto',background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:14}} onClick={e=>{e.preventDefault();setEmailAttachment(null)}}>x</button>}
-                    <input type="file" accept=".pdf,.doc,.docx,.png,.jpg" style={{display:'none'}} onChange={e=>e.target.files&&handleEmailAttachment(e.target.files[0])}/>
-                  </label>
-                </div>
                 <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
                   <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowEmailModal(false)}>Cancel</button>
                   <button className="btn-save" disabled={sendingEmail||!emailForm.subject||!emailForm.message} onClick={()=>sendClientEmail(focusedClient.name,focusedClient.email)}>
@@ -1787,6 +2006,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* ─── ACTIVE PROJECT POPUP ────────────────────────────────────────────── */}
       {showActiveProjectPopup && pendingAdvanceClient && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
           <div style={{background:d.white,borderRadius:20,padding:32,width:380,border:'1px solid '+d.border}}>
