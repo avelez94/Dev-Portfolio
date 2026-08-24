@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 function BookingContent() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const intakeId = searchParams.get('ref')
 
   const [slots, setSlots] = useState<string[]>([])
@@ -38,7 +37,6 @@ function BookingContent() {
     setLoading(true)
     const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
     const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0)
-
     try {
       const res = await fetch(
         `/api/availability?start=${start.toISOString().split('T')[0]}&end=${end.toISOString().split('T')[0]}`
@@ -56,14 +54,12 @@ function BookingContent() {
     if (!selectedSlot || !intakeId) return
     setConfirming(true)
     setError('')
-
     try {
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ intakeId, scheduledAt: selectedSlot }),
       })
-
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Something went wrong')
       setConfirmed(true)
@@ -74,7 +70,6 @@ function BookingContent() {
     }
   }
 
-  // Group slots by date
   const slotsByDate = slots.reduce((acc: Record<string, string[]>, slot) => {
     const date = slot.split('T')[0]
     if (!acc[date]) acc[date] = []
@@ -82,29 +77,21 @@ function BookingContent() {
     return acc
   }, {})
 
-  // Get days in current month view
   const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay()
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate()
   const today = new Date()
   const minDate = new Date(today.getTime() + 48 * 60 * 60 * 1000)
-
   const selectedDate = selectedSlot ? selectedSlot.split('T')[0] : null
-  const timeSlotsForSelected = selectedDate ? (slotsByDate[selectedDate] || []) : []
 
   function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
     })
   }
 
   function formatConfirmedDate(iso: string) {
     return new Date(iso).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
     })
   }
 
@@ -121,6 +108,73 @@ function BookingContent() {
 
   return (
     <div className="shell">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+          --pink: #A96860;
+          --pink-light: #C18078;
+          --cream: #FAF3E8;
+          --dark: #2A2420;
+          --muted: #8B7D73;
+          --border: rgba(169,104,96,0.2);
+          --surface: #FFFFFF;
+          --surface2: rgba(245,230,211,0.4);
+        }
+        body { background: var(--cream); color: var(--dark); font-family: 'DM Sans', sans-serif; font-weight: 300; min-height: 100vh; }
+        .shell { width: 100%; max-width: 680px; margin: 0 auto; padding: 48px 24px 100px; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 52px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+        .logo-text { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--dark); text-decoration: none; font-weight: 700; }
+        .step-counter { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+        .step-tag { display: inline-flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--pink); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 16px; }
+        .step-tag::before { content: ''; width: 24px; height: 1px; background: var(--pink); }
+        .page-title { font-family: 'Playfair Display', serif; font-size: clamp(32px, 6vw, 52px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 16px; color: var(--dark); }
+        .page-title em { font-style: italic; color: var(--pink); }
+        .page-sub { font-size: 0.9rem; color: var(--muted); line-height: 1.65; margin-bottom: 40px; max-width: 480px; }
+        .calendar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 28px; margin-bottom: 32px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); }
+        .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .cal-month { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; color: var(--dark); }
+        .cal-nav { background: none; border: 1px solid var(--border); color: var(--muted); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: border-color 0.2s, color 0.2s; border-radius: 4px; }
+        .cal-nav:hover:not(:disabled) { border-color: var(--pink); color: var(--pink); }
+        .cal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+        .cal-days-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+        .cal-day-label { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--muted); text-align: center; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 0; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .cal-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--muted); position: relative; border: 1px solid transparent; transition: all 0.15s; border-radius: 4px; }
+        .cal-cell.empty { border-color: transparent; }
+        .cal-cell.disabled { opacity: 0.3; cursor: not-allowed; }
+        .cal-cell.has-slots { color: var(--dark); cursor: pointer; border-color: var(--border); background: var(--surface2); }
+        .cal-cell.has-slots:hover { border-color: var(--pink); background: rgba(169,104,96,0.06); }
+        .cal-cell.selected { border-color: var(--pink); background: rgba(169,104,96,0.08); color: var(--dark); }
+        .slot-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--pink); position: absolute; bottom: 5px; }
+        .time-slots { margin-bottom: 32px; }
+        .time-slots-label { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--pink); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+        .time-slots-label::before { content: ''; width: 20px; height: 1px; background: var(--pink); }
+        .time-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+        .time-slot { background: var(--surface); border: 1px solid var(--border); color: var(--dark); font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.06em; padding: 12px 16px; cursor: pointer; transition: all 0.15s; text-align: center; border-radius: 4px; }
+        .time-slot:hover { border-color: var(--pink); color: var(--pink); }
+        .time-slot.selected { border-color: var(--pink); background: var(--pink); color: var(--cream); }
+        .nav { display: flex; justify-content: flex-end; margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--border); }
+        .btn-confirm { display: inline-flex; align-items: center; gap: 14px; background: var(--pink); border: none; color: var(--cream); font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 28px; cursor: pointer; transition: background 0.25s, transform 0.2s; border-radius: 4px; }
+        .btn-confirm:hover:not(:disabled) { background: var(--pink-light); transform: translateY(-2px); }
+        .btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+        .error-msg { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: #b04a4a; margin-top: 12px; }
+        .confirmed { text-align: center; padding: 60px 0; }
+        .confirmed-mark { font-family: 'Playfair Display', serif; font-size: 3rem; color: var(--pink); margin-bottom: 28px; display: block; font-style: italic; }
+        .confirmed-title { font-family: 'Playfair Display', serif; font-size: clamp(28px, 5vw, 44px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 20px; color: var(--dark); }
+        .confirmed-divider { width: 40px; height: 1px; background: var(--pink); margin: 0 auto 28px; opacity: 0.4; }
+        .confirmed-detail { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--pink); padding: 20px 24px; margin: 0 auto 28px; max-width: 400px; text-align: left; border-radius: 4px; }
+        .detail-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--pink); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+        .detail-value { font-size: 1rem; color: var(--dark); font-weight: 500; margin-bottom: 4px; }
+        .detail-value.time { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: var(--muted); font-weight: 300; }
+        .confirmed-body { font-size: 0.9rem; color: var(--muted); line-height: 1.7; max-width: 420px; margin: 0 auto 32px; }
+        .btn-home { display: inline-flex; align-items: center; gap: 10px; background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 12px 24px; text-decoration: none; transition: border-color 0.2s, color 0.2s; border-radius: 4px; }
+        .btn-home:hover { border-color: var(--pink); color: var(--pink); }
+        .error-state { text-align: center; padding: 80px 0; }
+        .error-state p { color: var(--muted); margin-bottom: 20px; font-size: 0.9rem; }
+        .error-state a { color: var(--pink); font-family: 'DM Mono', monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; }
+      `}</style>
+
       <div className="top-bar">
         <a href="/" className="logo-text">Alante Velez</a>
         {!confirmed && <span className="step-counter">Schedule your call</span>}
@@ -190,7 +244,6 @@ function BookingContent() {
                 const hasSlots = !!slotsByDate[dateStr]
                 const isSelected = selectedDate === dateStr
                 const isPast = new Date(dateStr) < minDate
-
                 return (
                   <div
                     key={day}
@@ -232,7 +285,6 @@ function BookingContent() {
           {error && <p className="error-msg">{error}</p>}
 
           <div className="nav">
-            <span />
             <button
               className="btn-confirm"
               onClick={confirmBooking}
@@ -248,73 +300,6 @@ function BookingContent() {
           </div>
         </>
       )}
-
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-          --terracotta: #C4704A; --terracotta-light: #d4855f;
-          --cream: #FAF6F0; --espresso: #2C1A0E;
-          --espresso-mid: #3d2a1a; --espresso-hover: #4a3220;
-          --muted: #8a7060; --border: rgba(196,112,74,0.2);
-          --serif: 'Playfair Display', Georgia, serif;
-          --mono: 'DM Mono', monospace;
-          --sans: 'DM Sans', sans-serif;
-        }
-        body { background: var(--espresso); color: var(--cream); font-family: var(--sans); font-weight: 300; min-height: 100vh; }
-        body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E"); opacity: 0.03; pointer-events: none; z-index: 0; }
-        .shell { width: 100%; max-width: 720px; margin: 0 auto; padding: 48px 16px 100px; position: relative; z-index: 1; }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 52px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
-        .logo-text { font-family: var(--serif); font-size: 1.1rem; color: var(--cream); text-decoration: none; }
-        .step-counter { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
-        .step-tag { display: inline-flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 0.68rem; color: var(--terracotta); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 16px; }
-        .step-tag::before { content: ''; width: 24px; height: 1px; background: var(--terracotta); }
-        .page-title { font-family: var(--serif); font-size: clamp(32px,6vw,52px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 16px; }
-        .page-title em { font-style: italic; color: var(--terracotta); }
-        .page-sub { font-size: 0.9rem; color: var(--muted); line-height: 1.65; margin-bottom: 40px; max-width: 480px; }
-        .calendar-wrap { background: var(--espresso-mid); padding: 28px; margin-bottom: 32px; }
-        .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .cal-month { font-family: var(--serif); font-size: 1.1rem; font-weight: 700; color: var(--cream); }
-        .cal-nav { background: none; border: 1px solid var(--border); color: var(--muted); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
-        .cal-nav:hover:not(:disabled) { border-color: var(--terracotta); color: var(--cream); }
-        .cal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
-        .cal-days-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
-        .cal-day-label { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); text-align: center; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 0; }
-        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-        .cal-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--muted); position: relative; border: 1px solid transparent; transition: all 0.15s; }
-        .cal-cell.empty { border-color: transparent; }
-        .cal-cell.disabled { opacity: 0.3; cursor: not-allowed; }
-        .cal-cell.has-slots { color: var(--cream); cursor: pointer; border-color: var(--border); }
-        .cal-cell.has-slots:hover { border-color: var(--terracotta); background: var(--espresso-hover); }
-        .cal-cell.selected { border-color: var(--terracotta); background: var(--espresso-hover); color: var(--cream); }
-        .slot-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--terracotta); position: absolute; bottom: 6px; }
-        .time-slots { margin-bottom: 32px; }
-        .time-slots-label { font-family: var(--mono); font-size: 0.68rem; color: var(--terracotta); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
-        .time-slots-label::before { content: ''; width: 20px; height: 1px; background: var(--terracotta); }
-        .time-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
-        .time-slot { background: var(--espresso-mid); border: 1px solid var(--border); color: var(--cream); font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.06em; padding: 12px 16px; cursor: pointer; transition: all 0.15s; text-align: center; }
-        .time-slot:hover { border-color: var(--terracotta); background: var(--espresso-hover); }
-        .time-slot.selected { border-color: var(--terracotta); background: var(--terracotta); color: var(--cream); }
-        .nav { display: flex; justify-content: flex-end; margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--border); }
-        .btn-confirm { display: inline-flex; align-items: center; gap: 14px; background: var(--terracotta); border: none; color: var(--cream); font-family: var(--mono); font-size: 0.75rem; font-weight: 400; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 28px; cursor: pointer; transition: background 0.25s, transform 0.2s; }
-        .btn-confirm:hover:not(:disabled) { background: var(--terracotta-light); transform: translateY(-2px); }
-        .btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
-        .error-msg { font-family: var(--mono); font-size: 0.7rem; color: #e07070; margin-top: 12px; }
-        .confirmed { text-align: center; padding: 60px 0; }
-        .confirmed-mark { font-family: var(--serif); font-size: 3rem; color: var(--terracotta); margin-bottom: 28px; display: block; font-style: italic; }
-        .confirmed-title { font-family: var(--serif); font-size: clamp(28px,5vw,44px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 20px; }
-        .confirmed-divider { width: 40px; height: 1px; background: var(--terracotta); margin: 0 auto 28px; opacity: 0.5; }
-        .confirmed-detail { background: var(--espresso-mid); border-left: 3px solid var(--terracotta); padding: 20px 24px; margin: 0 auto 28px; max-width: 400px; text-align: left; }
-        .detail-label { font-family: var(--mono); font-size: 0.65rem; color: var(--terracotta); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
-        .detail-value { font-size: 1rem; color: var(--cream); font-weight: 500; margin-bottom: 4px; }
-        .detail-value.time { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); font-weight: 300; }
-        .confirmed-body { font-size: 0.9rem; color: var(--muted); line-height: 1.7; max-width: 420px; margin: 0 auto 32px; }
-        .btn-home { display: inline-flex; align-items: center; gap: 10px; background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 12px 24px; text-decoration: none; transition: border-color 0.2s, color 0.2s; }
-        .btn-home:hover { border-color: var(--terracotta); color: var(--cream); }
-        .error-state { text-align: center; padding: 80px 0; }
-        .error-state p { color: var(--muted); margin-bottom: 20px; }
-        .error-state a { color: var(--terracotta); font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; }
-      `}</style>
     </div>
   )
 }
@@ -322,8 +307,8 @@ function BookingContent() {
 export default function BookPage() {
   return (
     <Suspense fallback={
-      <div style={{ background: '#2C1A0E', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: '#8a7060', fontFamily: 'monospace', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Loading...</span>
+      <div style={{ background: '#FAF3E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: '#8B7D73', fontFamily: 'monospace', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Loading...</span>
       </div>
     }>
       <BookingContent />

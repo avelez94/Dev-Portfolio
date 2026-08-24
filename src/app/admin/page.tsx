@@ -156,7 +156,10 @@ export default function AdminDashboard() {
     deposit_pct: '50',
     timeline: '',
     next_steps: 'Sign the proposal and submit your 50% deposit to officially kick off the project.',
+    message: '',
   })
+  const [sendingProposal, setSendingProposal] = useState(false)
+  const [proposalSent, setProposalSent] = useState(false)
 
   const clockRef = useRef<ReturnType<typeof setInterval>|null>(null)
 
@@ -598,6 +601,38 @@ export default function AdminDashboard() {
     addLine('Client: ' + f.client_name); addSpace()
     addLine('Date: ___________')
     save('Proposal_' + f.client_name.replace(/\s+/g,'_') + '_' + f.project_title.replace(/\s+/g,'_') + '.pdf')
+  }
+
+  async function sendProposalEmail() {
+    const f = proposalForm
+    if (!f.client_email || !f.client_name) return
+    setSendingProposal(true)
+    try {
+      await fetch('/api/proposals/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientEmail: f.client_email,
+          clientName: f.client_name,
+          clientBusiness: f.client_business,
+          projectTitle: f.project_title,
+          projectType: f.project_type,
+          understood: f.understood,
+          deliverables: f.deliverables,
+          outOfScope: f.out_of_scope,
+          priceLow: f.price_low,
+          priceHigh: f.price_high,
+          depositPct: f.deposit_pct,
+          timeline: f.timeline,
+          nextSteps: f.next_steps,
+          message: f.message,
+          cc: MY_EMAIL,
+        })
+      })
+      setProposalSent(true)
+      setTimeout(() => setProposalSent(false), 3000)
+    } catch(e) { console.error(e) }
+    setSendingProposal(false)
   }
 
   function generateSOWDoc() {
@@ -1323,6 +1358,18 @@ export default function AdminDashboard() {
                     <div className="fill-form-sub" style={{color:d.text3}}>Fill in the details and download a professional proposal PDF to send before the contract.</div>
                     <div className="section-mini-label" style={{color:d.text3}}>Client info</div>
                     <div className="form-grid">
+                      <div className="form-group" style={{gridColumn:'1/-1'}}>
+                        <div className="form-label" style={{color:d.text3}}>Select from discovery clients</div>
+                        <select style={inputStyle} onChange={e=>{
+                          const c = clients.find(cl=>cl.id===e.target.value)
+                          if(c) setProposalForm({...proposalForm,client_name:c.name,client_email:c.email,client_business:c.business||''})
+                        }} defaultValue="">
+                          <option value="" disabled>Select a client...</option>
+                          {clients.filter(c=>c.pipeline_stage==='discovery_call').map(c=>(
+                            <option key={c.id} value={c.id}>{c.name}{c.business?' — '+c.business:''}</option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client name</div><input style={inputStyle} value={proposalForm.client_name} onChange={e=>setProposalForm({...proposalForm,client_name:e.target.value})} placeholder="Full name"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client email</div><input style={inputStyle} value={proposalForm.client_email} onChange={e=>setProposalForm({...proposalForm,client_email:e.target.value})} placeholder="client@email.com"/></div>
                       <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Business name (optional)</div><input style={inputStyle} value={proposalForm.client_business} onChange={e=>setProposalForm({...proposalForm,client_business:e.target.value})} placeholder="Company or LLC name"/></div>
@@ -1353,14 +1400,28 @@ export default function AdminDashboard() {
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Next steps</div>
-                    <div className="form-group" style={{marginBottom:16}}>
+                    <div className="form-group" style={{marginBottom:12}}>
                       <div className="form-label" style={{color:d.text3}}>Next steps message</div>
                       <textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={proposalForm.next_steps} onChange={e=>setProposalForm({...proposalForm,next_steps:e.target.value})}/>
                     </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Personal message (included in email)</div>
+                    <div className="form-group" style={{marginBottom:16}}>
+                      <div className="form-label" style={{color:d.text3}}>Your message to the client</div>
+                      <textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:100}} value={proposalForm.message} onChange={e=>setProposalForm({...proposalForm,message:e.target.value})} placeholder={'Hi ' + (proposalForm.client_name.split(' ')[0] || 'there') + ',\n\nGreat speaking with you today. Please find your proposal attached...'}/>
+                    </div>
+                    {proposalSent && (
+                      <div style={{background:d.green,color:d.greenText,borderRadius:8,padding:'10px 14px',fontSize:12,marginBottom:12,textAlign:'center'}}>
+                        Proposal sent to {proposalForm.client_email}
+                      </div>
+                    )}
                     <div className="form-actions">
                       <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
                       <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>openPreview(buildProposalPreview(),'download',generateProposalDoc)}>Preview</button>
-                      <button className="btn-save" onClick={generateProposalDoc}>Download PDF</button>
+                      <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={generateProposalDoc}>Download PDF</button>
+                      <button className="btn-save" disabled={sendingProposal||!proposalForm.client_email} onClick={sendProposalEmail}>
+                        {sendingProposal?'Sending...':'Send to Client'}
+                      </button>
                     </div>
                   </div>
                 )}

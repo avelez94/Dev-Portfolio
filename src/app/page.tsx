@@ -12,7 +12,8 @@ export default function Home() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&family=Caveat:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+        
         :root {
           --pink: #A96860;
           --pink-light: #C18078;
@@ -35,45 +36,43 @@ export default function Home() {
         .nav-logo-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
         
         .nav-links { display: flex; gap: 36px; }
-        .nav-links a { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; opacity: 0; animation: fadeUp 0.8s forwards; position: relative; }
-        .nav-links a::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 1px; background: var(--terracotta); transition: width 0.3s; }
-        .nav-links a:hover::after { width: 100%; }
-        .nav-links a:nth-child(1) { animation-delay: 0.3s; }
-        .nav-links a:nth-child(2) { animation-delay: 0.4s; }
-        .nav-links a:nth-child(3) { animation-delay: 0.5s; }
-        .nav-links a:nth-child(4) { animation-delay: 0.6s; }
-        .nav-links a:nth-child(5) { animation-delay: 0.7s; }
-        .nav-links a:hover { color: var(--cream); }
-        .hero { min-height: 100vh; display: flex; align-items: center; padding: 120px 48px 80px; position: relative; overflow: hidden; z-index: 2; }
-        .hero-bg-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Playfair Display', serif; font-size: clamp(100px, 18vw, 240px); font-weight: 900; color: transparent; -webkit-text-stroke: 1px rgba(196,112,74,0.07); white-space: nowrap; pointer-events: none; user-select: none; letter-spacing: -0.02em; transition: transform 0.1s ease-out; }
-        .hero-content { position: relative; z-index: 2; max-width: 820px; }
-        .hero-greeting { font-family: 'Caveat', cursive; font-size: 2.2rem; font-weight: 700; color: var(--terracotta); margin-bottom: 16px; opacity: 0; animation: fadeUp 0.9s 0.3s forwards; }
-        .hero-tag { display: inline-flex; align-items: center; gap: 10px; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--terracotta); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 28px; opacity: 0; animation: fadeUp 0.9s 0.4s forwards; }
-        .hero-tag::before { content: ''; width: 32px; height: 1px; background: var(--terracotta); }
-        .hero-name { font-family: 'Playfair Display', serif; font-size: clamp(52px, 8vw, 96px); font-weight: 900; line-height: 0.95; letter-spacing: -0.02em; margin-bottom: 32px; opacity: 0; animation: fadeUp 0.9s 0.55s forwards; }
-        .hero-name em { font-style: italic; color: var(--terracotta); }
-        .typewriter-wrap { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: var(--muted); letter-spacing: 0.08em; margin-bottom: 28px; opacity: 0; animation: fadeUp 0.9s 0.65s forwards; display: flex; align-items: center; gap: 8px; }
-        .typewriter-prefix { color: var(--terracotta); }
-        #typewriterText { color: var(--cream); }
-        .cursor-blink { display: inline-block; width: 2px; height: 14px; background: var(--terracotta); animation: blink 0.8s infinite; vertical-align: middle; }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-        .hero-desc { font-size: 1.05rem; line-height: 1.7; color: rgba(250,246,240,0.6); max-width: 520px; margin-bottom: 48px; font-weight: 300; opacity: 0; animation: fadeUp 0.9s 0.7s forwards; }
-        .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; opacity: 0; animation: fadeUp 0.9s 0.85s forwards; }
-        .hero-cta { display: inline-flex; align-items: center; gap: 14px; background: var(--terracotta); color: var(--cream); padding: 16px 32px; font-family: 'DM Mono', monospace; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: background 0.25s, transform 0.25s, box-shadow 0.25s; position: relative; overflow: hidden; }
-        .hero-cta::before { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.08); transform: translateX(-100%); transition: transform 0.3s; }
-        .hero-cta:hover::before { transform: translateX(0); }
-        .hero-cta:hover { background: var(--terracotta-light); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(196,112,74,0.3); }
-        .hero-cta-ghost { display: inline-flex; align-items: center; gap: 14px; background: transparent; color: var(--cream); padding: 16px 32px; border: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: border-color 0.25s, color 0.25s, transform 0.25s; }
-        .hero-cta-ghost:hover { border-color: var(--terracotta); color: var(--terracotta); transform: translateY(-2px); }
-        .hero-scroll { position: absolute; bottom: 40px; right: 48px; font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; writing-mode: vertical-rl; display: flex; align-items: center; gap: 12px; opacity: 0; animation: fadeUp 1s 1.2s forwards; }
-        .hero-scroll::after { content: ''; width: 1px; height: 48px; background: var(--terracotta); animation: lineGrow 1.5s 1.5s ease forwards; transform-origin: top; transform: scaleY(0); }
-        @keyframes lineGrow { to { transform: scaleY(1); } }
-        .marquee-wrap { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 16px 0; overflow: hidden; background: rgba(196,112,74,0.04); position: relative; z-index: 2; }
-        .marquee-track { display: flex; animation: marqueeScroll 22s linear infinite; width: max-content; }
-        .marquee-track:hover { animation-play-state: paused; }
-        @keyframes marqueeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        .marquee-item { display: flex; align-items: center; gap: 28px; padding: 0 28px; white-space: nowrap; font-family: 'DM Mono', monospace; font-size: 0.75rem; color: rgba(250,246,240,0.35); letter-spacing: 0.08em; }
-        .marquee-sep { color: var(--terracotta); opacity: 0.4; }
+        .nav-links a { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; }
+        .nav-links a:hover { color: var(--pink); }
+
+        .nav-cta { background: var(--dark); color: var(--cream); padding: 12px 24px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.2s; }
+        .nav-cta:hover { background: var(--pink); }
+
+        .hero { min-height: 100vh; display: grid; grid-template-columns: 0.7fr 1.3fr; align-items: center; padding: 140px 48px; position: relative; overflow: hidden; z-index: 2; gap: 40px; }
+        
+        .hero::before { content: ''; position: absolute; right: -5%; top: 50%; transform: translateY(-50%); width: 60%; height: 150%; background: url('/plante_shadow.jpg') center/cover no-repeat; pointer-events: none; opacity: 0.8; z-index: 1; }
+
+        .hero-left { position: relative; z-index: 2; }
+        .hero-photo { width: 100%; max-width: 420px; border-radius: 8px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.08); }
+        .hero-photo img { width: 100%; display: block; }
+
+        .hero-right { position: relative; z-index: 3; max-width: 550px; }
+        
+        .hero-tag { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--pink); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 20px; font-weight: 500; }
+
+        .hero-name { font-family: 'Playfair Display', serif; font-size: clamp(44px, 6vw, 72px); font-weight: 900; line-height: 1.15; margin-bottom: 24px; letter-spacing: -0.015em; color: var(--dark); }
+        .hero-name em { font-style: italic; color: var(--pink); }
+
+        .hero-desc { font-size: 1rem; line-height: 1.7; color: rgba(42,36,32,0.75); max-width: 480px; margin-bottom: 36px; }
+
+        .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 40px; }
+        
+        .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 28px; font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.25s; border: none; cursor: pointer; font-weight: 500; }
+        
+        .btn-primary { background: var(--pink); color: var(--cream); }
+        .btn-primary:hover { background: var(--pink-light); transform: translateY(-2px); }
+
+        .btn-secondary { background: transparent; color: var(--dark); border: 1.5px solid var(--muted); }
+        .btn-secondary:hover { border-color: var(--pink); color: var(--pink); }
+
+        .tech-ticker { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 0; margin-top: 32px; }
+        .ticker-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 10px; font-weight: 500; }
+        .ticker-items { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted); letter-spacing: 0.06em; display: flex; flex-wrap: wrap; gap: 20px; }
+
         section { padding: 100px 48px; position: relative; z-index: 2; }
         section.light { background: var(--cream); }
         section.featured { background: linear-gradient(135deg, rgba(245,230,211,0.5), rgba(250,243,232,0.5)); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -85,14 +84,15 @@ export default function Home() {
 
         .projects-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 28px; }
         
-        .project-card { background: white; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: all 0.3s; box-shadow: 0 4px 16px rgba(0,0,0,0.04); }
-        .project-card:hover { border-color: var(--pink); box-shadow: 0 12px 32px rgba(169,104,96,0.12); }
+        .project-row { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-bottom: 80px; }
+        
+        .project-row.reverse { direction: rtl; }
+        
+        .project-row.reverse > * { direction: ltr; }
+        
+        .project-image-large { width: 100%; aspect-ratio: 4/3; background: linear-gradient(135deg, rgba(212,165,116,0.1), rgba(169,104,96,0.1)); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
 
-        .project-image { width: 100%; height: 280px; background: linear-gradient(135deg, rgba(212,165,116,0.1), rgba(169,104,96,0.1)); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); }
-
-        .image-placeholder { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-
-        .project-body { padding: 32px 28px; }
+        .project-content { display: flex; flex-direction: column; gap: 16px; }
         .project-icon { font-size: 2rem; margin-bottom: 12px; }
         .project-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; color: var(--dark); }
         .project-subtitle { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); letter-spacing: 0.1em; margin-bottom: 14px; text-transform: uppercase; font-weight: 500; }
@@ -174,18 +174,16 @@ export default function Home() {
         <a href="#hire" className="nav-cta">Start a Project</a>
       </nav>
 
-      <section className="hero">
-        <div className="hero-bg-text" id="heroBgText">DEVELOPER</div>
-        <div className="hero-content">
-          <div className="hero-greeting">Hey there</div>
-          <div className="hero-tag">Full Stack Developer</div>
-          <h1 className="hero-name">From idea to <em>revenue generating product.</em><br />Then I stay.</h1>
-          <div className="typewriter-wrap">
-            <span className="typewriter-prefix">~/</span>
-            <span id="typewriterText"></span>
-            <span className="cursor-blink"></span>
+      <section className="hero light">
+        <div className="hero-left">
+          <div className="hero-photo">
+            <img src="/Alante.PNG" alt="Alante Velez" />
           </div>
-          <p className="hero-desc">Fast shipping matters. Reliable code matters more. Every project gets documentation, post launch support, and a developer who's actually there when you need them.</p>
+        </div>
+        <div className="hero-right">
+          <div className="hero-tag">Full Stack Product Development</div>
+          <h1 className="hero-name">I turn ideas into <em>products that work.</em><br />Then I stay.</h1>
+          <p className="hero-desc">I design, build, launch, and maintain custom web applications for businesses — from SaaS platforms and client portals to AI workflows, payments, and automation.</p>
           <div className="hero-btns">
             <a href="#hire" className="btn btn-primary">Start a Project →</a>
             <a href="#work" className="btn btn-secondary">View My Work →</a>
@@ -207,58 +205,57 @@ export default function Home() {
           </div>
           <a href="#" className="section-link">View All Work →</a>
         </div>
-        <div className="projects-grid">
-          <div className="project-card">
-            <div className="project-image">
-              <div className="image-placeholder">Image Placeholder</div>
-            </div>
-            <div className="project-body">
-              <div className="project-name">Planary</div>
-              <div className="project-subtitle">AI-Powered Travel Platform</div>
-              <p className="project-desc">Custom travel planning platform with AI recommendations, interactive itineraries, Stripe payments, customer dashboard, and admin panel.</p>
-              <div className="tech-stack">
-                <span className="tech-badge">Next.js</span>
-                <span className="tech-badge">Supabase</span>
-                <span className="tech-badge">Stripe</span>
-                <span className="tech-badge">AI</span>
-              </div>
-              <a href="https://planarytravel.com" target="_blank" className="project-link">View Case Study →</a>
-            </div>
-          </div>
 
-          <div className="project-card">
-            <div className="project-image">
-              <div className="image-placeholder">Image Placeholder</div>
-            </div>
-            <div className="project-body">
-              <div className="project-name">Rising Sons Leadership Academy</div>
-              <div className="project-subtitle">Custom Learning Management System</div>
-              <p className="project-desc">Full-stack LMS with custom video player, per-student access control, progress tracking, PayPal payments, and Zoom integration.</p>
-              <div className="tech-stack">
-                <span className="tech-badge">Next.js</span>
-                <span className="tech-badge">Supabase</span>
-                <span className="tech-badge">PayPal</span>
-                <span className="tech-badge">Zoom API</span>
-              </div>
-              <a href="https://risingsonsacademy.org" target="_blank" className="project-link">View Case Study →</a>
-            </div>
+        <div className="project-row">
+          <div className="project-image-large">
+            <div className="image-placeholder">Image Placeholder</div>
           </div>
+          <div className="project-content">
+            <div className="project-name">Planary</div>
+            <div className="project-subtitle">AI-Powered Travel Platform</div>
+            <p className="project-desc">Custom travel planning platform with AI recommendations, interactive itineraries, Stripe payments, customer dashboard, and admin panel.</p>
+            <div className="tech-stack">
+              <span className="tech-badge">Next.js</span>
+              <span className="tech-badge">Supabase</span>
+              <span className="tech-badge">Stripe</span>
+              <span className="tech-badge">AI</span>
+            </div>
+            <a href="https://planarytravel.com" target="_blank" className="project-link">View Case Study →</a>
+          </div>
+        </div>
 
-          <div className="project-card">
-            <div className="project-image">
-              <div className="image-placeholder">Image Placeholder</div>
+        <div className="project-row reverse">
+          <div className="project-image-large">
+            <div className="image-placeholder">Image Placeholder</div>
+          </div>
+          <div className="project-content">
+            <div className="project-name">Rising Sons Leadership Academy</div>
+            <div className="project-subtitle">Custom Learning Management System</div>
+            <p className="project-desc">Full-stack LMS with custom video player, per-student access control, progress tracking, PayPal payments, and Zoom integration.</p>
+            <div className="tech-stack">
+              <span className="tech-badge">Next.js</span>
+              <span className="tech-badge">Supabase</span>
+              <span className="tech-badge">PayPal</span>
+              <span className="tech-badge">Zoom API</span>
             </div>
-            <div className="project-body">
-              <div className="project-name">Tramaine Crawford</div>
-              <div className="project-subtitle">Professional Development Platform</div>
-              <p className="project-desc">Coaching and consulting booking platform. Allows clients to schedule sessions, manage availability, and track coaching relationships.</p>
-              <div className="tech-stack">
-                <span className="tech-badge">Next.js</span>
-                <span className="tech-badge">Supabase</span>
-                <span className="tech-badge">Calendly</span>
-              </div>
-              <a href="https://tramainecrawford.com" target="_blank" className="project-link">View Live Site →</a>
+            <a href="https://risingsonsacademy.org" target="_blank" className="project-link">View Case Study →</a>
+          </div>
+        </div>
+
+        <div className="project-row">
+          <div className="project-image-large">
+            <div className="image-placeholder">Image Placeholder</div>
+          </div>
+          <div className="project-content">
+            <div className="project-name">Tramaine Crawford</div>
+            <div className="project-subtitle">Professional Development Platform</div>
+            <p className="project-desc">Coaching and consulting booking platform. Allows clients to schedule sessions, manage availability, and track coaching relationships.</p>
+            <div className="tech-stack">
+              <span className="tech-badge">Next.js</span>
+              <span className="tech-badge">Supabase</span>
+              <span className="tech-badge">Calendly</span>
             </div>
+            <a href="https://tramainecrawford.com" target="_blank" className="project-link">View Live Site →</a>
           </div>
         </div>
 
@@ -370,12 +367,12 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="cta-section">
-        <div className="section-label">Ready?</div>
-        <h2 className="section-title">Your project starts<br /><em style={{fontStyle: 'italic', color: 'var(--terracotta)'}}>with one form.</em></h2>
-        <p className="cta-subtitle">Ready to build? Fill out the intake form and book your discovery call in one shot. Have a question first? Use the same form—just tell me what's on your mind.</p>
-        <a href="/intake" className="cta-btn magnetic">Start the Intake Form <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
-        <a href="/intake" className="hero-cta-ghost magnetic" style={{marginTop:16,display:"inline-flex",alignItems:"center",gap:14,padding:"16px 32px",border:"1px solid var(--border)",color:"var(--cream)",fontFamily:"DM Mono,monospace",fontSize:"0.78rem",letterSpacing:"0.1em",textTransform:"uppercase",textDecoration:"none",transition:"border-color 0.25s,color 0.25s,transform 0.25s"}}>Have a question first? <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></a>
+      <section id="hire" className="light">
+        <div className="cta-block">
+          <h2 className="cta-title">Let's build something<br /><em style={{color: 'var(--pink)', fontStyle: 'italic'}}>that lasts.</em></h2>
+          <p className="cta-subtitle">Have an idea but unsure what you need? That's okay. Tell me what you're trying to accomplish and I'll help determine the technical approach.</p>
+          <a href="/intake" className="btn btn-primary" style={{marginRight: '12px'}}>Start the Intake Form →</a>
+        </div>
       </section>
 
       <footer>
