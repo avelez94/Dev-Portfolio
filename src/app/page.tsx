@@ -12,12 +12,7 @@ export default function Home() {
   return (
     <>
       <style>{`
-<<<<<<< HEAD
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
-        
-=======
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&family=Caveat:wght@400;700&display=swap');
->>>>>>> 3d49bdf (Update hero section with new copy and cursive greeting)
         :root {
           --pink: #A96860;
           --pink-light: #C18078;
@@ -40,45 +35,6 @@ export default function Home() {
         .nav-logo-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
         
         .nav-links { display: flex; gap: 36px; }
-<<<<<<< HEAD
-        .nav-links a { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; }
-        .nav-links a:hover { color: var(--pink); }
-
-        .nav-cta { background: var(--dark); color: var(--cream); padding: 12px 24px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.2s; }
-        .nav-cta:hover { background: var(--pink); }
-
-        .hero { min-height: 100vh; display: grid; grid-template-columns: 0.7fr 1.3fr; align-items: center; padding: 140px 48px; position: relative; overflow: hidden; z-index: 2; gap: 40px; }
-        
-        .hero::before { content: ''; position: absolute; right: -5%; top: 50%; transform: translateY(-50%); width: 60%; height: 150%; background: url('/plante_shadow.jpg') center/cover no-repeat; pointer-events: none; opacity: 0.8; z-index: 1; }
-
-        .hero-left { position: relative; z-index: 2; }
-        .hero-photo { width: 100%; max-width: 420px; border-radius: 8px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.08); }
-        .hero-photo img { width: 100%; display: block; }
-
-        .hero-right { position: relative; z-index: 3; max-width: 550px; }
-        
-        .hero-tag { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--pink); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 20px; font-weight: 500; }
-
-        .hero-name { font-family: 'Playfair Display', serif; font-size: clamp(44px, 6vw, 72px); font-weight: 900; line-height: 1.15; margin-bottom: 24px; letter-spacing: -0.015em; color: var(--dark); }
-        .hero-name em { font-style: italic; color: var(--pink); }
-
-        .hero-desc { font-size: 1rem; line-height: 1.7; color: rgba(42,36,32,0.75); max-width: 480px; margin-bottom: 36px; }
-
-        .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 40px; }
-        
-        .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 28px; font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.25s; border: none; cursor: pointer; font-weight: 500; }
-        
-        .btn-primary { background: var(--pink); color: var(--cream); }
-        .btn-primary:hover { background: var(--pink-light); transform: translateY(-2px); }
-
-        .btn-secondary { background: transparent; color: var(--dark); border: 1.5px solid var(--muted); }
-        .btn-secondary:hover { border-color: var(--pink); color: var(--pink); }
-
-        .tech-ticker { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 0; margin-top: 32px; }
-        .ticker-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 10px; font-weight: 500; }
-        .ticker-items { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted); letter-spacing: 0.06em; display: flex; flex-wrap: wrap; gap: 20px; }
-
-=======
         .nav-links a { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; opacity: 0; animation: fadeUp 0.8s forwards; position: relative; }
         .nav-links a::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 1px; background: var(--terracotta); transition: width 0.3s; }
         .nav-links a:hover::after { width: 100%; }
@@ -118,7 +74,6 @@ export default function Home() {
         @keyframes marqueeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         .marquee-item { display: flex; align-items: center; gap: 28px; padding: 0 28px; white-space: nowrap; font-family: 'DM Mono', monospace; font-size: 0.75rem; color: rgba(250,246,240,0.35); letter-spacing: 0.08em; }
         .marquee-sep { color: var(--terracotta); opacity: 0.4; }
->>>>>>> 3d49bdf (Update hero section with new copy and cursive greeting)
         section { padding: 100px 48px; position: relative; z-index: 2; }
         section.light { background: var(--cream); }
         section.featured { background: linear-gradient(135deg, rgba(245,230,211,0.5), rgba(250,243,232,0.5)); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -219,18 +174,6 @@ export default function Home() {
         <a href="#hire" className="nav-cta">Start a Project</a>
       </nav>
 
-<<<<<<< HEAD
-      <section className="hero light">
-        <div className="hero-left">
-          <div className="hero-photo">
-            <img src="/Alante.PNG" alt="Alante Velez" />
-          </div>
-        </div>
-        <div className="hero-right">
-          <div className="hero-tag">Full Stack Product Development</div>
-          <h1 className="hero-name">I turn ideas into <em>products that work.</em><br />Then I stay.</h1>
-          <p className="hero-desc">I design, build, launch, and maintain custom web applications for businesses — from SaaS platforms and client portals to AI workflows, payments, and automation.</p>
-=======
       <section className="hero">
         <div className="hero-bg-text" id="heroBgText">DEVELOPER</div>
         <div className="hero-content">
@@ -243,7 +186,6 @@ export default function Home() {
             <span className="cursor-blink"></span>
           </div>
           <p className="hero-desc">Fast shipping matters. Reliable code matters more. Every project gets documentation, post launch support, and a developer who's actually there when you need them.</p>
->>>>>>> 3d49bdf (Update hero section with new copy and cursive greeting)
           <div className="hero-btns">
             <a href="#hire" className="btn btn-primary">Start a Project →</a>
             <a href="#work" className="btn btn-secondary">View My Work →</a>
