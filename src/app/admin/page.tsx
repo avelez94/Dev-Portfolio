@@ -161,10 +161,13 @@ export default function AdminDashboard() {
   const [sendingProposal, setSendingProposal] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
   const [proposals, setProposals] = useState<any[]>([])
+  const [sows, setSows] = useState<any[]>([])
   const [sowMilestones, setSowMilestones] = useState([{ name: 'Milestone 1', deliverables: '', dueDate: '', fee: '' }])
   const [sowProposalTotal, setSowProposalTotal] = useState(0)
   const [sendingSOW, setSendingSOW] = useState(false)
   const [sowSent, setSOWSent] = useState(false)
+  const [sendingContract, setSendingContract] = useState(false)
+  const [contractSent, setContractSent] = useState(false)
 
   const clockRef = useRef<ReturnType<typeof setInterval>|null>(null)
 
@@ -176,7 +179,7 @@ export default function AdminDashboard() {
 
   async function fetchAll() {
     setLoading(true)
-    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing(),fetchMeetings(),fetchProposals()])
+    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing(),fetchMeetings(),fetchProposals(),fetchSows()])
     setLoading(false)
   }
   async function fetchBookings() {
@@ -227,6 +230,10 @@ export default function AdminDashboard() {
   async function fetchProposals() {
     const { data } = await supabase.from('proposals').select('*').order('created_at',{ascending:false})
     setProposals(data || [])
+  }
+  async function fetchSows() {
+    const { data } = await supabase.from('sows').select('*').order('created_at',{ascending:false})
+    setSows(data || [])
   }
   async function scheduleMeeting(clientId: string, clientName: string, clientEmail: string) {
     if (!meetingForm.date || !meetingForm.time) return
@@ -768,6 +775,38 @@ export default function AdminDashboard() {
     addLine('Stripe, PayPal, Zelle, or Wise')
     addLine('Reference: Invoice #' + f.invoice_number + ' | ' + clientName)
     save('Invoice_' + f.invoice_number + '_' + clientName.replace(/\s+/g,'_') + '.pdf')
+  }
+
+  async function sendContractEmail() {
+    const f = contractForm
+    if (!f.client_email || !f.client_name) return
+    setSendingContract(true)
+    try {
+      const res = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientName: f.client_name,
+          clientEmail: f.client_email,
+          clientBusiness: f.client_business,
+          projectTitle: f.project_title,
+          projectType: f.project_type,
+          startDate: f.start_date,
+          deliveryDate: f.delivery_date,
+          totalFee: parseFloat(f.total_fee) || 0,
+          deposit: parseFloat(f.deposit) || 0,
+          balance: parseFloat(f.balance) || 0,
+          killFeePct: parseFloat(f.kill_fee_pct) || 25,
+          paymentMethod: f.payment_method,
+          lineItems: [],
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setContractSent(true)
+      setTimeout(() => setContractSent(false), 3000)
+    } catch(e) { console.error(e) }
+    setSendingContract(false)
   }
 
   function generateContractDoc() {
@@ -1647,16 +1686,39 @@ export default function AdminDashboard() {
                 {activeFillForm==='contract' && (
                   <div className="fill-form-wrap" style={{background:d.surface,borderColor:d.border}}>
                     <div className="fill-form-title" style={{color:d.text}}>Freelance Contract</div>
-                    <div className="fill-form-sub" style={{color:d.text3}}>Standard terms are pre-filled. Add client and project details to generate.</div>
-                    <div className="section-mini-label" style={{color:d.text3}}>Client info</div>
+                    <div className="fill-form-sub" style={{color:d.text3}}>Select an accepted SOW to auto-fill. All legal terms are pre-loaded. Client signs with a drawn signature.</div>
+                    <div className="section-mini-label" style={{color:d.text3}}>Select from accepted SOWs</div>
+                    <div className="form-grid">
+                      <div className="form-group" style={{gridColumn:'1/-1'}}>
+                        <select style={inputStyle} onChange={e=>{
+                          const s = sows.find(sw=>sw.id===e.target.value)
+                          if(s) setContractForm({
+                            ...contractForm,
+                            client_name: s.client_name,
+                            client_email: s.client_email,
+                            client_business: s.client_business || '',
+                            project_title: s.project_title,
+                            project_type: s.project_type,
+                            start_date: s.start_date || '',
+                            delivery_date: s.delivery_date || '',
+                            total_fee: String(s.total),
+                            deposit: String(s.deposit),
+                            balance: String(s.balance),
+                          })
+                        }} defaultValue="">
+                          <option value="" disabled>Select a client...</option>
+                          {sows.filter(s=>s.status==='accepted').map(s=>(
+                            <option key={s.id} value={s.id}>{s.client_name} — {s.project_title}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Client and project</div>
                     <div className="form-grid">
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client name</div><input style={inputStyle} value={contractForm.client_name} onChange={e=>setContractForm({...contractForm,client_name:e.target.value})} placeholder="Full name"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client email</div><input style={inputStyle} value={contractForm.client_email} onChange={e=>setContractForm({...contractForm,client_email:e.target.value})} placeholder="client@email.com"/></div>
                       <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Business name (optional)</div><input style={inputStyle} value={contractForm.client_business} onChange={e=>setContractForm({...contractForm,client_business:e.target.value})} placeholder="Company or LLC name"/></div>
-                    </div>
-                    <div className="section-divider" style={{background:d.border}}/>
-                    <div className="section-mini-label" style={{color:d.text3}}>Project</div>
-                    <div className="form-grid">
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project title</div><input style={inputStyle} value={contractForm.project_title} onChange={e=>setContractForm({...contractForm,project_title:e.target.value})} placeholder="Project name"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project type</div><select style={inputStyle} value={contractForm.project_type} onChange={e=>setContractForm({...contractForm,project_type:e.target.value})}>{PROJECT_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date</div><input style={inputStyle} type="date" value={contractForm.start_date} onChange={e=>setContractForm({...contractForm,start_date:e.target.value})}/></div>
@@ -1671,10 +1733,31 @@ export default function AdminDashboard() {
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Kill fee (%)</div><input style={inputStyle} value={contractForm.kill_fee_pct} onChange={e=>setContractForm({...contractForm,kill_fee_pct:e.target.value})}/></div>
                       <div className="form-group" style={{gridColumn:'2/-1'}}><div className="form-label" style={{color:d.text3}}>Payment method</div><input style={inputStyle} value={contractForm.payment_method} onChange={e=>setContractForm({...contractForm,payment_method:e.target.value})}/></div>
                     </div>
-                    <div className="form-actions">
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>
+                    <div style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,fontSize:11,color:d.text2,lineHeight:1.8}}>
+                      <div style={{marginBottom:6}}>1. Services — Scope and change order rate ($65/hr)</div>
+                      <div style={{marginBottom:6}}>2. Payment — Total, deposit, balance, late payment interest (1.5%/month)</div>
+                      <div style={{marginBottom:6}}>3. Kill fee — {contractForm.kill_fee_pct}% of total if cancelled after work begins</div>
+                      <div style={{marginBottom:6}}>4. Intellectual property — Full ownership transfers on final payment</div>
+                      <div style={{marginBottom:6}}>5. Revisions — 2 rounds included, additional at $65/hr</div>
+                      <div style={{marginBottom:6}}>6. Confidentiality — Both parties keep proprietary info confidential</div>
+                      <div style={{marginBottom:6}}>7. Warranties — Work is original, defect-free for 30 days post-delivery</div>
+                      <div style={{marginBottom:6}}>8. Limitation of liability — Capped at total amount paid</div>
+                      <div>9. Governing law — State of Indiana</div>
+                    </div>
+                    {contractSent && (
+                      <div style={{background:d.green,color:d.greenText,borderRadius:8,padding:'10px 14px',fontSize:12,marginTop:12,textAlign:'center'}}>
+                        Contract sent to {contractForm.client_email} for signature
+                      </div>
+                    )}
+                    <div className="form-actions" style={{marginTop:16}}>
                       <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
                       <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>openPreview(buildContractPreview(),'download',generateContractDoc)}>Preview</button>
-                      <button className="btn-save" onClick={generateContractDoc}>Download Contract</button>
+                      <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={generateContractDoc}>Download</button>
+                      <button className="btn-save" disabled={sendingContract||!contractForm.client_email} onClick={sendContractEmail}>
+                        {sendingContract?'Sending...':'Send for Signature'}
+                      </button>
                     </div>
                   </div>
                 )}
