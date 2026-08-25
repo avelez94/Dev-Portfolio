@@ -147,12 +147,6 @@ export default function ProposalPage() {
         <div className="logo-sub">Project Proposal</div>
       </div>
 
-      {proposal.message && (
-        <div className="card" style={{marginBottom:16}}>
-          <p className="body-text" style={{whiteSpace:'pre-wrap'}}>{proposal.message}</p>
-        </div>
-      )}
-
       <div className="card">
         <div className="eyebrow">Prepared for</div>
         <div className="card-title">{proposal.client_name}</div>
