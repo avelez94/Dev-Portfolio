@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 
-type LineItem = { description: string; price: number }
+type Milestone = { name: string; deliverables: string; dueDate: string; fee: string }
 type SOW = {
   id: string
   client_name: string
@@ -14,12 +14,11 @@ type SOW = {
   understood: string | null
   deliverables: string | null
   out_of_scope: string | null
-  line_items: LineItem[]
+  line_items: Milestone[]
   total: number
   deposit: number
   balance: number
   deposit_pct: number
-  timeline: string | null
   start_date: string | null
   delivery_date: string | null
   revisions: string
@@ -41,14 +40,17 @@ const STYLES = `
   .card-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: #2A2420; margin-bottom: 2px; }
   .card-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: #8B7D73; letter-spacing: 0.06em; }
   .body-text { font-size: 14px; line-height: 1.75; color: #3D3630; white-space: pre-wrap; }
-  .line-items { display: flex; flex-direction: column; gap: 0; margin-bottom: 12px; }
-  .line-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(169,104,96,0.1); }
-  .line-desc { font-size: 14px; color: #2A2420; }
-  .line-price { font-size: 14px; color: #2A2420; font-weight: 500; white-space: nowrap; margin-left: 16px; }
-  .total-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0 12px; border-top: 2px solid rgba(169,104,96,0.2); margin-top: 4px; }
+  .milestone { border: 1px solid rgba(169,104,96,0.15); border-radius: 6px; padding: 16px; margin-bottom: 10px; }
+  .milestone:last-child { margin-bottom: 0; }
+  .milestone-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .milestone-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: #2A2420; }
+  .milestone-fee { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600; color: #A96860; }
+  .milestone-due { font-family: 'DM Mono', monospace; font-size: 10px; color: #8B7D73; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  .milestone-deliverables { font-size: 13px; line-height: 1.65; color: #3D3630; white-space: pre-wrap; }
+  .total-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0 12px; border-top: 2px solid rgba(169,104,96,0.2); margin-top: 8px; }
   .total-row span { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: #2A2420; }
   .total-amount { color: #A96860; font-size: 22px; }
-  .deposit-note { font-family: 'DM Mono', monospace; font-size: 11px; color: #8B7D73; line-height: 1.8; }
+  .deposit-note { font-family: 'DM Mono', monospace; font-size: 11px; color: #8B7D73; line-height: 1.8; margin-top: 8px; }
   .deposit-note strong { color: #2A2420; }
   .action-row { display: flex; gap: 12px; justify-content: flex-end; align-items: center; }
   .btn-accept { background: #A96860; border: none; color: #FAF3E8; font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 32px; cursor: pointer; border-radius: 4px; transition: background 0.2s, transform 0.15s; }
@@ -118,6 +120,11 @@ export default function SOWPage() {
     setResponding(false)
   }
 
+  function formatDate(dateStr: string) {
+    if (!dateStr) return ''
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  }
+
   if (loading) return <Shell><div className="loading">Loading your statement of work...</div></Shell>
   if (error) return <Shell><div className="error-state">{error}</div></Shell>
   if (!sow) return null
@@ -161,7 +168,7 @@ export default function SOWPage() {
         <div className="card-sub">{sow.project_type}</div>
         {sow.start_date && (
           <div className="card-sub" style={{marginTop:8}}>
-            Start: {sow.start_date}{sow.delivery_date ? '  ·  Delivery: ' + sow.delivery_date : ''}
+            Start: {formatDate(sow.start_date)}{sow.delivery_date ? '  ·  Est. completion: ' + formatDate(sow.delivery_date) : ''}
           </div>
         )}
       </div>
@@ -175,7 +182,7 @@ export default function SOWPage() {
 
       {sow.deliverables && (
         <div className="card">
-          <div className="eyebrow">Deliverables</div>
+          <div className="eyebrow">Full deliverables</div>
           <p className="body-text">{sow.deliverables}</p>
         </div>
       )}
@@ -189,22 +196,28 @@ export default function SOWPage() {
 
       {sow.line_items && sow.line_items.length > 0 && (
         <div className="card">
-          <div className="eyebrow">Payment breakdown</div>
-          <div className="line-items">
-            {sow.line_items.map((item, i) => (
-              <div key={i} className="line-item">
-                <span className="line-desc">{item.description}</span>
-                <span className="line-price">${Number(item.price).toLocaleString()}</span>
+          <div className="eyebrow">Milestone schedule</div>
+          {sow.line_items.map((milestone, i) => (
+            <div key={i} className="milestone">
+              <div className="milestone-header">
+                <div className="milestone-name">{milestone.name}</div>
+                <div className="milestone-fee">${Number(milestone.fee).toLocaleString()}</div>
               </div>
-            ))}
-          </div>
+              {milestone.dueDate && (
+                <div className="milestone-due">Due: {formatDate(milestone.dueDate)}</div>
+              )}
+              {milestone.deliverables && (
+                <div className="milestone-deliverables">{milestone.deliverables}</div>
+              )}
+            </div>
+          ))}
           <div className="total-row">
             <span>Total</span>
             <span className="total-amount">${sow.total.toLocaleString()}</span>
           </div>
           <div className="deposit-note">
             Deposit ({sow.deposit_pct}% due to begin): <strong>${sow.deposit.toLocaleString()}</strong><br/>
-            Balance due on delivery: <strong>${sow.balance.toLocaleString()}</strong>
+            Remaining balance paid across milestones as outlined above.
           </div>
         </div>
       )}

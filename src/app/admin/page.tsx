@@ -161,7 +161,8 @@ export default function AdminDashboard() {
   const [sendingProposal, setSendingProposal] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
   const [proposals, setProposals] = useState<any[]>([])
-  const [sowLineItems, setSowLineItems] = useState([{ description: '', price: '' }])
+  const [sowMilestones, setSowMilestones] = useState([{ name: 'Milestone 1', deliverables: '', dueDate: '', fee: '' }])
+  const [sowProposalTotal, setSowProposalTotal] = useState(0)
   const [sendingSOW, setSendingSOW] = useState(false)
   const [sowSent, setSOWSent] = useState(false)
 
@@ -654,10 +655,15 @@ export default function AdminDashboard() {
   async function sendSOWEmail() {
     const f = sowForm
     if (!f.client_email || !f.client_name) return
+    const validMilestones = sowMilestones.filter(m => m.deliverables && m.fee)
+    const milestoneTotal = validMilestones.reduce((s, m) => s + (parseFloat(m.fee) || 0), 0)
+    if (sowProposalTotal > 0 && Math.round(milestoneTotal) !== Math.round(sowProposalTotal)) {
+      alert(`Milestone total ($${milestoneTotal.toLocaleString()}) must equal the proposal total ($${sowProposalTotal.toLocaleString()}). Please adjust your milestone fees.`)
+      return
+    }
     setSendingSOW(true)
     try {
-      const validItems = sowLineItems.filter(i => i.description && i.price)
-      const total = parseFloat(f.total_fee) || 0
+      const total = milestoneTotal || parseFloat(f.total_fee) || 0
       const deposit = parseFloat(f.deposit) || total * 0.5
       const balance = total - deposit
       const res = await fetch('/api/sows', {
@@ -671,12 +677,11 @@ export default function AdminDashboard() {
           understood: f.description,
           deliverables: f.deliverables,
           outOfScope: f.out_of_scope,
-          lineItems: validItems,
+          milestones: validMilestones,
           total,
           deposit,
           balance,
           depositPct: total > 0 ? Math.round((deposit/total)*100) : 50,
-          timeline: '',
           startDate: f.start_date,
           deliveryDate: f.delivery_date,
           revisions: f.revisions,
@@ -1522,7 +1527,8 @@ export default function AdminDashboard() {
                           const p = proposals.find(pr=>pr.id===e.target.value)
                           if(p) {
                             setSowForm({...sowForm,client_name:p.client_name,client_email:p.client_email,project_title:p.project_title,project_type:p.project_type,total_fee:String(p.total),deposit:String(Math.round(p.total*p.deposit_pct/100)),balance:String(Math.round(p.total-(p.total*p.deposit_pct/100)))})
-                            setSowLineItems(p.line_items && p.line_items.length > 0 ? p.line_items.map((i:any) => ({description:i.description,price:String(i.price)})) : [{description:'',price:''}])
+                            setSowProposalTotal(p.total)
+                            setSowMilestones([{name:'Milestone 1',deliverables:'',dueDate:'',fee:''}])
                           }
                         }} defaultValue="">
                           <option value="" disabled>Select a client...</option>
@@ -1546,20 +1552,42 @@ export default function AdminDashboard() {
                       <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Out of scope</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.out_of_scope} onChange={e=>setSowForm({...sowForm,out_of_scope:e.target.value})} placeholder="What is explicitly not included..."/></div>
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
-                    <div className="section-mini-label" style={{color:d.text3}}>Investment breakdown</div>
-                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>Pre-filled from the accepted proposal. Edit if needed.</div>
-                    {sowLineItems.map((item, idx) => (
-                      <div key={idx} style={{display:'grid',gridTemplateColumns:'1fr 120px 32px',gap:8,marginBottom:8,alignItems:'center'}}>
-                        <input style={inputStyle} value={item.description} onChange={e=>{const updated=[...sowLineItems];updated[idx]={...updated[idx],description:e.target.value};setSowLineItems(updated)}} placeholder="Line item description"/>
-                        <input style={{...inputStyle,textAlign:'right'}} type="number" value={item.price} onChange={e=>{const updated=[...sowLineItems];updated[idx]={...updated[idx],price:e.target.value};setSowLineItems(updated)}} placeholder="0"/>
-                        <button onClick={()=>setSowLineItems(sowLineItems.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px',lineHeight:1}}>x</button>
+                    <div className="section-mini-label" style={{color:d.text3}}>Milestone schedule</div>
+                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>
+                      Break the project into milestones. Each milestone has deliverables, a due date, and a fee.
+                      {sowProposalTotal > 0 && (
+                        <span style={{marginLeft:8,color:sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)===sowProposalTotal?d.greenText:d.accent}}>
+                          Milestone total: ${sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0).toLocaleString()} / ${sowProposalTotal.toLocaleString()} required
+                        </span>
+                      )}
+                    </div>
+                    {sowMilestones.map((milestone, idx) => (
+                      <div key={idx} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,marginBottom:10}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                          <input style={{...inputStyle,width:'auto',flex:1,fontWeight:500,fontSize:12}} value={milestone.name} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],name:e.target.value};setSowMilestones(u)}} placeholder="Milestone name"/>
+                          <button onClick={()=>setSowMilestones(sowMilestones.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px 0 12px',lineHeight:1}}>x</button>
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                          <div>
+                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Due date</div>
+                            <input style={inputStyle} type="date" value={milestone.dueDate} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],dueDate:e.target.value};setSowMilestones(u)}}/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Fee ($)</div>
+                            <input style={{...inputStyle,textAlign:'right'}} type="number" value={milestone.fee} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],fee:e.target.value};setSowMilestones(u)}} placeholder="0"/>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Deliverables</div>
+                          <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:60}} value={milestone.deliverables} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],deliverables:e.target.value};setSowMilestones(u)}} placeholder="What will be delivered at this milestone..."/>
+                        </div>
                       </div>
                     ))}
-                    <button onClick={()=>setSowLineItems([...sowLineItems,{description:'',price:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add line item</button>
-                    {sowLineItems.some(i=>i.price) && (
+                    <button onClick={()=>setSowMilestones([...sowMilestones,{name:'Milestone '+(sowMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
+                    {sowMilestones.some(m=>m.fee) && (
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid '+d.border,marginBottom:12}}>
-                        <div style={{fontSize:12,fontWeight:500,color:d.text}}>Total</div>
-                        <div style={{fontSize:14,fontWeight:600,color:d.accent}}>${sowLineItems.reduce((s,i)=>s+(parseFloat(i.price)||0),0).toLocaleString()}</div>
+                        <div style={{fontSize:12,fontWeight:500,color:d.text}}>Milestone total</div>
+                        <div style={{fontSize:14,fontWeight:600,color:sowProposalTotal>0&&sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)===sowProposalTotal?d.greenText:d.accent}}>${sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0).toLocaleString()}</div>
                       </div>
                     )}
                     <div className="section-divider" style={{background:d.border}}/>

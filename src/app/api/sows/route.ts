@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       clientName, clientEmail, projectTitle, projectType,
-      understood, deliverables, outOfScope, lineItems,
+      understood, deliverables, outOfScope, milestones,
       total, deposit, balance, depositPct,
       startDate, deliveryDate, revisions, hourlyRate, paymentMethod,
     } = body
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       understood: understood || null,
       deliverables: deliverables || null,
       out_of_scope: outOfScope || null,
-      line_items: lineItems || [],
+      line_items: milestones || [],
       total: total || 0,
       deposit: deposit || 0,
       balance: balance || 0,
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   <div class="divider"></div>
   <h1 class="heading">Your Statement<br><em>of Work.</em></h1>
   <p>Hi ${clientName}, your Statement of Work for <strong>${projectTitle}</strong> is ready for your review.</p>
-  <p>Please review the full scope, deliverables, timeline, and payment details. You can accept or decline directly from the page.</p>
+  <p>Please review the full scope, deliverables, milestone schedule, and payment details. You can accept or decline directly from the page.</p>
   <div class="cta-wrap">
     <a href="${sowUrl}" class="cta">Review Statement of Work</a>
     <p class="cta-url">Or copy this link: ${sowUrl}</p>
