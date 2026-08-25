@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   <div class="detail-label">Signed on</div><div class="detail-value">${signedDate}</div>
   <div class="detail-label">Total fee</div><div class="detail-value">$${contract.total_fee.toLocaleString()}</div>
   <div class="detail-label">Deposit due to begin</div><div class="detail-value">$${contract.deposit.toLocaleString()}</div>
-  <div class="detail-label">Balance due on delivery</div><div class="detail-value">$${contract.balance.toLocaleString()}</div>
+  <div class="detail-label">Balance paid across milestones</div><div class="detail-value">$${contract.balance.toLocaleString()}</div>
 </div>
 <p>Your deposit invoice will arrive shortly. Once payment is received the project officially begins. Keep this email for your records.</p>
 <div class="footer">alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</div>

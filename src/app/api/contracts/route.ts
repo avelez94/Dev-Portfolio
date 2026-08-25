@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     <div class="detail-value">$${Number(totalFee).toLocaleString()}</div>
     <div class="detail-label">Deposit due to begin</div>
     <div class="detail-value">$${Number(deposit).toLocaleString()}</div>
-    <div class="detail-label">Balance due on delivery</div>
+    <div class="detail-label">Balance paid across milestones</div>
     <div class="detail-value">$${Number(balance).toLocaleString()}</div>
   </div>
   <div class="cta-wrap">
