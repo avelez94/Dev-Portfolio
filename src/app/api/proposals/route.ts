@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://alantevelez.com'
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL 
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://alantevelez.com')
     const proposalUrl = `${siteUrl}/proposals/${proposal.id}`
 
     await resend.emails.send({
