@@ -149,15 +149,15 @@ export default function AdminDashboard() {
     project_title: '',
     project_type: 'Landing Page',
     understood: '',
-    deliverables: '',
     out_of_scope: '',
-    price_low: '',
-    price_high: '',
     deposit_pct: '50',
     timeline: '',
     next_steps: 'Sign the proposal and submit your 50% deposit to officially kick off the project.',
     message: '',
   })
+  const [lineItems, setLineItems] = useState([
+    { description: '', price: '' }
+  ])
   const [sendingProposal, setSendingProposal] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
 
@@ -476,17 +476,21 @@ export default function AdminDashboard() {
 
   function buildProposalPreview(): PreviewDoc {
     const f = proposalForm
-    const hasRange = f.price_low && f.price_high && f.price_low !== f.price_high
+    const validItems = lineItems.filter(i => i.description && i.price)
+    const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
+    const deposit = total * (parseFloat(f.deposit_pct) / 100)
+    const itemsText = validItems.length > 0
+      ? validItems.map(i => i.description + '  —  $' + parseFloat(i.price).toLocaleString()).join('\n') + '\n\nTotal: $' + total.toLocaleString()
+      : 'No line items added yet.'
     return {
       title: 'Project Proposal — ' + (f.project_title || 'Untitled'),
       sections: [
         { label: 'Prepared for', value: [f.client_name, f.client_email, f.client_business].filter(Boolean).join('\n') },
         { label: 'Project', value: f.project_title + ' (' + f.project_type + ')' },
         { label: 'What I understood', value: f.understood || 'See attached notes.' },
-        { label: 'What is included', value: f.deliverables || 'To be defined.' },
+        { label: 'Investment breakdown', value: itemsText },
+        { label: 'Deposit required', value: f.deposit_pct + '% ($' + deposit.toLocaleString() + ') upfront to begin' },
         ...(f.out_of_scope ? [{ label: 'What is not included', value: f.out_of_scope }] : []),
-        { label: 'Investment', value: hasRange ? '$' + f.price_low + ' to $' + f.price_high : f.price_low ? '$' + f.price_low : 'TBD' },
-        { label: 'Deposit required', value: f.deposit_pct + '% upfront to begin' },
         { label: 'Timeline', value: f.timeline || 'To be confirmed in SOW.' },
         { label: 'Next steps', value: f.next_steps },
       ]
@@ -557,6 +561,9 @@ export default function AdminDashboard() {
 
   function generateProposalDoc() {
     const f = proposalForm
+    const validItems = lineItems.filter(i => i.description && i.price)
+    const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
+    const deposit = total * (parseFloat(f.deposit_pct) / 100)
     const { addLine, addSpace, addDivider, save } = makePDF()
     addLine('PROJECT PROPOSAL', 16, true, true)
     addLine('Alante Velez  |  Full Stack Web Developer', 10)
@@ -574,21 +581,21 @@ export default function AdminDashboard() {
     addLine('WHAT I UNDERSTOOD', 10, true, true); addSpace(0.5)
     addLine(f.understood || 'See attached notes.')
     addSpace(); addDivider()
-    addLine('WHAT IS INCLUDED', 10, true, true); addSpace(0.5)
-    addLine(f.deliverables || 'To be defined in the Statement of Work.')
+    addLine('INVESTMENT', 10, true, true); addSpace(0.5)
+    validItems.forEach(item => {
+      addLine(item.description + '  —  $' + parseFloat(item.price).toLocaleString())
+    })
+    addSpace(0.5)
+    addLine('TOTAL: $' + total.toLocaleString(), 12, true)
+    addSpace(0.5)
+    addLine('Deposit (' + f.deposit_pct + '% due to begin): $' + deposit.toLocaleString())
+    addLine('Balance due on delivery: $' + (total - deposit).toLocaleString())
+    addLine('Change orders and additional revisions billed at $65/hr.')
     addSpace(); addDivider()
     if (f.out_of_scope) {
       addLine('WHAT IS NOT INCLUDED', 10, true, true); addSpace(0.5)
       addLine(f.out_of_scope); addSpace(); addDivider()
     }
-    addLine('INVESTMENT', 10, true, true); addSpace(0.5)
-    const hasRange = f.price_low && f.price_high && f.price_low !== f.price_high
-    if (hasRange) { addLine('Estimated project investment: $' + f.price_low + ' to $' + f.price_high) }
-    else if (f.price_low) { addLine('Project investment: $' + f.price_low) }
-    addLine('A ' + f.deposit_pct + '% deposit is required to begin. The remaining balance is due upon final delivery.')
-    addLine('Work is structured in milestones. Payment is tied to each milestone completion.')
-    addLine('Change orders and additional revisions are billed at $65/hr.')
-    addSpace(); addDivider()
     addLine('TIMELINE', 10, true, true); addSpace(0.5)
     addLine(f.timeline || 'Estimated timeline will be confirmed in the Statement of Work once content and scope are finalized.')
     addSpace(); addDivider()
@@ -608,6 +615,8 @@ export default function AdminDashboard() {
     if (!f.client_email || !f.client_name) return
     setSendingProposal(true)
     try {
+      const validItems = lineItems.filter(i => i.description && i.price)
+      const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
       await fetch('/api/proposals/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -618,10 +627,9 @@ export default function AdminDashboard() {
           projectTitle: f.project_title,
           projectType: f.project_type,
           understood: f.understood,
-          deliverables: f.deliverables,
+          lineItems: validItems,
+          total,
           outOfScope: f.out_of_scope,
-          priceLow: f.price_low,
-          priceHigh: f.price_high,
           depositPct: f.deposit_pct,
           timeline: f.timeline,
           nextSteps: f.next_steps,
@@ -1384,14 +1392,28 @@ export default function AdminDashboard() {
                     <div className="section-mini-label" style={{color:d.text3}}>Scope</div>
                     <div className="form-grid">
                       <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>What I understood about the project</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:80}} value={proposalForm.understood} onChange={e=>setProposalForm({...proposalForm,understood:e.target.value})} placeholder="Based on our conversation, you are looking for a professional website that..."/></div>
-                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>What is included</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:80}} value={proposalForm.deliverables} onChange={e=>setProposalForm({...proposalForm,deliverables:e.target.value})} placeholder="Landing page, Business services page, Individual services page, Contact page, Scheduling integration, Domain and email setup, 2 rounds of revisions..."/></div>
                       <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>What is not included (optional)</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={proposalForm.out_of_scope} onChange={e=>setProposalForm({...proposalForm,out_of_scope:e.target.value})} placeholder="Logo design, copywriting, photography, ongoing maintenance..."/></div>
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
-                    <div className="section-mini-label" style={{color:d.text3}}>Investment and timeline</div>
-                    <div className="form-grid-3">
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Price low ($)</div><input style={inputStyle} type="number" value={proposalForm.price_low} onChange={e=>setProposalForm({...proposalForm,price_low:e.target.value})} placeholder="1000"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Price high ($) <span style={{fontSize:9,color:d.text3}}>blank for fixed</span></div><input style={inputStyle} type="number" value={proposalForm.price_high} onChange={e=>setProposalForm({...proposalForm,price_high:e.target.value})} placeholder="1800"/></div>
+                    <div className="section-mini-label" style={{color:d.text3}}>Investment breakdown</div>
+                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>Add each service as a line item with its price. The total and deposit are calculated automatically.</div>
+                    {lineItems.map((item, idx) => (
+                      <div key={idx} style={{display:'grid',gridTemplateColumns:'1fr 120px 32px',gap:8,marginBottom:8,alignItems:'center'}}>
+                        <input style={inputStyle} value={item.description} onChange={e=>{const updated=[...lineItems];updated[idx]={...updated[idx],description:e.target.value};setLineItems(updated)}} placeholder={"Landing page, Scheduling integration..."}/>
+                        <input style={{...inputStyle,textAlign:'right'}} type="number" value={item.price} onChange={e=>{const updated=[...lineItems];updated[idx]={...updated[idx],price:e.target.value};setLineItems(updated)}} placeholder="0"/>
+                        <button onClick={()=>setLineItems(lineItems.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px',lineHeight:1}}>x</button>
+                      </div>
+                    ))}
+                    <button onClick={()=>setLineItems([...lineItems,{description:'',price:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add line item</button>
+                    {lineItems.some(i=>i.price) && (
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid '+d.border,marginBottom:12}}>
+                        <div style={{fontSize:12,fontWeight:500,color:d.text}}>Total</div>
+                        <div style={{fontSize:14,fontWeight:600,color:d.accent}}>${lineItems.reduce((s,i)=>s+(parseFloat(i.price)||0),0).toLocaleString()}</div>
+                      </div>
+                    )}
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Payment and timeline</div>
+                    <div className="form-grid">
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit (%)</div><input style={inputStyle} value={proposalForm.deposit_pct} onChange={e=>setProposalForm({...proposalForm,deposit_pct:e.target.value})}/></div>
                     </div>
                     <div className="form-group" style={{marginBottom:12}}>
