@@ -1504,7 +1504,7 @@ export default function AdminDashboard() {
                     </div>
                     <div>
                       <div className="doc-name" style={{color:d.text}}>Project Proposal</div>
-                      <div style={{fontSize:11,color:d.text3}}>Send before the contract to present scope and price</div>
+                      <div style={{fontSize:11,color:d.text3}}>Scope, pricing, and milestone schedule combined</div>
                     </div>
                   </div>
                   <div className="doc-actions">
@@ -1633,136 +1633,6 @@ export default function AdminDashboard() {
                       <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={generateProposalDoc}>Download PDF</button>
                       <button className="btn-save" disabled={sendingProposal||!proposalForm.client_email} onClick={sendProposalEmail}>
                         {sendingProposal?'Sending...':'Send to Client'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* SOW CARD */}
-                <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
-                  <div className="doc-card-header">
-                    <div className="doc-icon" style={{background:d.sand,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M5 5h6M5 7.5h6M5 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg></div>
-                    <div>
-                      <div className="doc-name" style={{color:d.text}}>Statement of Work</div>
-                      <div style={{fontSize:11,color:d.text3}}>Fill out and download a complete SOW</div>
-                    </div>
-                  </div>
-                  <div className="doc-actions">
-                    <button className="doc-btn fill" onClick={()=>setActiveFillForm(activeFillForm==='sow'?null:'sow')}>{activeFillForm==='sow'?'Close form':'Fill out SOW'}</button>
-                  </div>
-                </div>
-                {activeFillForm==='sow' && (
-                  <div className="fill-form-wrap" style={{background:d.surface,borderColor:d.border}}>
-                    <div className="fill-form-title" style={{color:d.text}}>Statement of Work</div>
-                    <div className="fill-form-sub" style={{color:d.text3}}>Fill in the details below and send to the client or download a PDF.</div>
-                    <div className="section-mini-label" style={{color:d.text3}}>Client info</div>
-                    <div className="form-grid">
-                      <div className="form-group" style={{gridColumn:'1/-1'}}>
-                        <div className="form-label" style={{color:d.text3}}>Select from proposal sent clients</div>
-                        <select style={inputStyle} onChange={e=>{
-                          const p = proposals.find(pr=>pr.id===e.target.value)
-                          if(p) {
-                            setSowForm({...sowForm,client_name:p.client_name,client_email:p.client_email,project_title:p.project_title,project_type:p.project_type,total_fee:String(p.total),deposit:String(Math.round(p.total*p.deposit_pct/100)),balance:String(Math.round(p.total-(p.total*p.deposit_pct/100)))})
-                            setSowProposalTotal(p.total)
-                            setSowMilestones([{name:'Milestone 1',deliverables:'',dueDate:'',fee:''}])
-                          }
-                        }} defaultValue="">
-                          <option value="" disabled>Select a client...</option>
-                          {proposals.filter(p=>p.status==='accepted').map(p=>(
-                            <option key={p.id} value={p.id}>{p.client_name} — {p.project_title}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client name</div><input style={inputStyle} value={sowForm.client_name} onChange={e=>setSowForm({...sowForm,client_name:e.target.value})} placeholder="Full name or business"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Client email</div><input style={inputStyle} value={sowForm.client_email} onChange={e=>setSowForm({...sowForm,client_email:e.target.value})} placeholder="client@email.com"/></div>
-                    </div>
-                    <div className="section-divider" style={{background:d.border}}/>
-                    <div className="section-mini-label" style={{color:d.text3}}>Project details</div>
-                    <div className="form-grid">
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project title</div><input style={inputStyle} value={sowForm.project_title} onChange={e=>setSowForm({...sowForm,project_title:e.target.value})} placeholder="Project name"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project type</div><select style={inputStyle} value={sowForm.project_type} onChange={e=>setSowForm({...sowForm,project_type:e.target.value})}>{PROJECT_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date</div><input style={inputStyle} type="date" value={sowForm.start_date} onChange={e=>setSowForm({...sowForm,start_date:e.target.value})}/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Delivery date</div><input style={inputStyle} type="date" value={sowForm.delivery_date} onChange={e=>setSowForm({...sowForm,delivery_date:e.target.value})}/></div>
-                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Project overview</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.description} onChange={e=>setSowForm({...sowForm,description:e.target.value})} placeholder="What are you building..."/></div>
-                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Out of scope</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.out_of_scope} onChange={e=>setSowForm({...sowForm,out_of_scope:e.target.value})} placeholder="What is explicitly not included..."/></div>
-                    </div>
-                    <div className="section-divider" style={{background:d.border}}/>
-                    <div className="section-mini-label" style={{color:d.text3}}>Milestone schedule</div>
-                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>
-                      Break the project into milestones. Each milestone has deliverables, a due date, and a fee.
-                      {sowProposalTotal > 0 && (() => {
-                        const dep = parseFloat(sowForm.deposit) || sowProposalTotal * 0.5
-                        const bal = sowProposalTotal - dep
-                        const mTotal = sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)
-                        return (
-                          <span style={{marginLeft:8,color:mTotal===bal?d.greenText:d.accent}}>
-                            Milestone total: ${mTotal.toLocaleString()} / ${bal.toLocaleString()} required (balance after ${dep.toLocaleString()} deposit)
-                          </span>
-                        )
-                      })()}
-                    </div>
-                    {sowMilestones.map((milestone, idx) => (
-                      <div key={idx} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,marginBottom:10}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-                          <input style={{...inputStyle,width:'auto',flex:1,fontWeight:500,fontSize:12}} value={milestone.name} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],name:e.target.value};setSowMilestones(u)}} placeholder="Milestone name"/>
-                          <button onClick={()=>setSowMilestones(sowMilestones.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px 0 12px',lineHeight:1}}>x</button>
-                        </div>
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                          <div>
-                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Due date</div>
-                            <input style={inputStyle} type="date" value={milestone.dueDate} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],dueDate:e.target.value};setSowMilestones(u)}}/>
-                          </div>
-                          <div>
-                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Fee ($)</div>
-                            <input style={{...inputStyle,textAlign:'right'}} type="number" value={milestone.fee} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],fee:e.target.value};setSowMilestones(u)}} placeholder="0"/>
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Deliverables</div>
-                          <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:60}} value={milestone.deliverables} onChange={e=>{const u=[...sowMilestones];u[idx]={...u[idx],deliverables:e.target.value};setSowMilestones(u)}} placeholder="What will be delivered at this milestone..."/>
-                        </div>
-                      </div>
-                    ))}
-                    <button onClick={()=>setSowMilestones([...sowMilestones,{name:'Milestone '+(sowMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
-                    {sowMilestones.some(m=>m.fee) && (() => {
-                      const dep = parseFloat(sowForm.deposit) || sowProposalTotal * 0.5
-                      const bal = sowProposalTotal - dep
-                      const mTotal = sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)
-                      const isMatch = sowProposalTotal > 0 && Math.round(mTotal) === Math.round(bal)
-                      return (
-                        <div style={{padding:'10px 0',borderTop:'1px solid '+d.border,marginBottom:12}}>
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                            <div style={{fontSize:12,fontWeight:500,color:d.text}}>Milestone total</div>
-                            <div style={{fontSize:14,fontWeight:600,color:isMatch?d.greenText:d.accent}}>${mTotal.toLocaleString()}</div>
-                          </div>
-                          {sowProposalTotal > 0 && !isMatch && (
-                            <div style={{fontSize:10,color:d.accent,marginTop:4,fontFamily:'DM Mono,monospace'}}>
-                              Balance after deposit: ${bal.toLocaleString()} · Difference: ${Math.abs(mTotal - bal).toLocaleString()}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })()}
-                    <div className="section-divider" style={{background:d.border}}/>
-                    <div className="section-mini-label" style={{color:d.text3}}>Payment</div>
-                    <div className="form-grid-3">
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total fee ($)</div><input style={inputStyle} type="number" value={sowForm.total_fee} onChange={e=>setSowForm({...sowForm,total_fee:e.target.value})} placeholder="0"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit ($)</div><input style={inputStyle} type="number" value={sowForm.deposit} onChange={e=>setSowForm({...sowForm,deposit:e.target.value})} placeholder="0"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Balance ($)</div><input style={inputStyle} type="number" value={sowForm.balance} onChange={e=>setSowForm({...sowForm,balance:e.target.value})} placeholder="0"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Revisions included</div><input style={inputStyle} value={sowForm.revisions} onChange={e=>setSowForm({...sowForm,revisions:e.target.value})}/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Hourly rate ($)</div><input style={inputStyle} value={sowForm.hourly_rate} onChange={e=>setSowForm({...sowForm,hourly_rate:e.target.value})}/></div>
-                    </div>
-                    {sowSent && (
-                      <div style={{background:d.green,color:d.greenText,borderRadius:8,padding:'10px 14px',fontSize:12,marginBottom:12,textAlign:'center'}}>
-                        SOW sent to {sowForm.client_email}
-                      </div>
-                    )}
-                    <div className="form-actions">
-                      <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setActiveFillForm(null)}>Cancel</button>
-                      <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>openPreview(buildSOWPreview(),'download',generateSOWDoc)}>Preview</button>
-                      <button className="btn-save" onClick={generateSOWDoc}>Download SOW</button>
-                      <button className="btn-save" disabled={sendingSOW||!sowForm.client_email} onClick={sendSOWEmail}>
-                        {sendingSOW?'Sending...':'Send to Client'}
                       </button>
                     </div>
                   </div>
