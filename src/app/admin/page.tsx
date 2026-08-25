@@ -617,7 +617,7 @@ export default function AdminDashboard() {
     try {
       const validItems = lineItems.filter(i => i.description && i.price)
       const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
-      await fetch('/api/proposals/send', {
+      await fetch('/api/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
