@@ -13,6 +13,7 @@ type Proposal = {
   project_type: string
   understood: string | null
   line_items: LineItem[]
+  milestones: any[]
   total: number
   deposit_pct: number
   out_of_scope: string | null
@@ -199,6 +200,22 @@ export default function ProposalPage() {
         <div className="card">
           <div className="eyebrow">What is not included</div>
           <p className="body-text">{proposal.out_of_scope}</p>
+        </div>
+      )}
+
+      {proposal.milestones && proposal.milestones.length > 0 && (
+        <div className="card">
+          <div className="eyebrow">Milestone schedule</div>
+          {proposal.milestones.map((m: any, i: number) => (
+            <div key={i} style={{borderBottom: i < proposal.milestones.length - 1 ? '1px solid rgba(169,104,96,0.1)' : 'none', paddingBottom: 16, marginBottom: 16}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
+                <div style={{fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:'#2A2420'}}>{m.name}</div>
+                <div style={{fontFamily:"'DM Mono', monospace", fontSize:13, fontWeight:600, color:'#A96860'}}>${Number(m.fee).toLocaleString()}</div>
+              </div>
+              {m.dueDate && <div style={{fontFamily:"'DM Mono', monospace", fontSize:10, color:'#8B7D73', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6}}>Due: {new Date(m.dueDate + 'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>}
+              {m.deliverables && <div style={{fontSize:13, lineHeight:1.65, color:'#3D3630', whiteSpace:'pre-wrap'}}>{m.deliverables}</div>}
+            </div>
+          ))}
         </div>
       )}
 

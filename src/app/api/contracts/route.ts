@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
       clientName, clientEmail, clientBusiness,
       projectTitle, projectType, startDate, deliveryDate,
       totalFee, deposit, balance, killFeePct, paymentMethod, lineItems,
+      invoiceNumber, invoiceServiceDesc, invoiceDueDate,
     } = body
 
     const { data: contract, error } = await supabaseAdmin.from('contracts').insert({
@@ -28,9 +29,28 @@ export async function POST(req: NextRequest) {
       payment_method: paymentMethod || 'Stripe, PayPal, Zelle, or Wise',
       line_items: lineItems || [],
       status: 'pending',
+      // Store invoice details for auto-send on signing
+      signer_name: null,
+      signature_image: null,
     }).select().single()
 
     if (error) throw error
+
+    // Store invoice data in a separate record so it's ready when they sign
+    await supabaseAdmin.from('invoices').insert({
+      client_id: null,
+      invoice_number: invoiceNumber,
+      invoice_type: 'project',
+      total_fee: totalFee || 0,
+      deposit_amount: deposit || 0,
+      amount: totalFee || 0,
+      due_date: invoiceDueDate || null,
+      service_desc: invoiceServiceDesc || projectTitle,
+      hours: 0,
+      hourly_rate: 65,
+      status: 'awaiting_signature',
+      notes: `contract_id:${contract.id}`,
+    })
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
     const contractUrl = `${siteUrl}/contracts/${contract.id}`
@@ -52,13 +72,13 @@ export async function POST(req: NextRequest) {
   .heading{font-size:32px;font-weight:700;color:#2A2420;line-height:1.1;margin-bottom:20px}
   .heading em{font-style:italic;color:#A96860}
   p{font-size:15px;line-height:1.75;color:#3D3630;margin-bottom:16px;font-family:Georgia,serif}
-  .cta-wrap{background:white;border:1px solid rgba(169,104,96,0.2);border-radius:8px;padding:28px 24px;text-align:center;margin:32px 0}
-  .cta{display:inline-block;background:#A96860;color:#FAF3E8 !important;text-decoration:none;padding:16px 40px;font-family:monospace;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;border-radius:4px;font-weight:500}
-  .cta-url{font-family:monospace;font-size:11px;color:#8B7D73;margin-top:12px;word-break:break-all}
   .detail{background:white;border:1px solid rgba(169,104,96,0.2);border-left:3px solid #A96860;border-radius:4px;padding:16px 20px;margin:20px 0}
   .detail-label{font-family:monospace;font-size:10px;color:#A96860;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;margin-top:10px}
   .detail-label:first-child{margin-top:0}
   .detail-value{font-size:14px;color:#2A2420;font-family:Georgia,serif}
+  .cta-wrap{background:white;border:1px solid rgba(169,104,96,0.2);border-radius:8px;padding:28px 24px;text-align:center;margin:32px 0}
+  .cta{display:inline-block;background:#A96860;color:#FAF3E8 !important;text-decoration:none;padding:16px 40px;font-family:monospace;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;border-radius:4px;font-weight:500}
+  .cta-url{font-family:monospace;font-size:11px;color:#8B7D73;margin-top:12px;word-break:break-all}
   .footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.15)}
   .footer p{font-size:12px;color:#8B7D73;font-family:monospace;letter-spacing:0.06em}
 </style>
@@ -70,7 +90,7 @@ export async function POST(req: NextRequest) {
   <div class="divider"></div>
   <h1 class="heading">Your contract<br><em>is ready.</em></h1>
   <p>Hi ${clientName}, your contract for <strong>${projectTitle}</strong> is ready for your review and signature.</p>
-  <p>Please review all terms carefully. You will draw your signature directly on the page using your mouse or finger on mobile. Your electronic signature is legally binding under the ESIGN Act.</p>
+  <p>Please review all terms carefully. You will draw your signature directly on the page. Once signed, your deposit invoice will be sent automatically.</p>
   <div class="detail">
     <div class="detail-label">Project</div>
     <div class="detail-value">${projectTitle}</div>
@@ -85,7 +105,7 @@ export async function POST(req: NextRequest) {
     <a href="${contractUrl}" class="cta">Review and Sign Contract</a>
     <p class="cta-url">Or copy this link: ${contractUrl}</p>
   </div>
-  <p style="font-size:13px;color:#8B7D73;">If the button does not work, copy and paste the link above into your browser.</p>
+  <p style="font-size:13px;color:#8B7D73;">Your deposit invoice will be sent automatically once you sign. If the button does not work, copy and paste the link above into your browser.</p>
   <div class="footer">
     <p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p>
   </div>

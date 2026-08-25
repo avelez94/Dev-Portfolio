@@ -8,7 +8,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const { data, error } = await supabaseAdmin.from('proposals').select('*').eq('id', id).single()
   if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(data)
+  // Fetch linked SOW milestones
+  const { data: sow } = await supabaseAdmin.from('sows').select('line_items').eq('proposal_id', id).single()
+  return NextResponse.json({ ...data, milestones: sow?.line_items || [] })
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

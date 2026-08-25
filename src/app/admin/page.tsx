@@ -129,12 +129,14 @@ export default function AdminDashboard() {
     project_title:string; project_type:string
     start_date:string; delivery_date:string; total_fee:string
     deposit:string; balance:string; kill_fee_pct:string; payment_method:string
+    invoice_number:string; invoice_service_desc:string; invoice_due_date:string
   }>({
     client_name:'', client_email:'', client_business:'',
     project_title:'', project_type:'Landing Page',
     start_date:'', delivery_date:'', total_fee:'',
     deposit:'', balance:'', kill_fee_pct:'25',
     payment_method:'Stripe, PayPal, Zelle, or Wise',
+    invoice_number:'', invoice_service_desc:'', invoice_due_date:'',
   })
   const [sowForm, setSowForm] = useState({
     client_name:'', client_email:'', project_title:'', project_type:'Landing Page',
@@ -142,22 +144,51 @@ export default function AdminDashboard() {
     description:'', deliverables:'', out_of_scope:'', revisions:'2', hourly_rate:'65',
     payment_method:'Stripe, PayPal, Zelle, or Wise',
   })
-  const [proposalForm, setProposalForm] = useState({
-    client_name: '',
-    client_email: '',
-    client_business: '',
-    project_title: '',
-    project_type: 'Landing Page',
-    understood: '',
-    out_of_scope: '',
-    deposit_pct: '50',
-    timeline: '',
-    next_steps: 'Sign the proposal and submit your 50% deposit to officially kick off the project.',
-    message: '',
-  })
-  const [lineItems, setLineItems] = useState([
-    { description: '', price: '' }
-  ])
+  const getSavedProposalForm = () => {
+    try {
+      const saved = localStorage.getItem('proposalForm')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {
+      client_name: '', client_email: '', client_business: '',
+      project_title: '', project_type: 'Landing Page',
+      understood: '', out_of_scope: '',
+      deposit_pct: '50', timeline: '',
+      next_steps: 'Once you accept this proposal, I will send the contract for your signature. Once signed, your deposit invoice will follow to officially kick things off.',
+      message: '', start_date: '', delivery_date: '',
+      revisions: '2', hourly_rate: '65',
+      payment_method: 'Stripe, PayPal, Zelle, or Wise',
+    }
+  }
+  const getSavedLineItems = () => {
+    try {
+      const saved = localStorage.getItem('proposalLineItems')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return [{ description: '', price: '' }]
+  }
+  const getSavedMilestones = () => {
+    try {
+      const saved = localStorage.getItem('proposalMilestones')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return [{ name: 'Milestone 1', deliverables: '', dueDate: '', fee: '' }]
+  }
+  const [proposalForm, setProposalFormState] = useState(getSavedProposalForm)
+  const setProposalForm = (val: any) => {
+    setProposalFormState(val)
+    try { localStorage.setItem('proposalForm', JSON.stringify(val)) } catch {}
+  }
+  const [lineItems, setLineItemsState] = useState(getSavedLineItems)
+  const setLineItems = (val: any) => {
+    setLineItemsState(val)
+    try { localStorage.setItem('proposalLineItems', JSON.stringify(val)) } catch {}
+  }
+  const [proposalMilestones, setProposalMilestonesState] = useState(getSavedMilestones)
+  const setProposalMilestones = (val: any) => {
+    setProposalMilestonesState(val)
+    try { localStorage.setItem('proposalMilestones', JSON.stringify(val)) } catch {}
+  }
   const [sendingProposal, setSendingProposal] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
   const [proposals, setProposals] = useState<any[]>([])
@@ -629,11 +660,19 @@ export default function AdminDashboard() {
   async function sendProposalEmail() {
     const f = proposalForm
     if (!f.client_email || !f.client_name) return
+    const validItems = lineItems.filter(i => i.description && i.price)
+    const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
+    const deposit = total * (parseFloat(f.deposit_pct) / 100)
+    const balance = total - deposit
+    const validMilestones = proposalMilestones.filter(m => m.deliverables && m.fee)
+    const milestoneTotal = validMilestones.reduce((s, m) => s + (parseFloat(m.fee) || 0), 0)
+    if (validMilestones.length > 0 && balance > 0 && Math.round(milestoneTotal) !== Math.round(balance)) {
+      alert(`Milestone total ($${milestoneTotal.toLocaleString()}) must equal the balance after deposit ($${balance.toLocaleString()}).`)
+      return
+    }
     setSendingProposal(true)
     try {
-      const validItems = lineItems.filter(i => i.description && i.price)
-      const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
-      await fetch('/api/proposals/send', {
+      await fetch('/api/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -644,10 +683,15 @@ export default function AdminDashboard() {
           projectType: f.project_type,
           understood: f.understood,
           lineItems: validItems,
+          milestones: validMilestones,
           total,
           outOfScope: f.out_of_scope,
           depositPct: f.deposit_pct,
           timeline: f.timeline,
+          startDate: f.start_date,
+          deliveryDate: f.delivery_date,
+          revisions: f.revisions,
+          hourlyRate: parseFloat(f.hourly_rate),
           nextSteps: f.next_steps,
           message: f.message,
           cc: MY_EMAIL,
@@ -780,6 +824,10 @@ export default function AdminDashboard() {
   async function sendContractEmail() {
     const f = contractForm
     if (!f.client_email || !f.client_name) return
+    if (!f.invoice_number) {
+      alert('Please fill in the invoice number before sending.')
+      return
+    }
     setSendingContract(true)
     try {
       const res = await fetch('/api/contracts', {
@@ -799,6 +847,9 @@ export default function AdminDashboard() {
           killFeePct: parseFloat(f.kill_fee_pct) || 25,
           paymentMethod: f.payment_method,
           lineItems: [],
+          invoiceNumber: f.invoice_number,
+          invoiceServiceDesc: f.invoice_service_desc,
+          invoiceDueDate: f.invoice_due_date,
         })
       })
       const data = await res.json()
@@ -1507,11 +1558,47 @@ export default function AdminDashboard() {
                     <div className="section-mini-label" style={{color:d.text3}}>Payment and timeline</div>
                     <div className="form-grid">
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit (%)</div><input style={inputStyle} value={proposalForm.deposit_pct} onChange={e=>setProposalForm({...proposalForm,deposit_pct:e.target.value})}/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Timeline estimate</div><input style={inputStyle} value={proposalForm.timeline} onChange={e=>setProposalForm({...proposalForm,timeline:e.target.value})} placeholder="4 to 6 weeks from deposit"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date (est.)</div><input style={inputStyle} type="date" value={proposalForm.start_date} onChange={e=>setProposalForm({...proposalForm,start_date:e.target.value})}/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Delivery date (est.)</div><input style={inputStyle} type="date" value={proposalForm.delivery_date} onChange={e=>setProposalForm({...proposalForm,delivery_date:e.target.value})}/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Revisions included</div><input style={inputStyle} value={proposalForm.revisions} onChange={e=>setProposalForm({...proposalForm,revisions:e.target.value})}/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Hourly rate ($)</div><input style={inputStyle} value={proposalForm.hourly_rate} onChange={e=>setProposalForm({...proposalForm,hourly_rate:e.target.value})}/></div>
                     </div>
-                    <div className="form-group" style={{marginBottom:12}}>
-                      <div className="form-label" style={{color:d.text3}}>Timeline estimate</div>
-                      <input style={inputStyle} value={proposalForm.timeline} onChange={e=>setProposalForm({...proposalForm,timeline:e.target.value})} placeholder="4 to 6 weeks from deposit and content delivery"/>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Milestone schedule</div>
+                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>
+                      Break the balance into milestones. Each has deliverables, a due date, and a fee.
+                      {lineItems.some(i=>i.price) && (() => {
+                        const total = lineItems.reduce((s,i)=>s+(parseFloat(i.price)||0),0)
+                        const dep = total * (parseFloat(proposalForm.deposit_pct)/100)
+                        const bal = total - dep
+                        const mTotal = proposalMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)
+                        return <span style={{marginLeft:8,color:Math.round(mTotal)===Math.round(bal)?d.greenText:d.accent}}>Milestone total: ${mTotal.toLocaleString()} / ${bal.toLocaleString()} required (balance after ${dep.toLocaleString()} deposit)</span>
+                      })()}
                     </div>
+                    {proposalMilestones.map((milestone, idx) => (
+                      <div key={idx} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,marginBottom:10}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                          <input style={{...inputStyle,width:'auto',flex:1,fontWeight:500,fontSize:12}} value={milestone.name} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],name:e.target.value};setProposalMilestones(u)}} placeholder="Milestone name"/>
+                          <button onClick={()=>setProposalMilestones(proposalMilestones.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px 0 12px',lineHeight:1}}>x</button>
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                          <div>
+                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Due date</div>
+                            <input style={inputStyle} type="date" value={milestone.dueDate} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],dueDate:e.target.value};setProposalMilestones(u)}}/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Fee ($)</div>
+                            <input style={{...inputStyle,textAlign:'right'}} type="number" value={milestone.fee} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],fee:e.target.value};setProposalMilestones(u)}} placeholder="0"/>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Deliverables</div>
+                          <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:60}} value={milestone.deliverables} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],deliverables:e.target.value};setProposalMilestones(u)}} placeholder="What will be delivered at this milestone..."/>
+                        </div>
+                      </div>
+                    ))}
+                    <button onClick={()=>setProposalMilestones([...proposalMilestones,{name:'Milestone '+(proposalMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Next steps</div>
                     <div className="form-group" style={{marginBottom:12}}>
@@ -1692,19 +1779,27 @@ export default function AdminDashboard() {
                       <div className="form-group" style={{gridColumn:'1/-1'}}>
                         <select style={inputStyle} onChange={e=>{
                           const s = sows.find(sw=>sw.id===e.target.value)
-                          if(s) setContractForm({
-                            ...contractForm,
-                            client_name: s.client_name,
-                            client_email: s.client_email,
-                            client_business: s.client_business || '',
-                            project_title: s.project_title,
-                            project_type: s.project_type,
-                            start_date: s.start_date || '',
-                            delivery_date: s.delivery_date || '',
-                            total_fee: String(s.total),
-                            deposit: String(s.deposit),
-                            balance: String(s.balance),
-                          })
+                          if(s) {
+                            const now = new Date()
+                            const invNum = 'INV-' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + s.client_name.split(' ')[0].toUpperCase()
+                            const sevenDays = new Date(now.getTime() + 7*24*60*60*1000).toISOString().split('T')[0]
+                            setContractForm({
+                              ...contractForm,
+                              client_name: s.client_name,
+                              client_email: s.client_email,
+                              client_business: s.client_business || '',
+                              project_title: s.project_title,
+                              project_type: s.project_type,
+                              start_date: s.start_date || '',
+                              delivery_date: s.delivery_date || '',
+                              total_fee: String(s.total),
+                              deposit: String(s.deposit),
+                              balance: String(s.balance),
+                              invoice_number: invNum,
+                              invoice_service_desc: s.project_title + ' — Deposit to begin',
+                              invoice_due_date: sevenDays,
+                            })
+                          }
                         }} defaultValue="">
                           <option value="" disabled>Select a client...</option>
                           {sows.filter(s=>s.status==='accepted').map(s=>(
@@ -1732,6 +1827,14 @@ export default function AdminDashboard() {
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Balance ($)</div><input style={inputStyle} type="number" value={contractForm.balance} onChange={e=>setContractForm({...contractForm,balance:e.target.value})} placeholder="0"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Kill fee (%)</div><input style={inputStyle} value={contractForm.kill_fee_pct} onChange={e=>setContractForm({...contractForm,kill_fee_pct:e.target.value})}/></div>
                       <div className="form-group" style={{gridColumn:'2/-1'}}><div className="form-label" style={{color:d.text3}}>Payment method</div><input style={inputStyle} value={contractForm.payment_method} onChange={e=>setContractForm({...contractForm,payment_method:e.target.value})}/></div>
+                    </div>
+                    <div className="section-divider" style={{background:d.border}}/>
+                    <div className="section-mini-label" style={{color:d.text3}}>Deposit invoice (sent automatically on signature)</div>
+                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>These details go on the deposit invoice that gets sent the moment the client signs the contract.</div>
+                    <div className="form-grid">
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice number</div><input style={inputStyle} value={contractForm.invoice_number} onChange={e=>setContractForm({...contractForm,invoice_number:e.target.value})} placeholder="INV-2026-001"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Due date</div><input style={inputStyle} type="date" value={contractForm.invoice_due_date} onChange={e=>setContractForm({...contractForm,invoice_due_date:e.target.value})}/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Service description</div><input style={inputStyle} value={contractForm.invoice_service_desc} onChange={e=>setContractForm({...contractForm,invoice_service_desc:e.target.value})} placeholder="Project name — Deposit to begin"/></div>
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>

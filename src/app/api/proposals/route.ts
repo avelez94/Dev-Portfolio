@@ -9,9 +9,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       clientId, clientName, clientEmail, clientBusiness,
-      projectTitle, projectType, understood, lineItems, total,
-      depositPct, outOfScope, timeline, nextSteps, message,
+      projectTitle, projectType, understood, lineItems, milestones, total,
+      depositPct, outOfScope, timeline, startDate, deliveryDate,
+      revisions, hourlyRate, nextSteps, message,
     } = body
+
+    const deposit = total * (parseFloat(depositPct) / 100)
+    const balance = total - deposit
 
     const { data: proposal, error } = await supabaseAdmin
       .from('proposals')
@@ -37,8 +41,33 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL 
-        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://alantevelez.com')
+    // Also store SOW data in the proposal for when client accepts
+    if (milestones && milestones.length > 0) {
+      await supabaseAdmin.from('sows').insert({
+        proposal_id: proposal.id,
+        client_name: clientName,
+        client_email: clientEmail,
+        client_business: clientBusiness || null,
+        project_title: projectTitle,
+        project_type: projectType,
+        understood: understood || null,
+        out_of_scope: outOfScope || null,
+        line_items: milestones,
+        total: total || 0,
+        deposit: deposit,
+        balance: balance,
+        deposit_pct: parseFloat(depositPct) || 50,
+        timeline: timeline || null,
+        start_date: startDate || null,
+        delivery_date: deliveryDate || null,
+        revisions: revisions || '2',
+        hourly_rate: hourlyRate || 65,
+        payment_method: 'Stripe, PayPal, Zelle, or Wise',
+        status: 'pending',
+      })
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
     const proposalUrl = `${siteUrl}/proposals/${proposal.id}`
 
     await resend.emails.send({
@@ -46,18 +75,7 @@ export async function POST(req: NextRequest) {
       to: clientEmail,
       cc: 'alante@alantevelez.com',
       subject: `Project Proposal — ${projectTitle}`,
-      html: getProposalEmailHtml({ clientName, projectTitle, proposalUrl, message }),
-    })
-
-    return NextResponse.json({ success: true, id: proposal.id })
-  } catch (err) {
-    console.error('Create proposal error:', err)
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
-  }
-}
-
-function getProposalEmailHtml({ clientName, projectTitle, proposalUrl, message }: any) {
-  return `<!DOCTYPE html>
+      html: `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -90,4 +108,11 @@ function getProposalEmailHtml({ clientName, projectTitle, proposalUrl, message }
   </div>
 </div>
 </body></html>`
+    })
+
+    return NextResponse.json({ success: true, id: proposal.id })
+  } catch (err) {
+    console.error('Create proposal error:', err)
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  }
 }
