@@ -180,13 +180,6 @@ export default function SOWPage() {
         </div>
       )}
 
-      {sow.deliverables && (
-        <div className="card">
-          <div className="eyebrow">Full deliverables</div>
-          <p className="body-text">{sow.deliverables}</p>
-        </div>
-      )}
-
       {sow.out_of_scope && (
         <div className="card">
           <div className="eyebrow">Out of scope</div>

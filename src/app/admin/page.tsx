@@ -675,7 +675,6 @@ export default function AdminDashboard() {
           projectTitle: f.project_title,
           projectType: f.project_type,
           understood: f.description,
-          deliverables: f.deliverables,
           outOfScope: f.out_of_scope,
           milestones: validMilestones,
           total,
@@ -1548,7 +1547,6 @@ export default function AdminDashboard() {
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date</div><input style={inputStyle} type="date" value={sowForm.start_date} onChange={e=>setSowForm({...sowForm,start_date:e.target.value})}/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Delivery date</div><input style={inputStyle} type="date" value={sowForm.delivery_date} onChange={e=>setSowForm({...sowForm,delivery_date:e.target.value})}/></div>
                       <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Project overview</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.description} onChange={e=>setSowForm({...sowForm,description:e.target.value})} placeholder="What are you building..."/></div>
-                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Deliverables</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:100}} value={sowForm.deliverables} onChange={e=>setSowForm({...sowForm,deliverables:e.target.value})} placeholder="Landing page, Business services page, Individual services page, Contact page, Scheduling integration, Payment integration, Domain and email setup..."/></div>
                       <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Out of scope</div><textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text}} value={sowForm.out_of_scope} onChange={e=>setSowForm({...sowForm,out_of_scope:e.target.value})} placeholder="What is explicitly not included..."/></div>
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>

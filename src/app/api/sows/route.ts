@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       clientName, clientEmail, projectTitle, projectType,
-      understood, deliverables, outOfScope, milestones,
+      understood, outOfScope, milestones,
       total, deposit, balance, depositPct,
       startDate, deliveryDate, revisions, hourlyRate, paymentMethod,
     } = body
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       project_title: projectTitle,
       project_type: projectType,
       understood: understood || null,
-      deliverables: deliverables || null,
+      deliverables: null,
       out_of_scope: outOfScope || null,
       line_items: milestones || [],
       total: total || 0,
