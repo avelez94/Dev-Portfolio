@@ -1210,6 +1210,23 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
+                {proposals.filter(p=>p.status==='accepted').length > 0 && (
+                  <div className="section" style={{marginBottom:16}}>
+                    <div className="section-label" style={{color:d.greenText}}>
+                      Proposals Accepted
+                      <span className="section-label-count" style={{background:d.green,color:d.greenText}}>{proposals.filter(p=>p.status==='accepted').length}</span>
+                    </div>
+                    {proposals.filter(p=>p.status==='accepted').map(p=>(
+                      <div key={p.id} className="alert-row" style={{background:d.green,borderColor:d.greenText+'44'}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:500,color:d.text}}>{p.client_name}</div>
+                          <div style={{fontSize:11,color:d.greenText}}>{p.project_title} · Accepted {new Date(p.responded_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+                        </div>
+                        <button className="cr-btn" style={{background:d.greenText,color:'white'}} onClick={()=>setView('docs')}>Send Contract</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {overdueInvoices.length > 0 && (
                   <div className="section" style={{marginBottom:16}}>
                     <div className="section-label" style={{color:d.redText}}>

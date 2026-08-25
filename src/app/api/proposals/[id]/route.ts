@@ -30,6 +30,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       decline_reason: declineReason || null,
     }).eq('id', id)
 
+    // Move client to proposal_sent stage if accepted
+    if (action === 'accepted' && proposal.client_email) {
+      const { data: client } = await supabaseAdmin
+        .from('clients')
+        .select('id, pipeline_stage')
+        .eq('email', proposal.client_email)
+        .single()
+      if (client && client.pipeline_stage === 'discovery_call') {
+        await supabaseAdmin.from('clients').update({ pipeline_stage: 'proposal_sent' }).eq('id', client.id)
+      }
+    }
+
     if (action === 'accepted') {
       await resend.emails.send({
         from: 'Alante Velez <alante@alantevelez.com>',
