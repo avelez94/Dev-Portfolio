@@ -657,15 +657,15 @@ export default function AdminDashboard() {
     if (!f.client_email || !f.client_name) return
     const validMilestones = sowMilestones.filter(m => m.deliverables && m.fee)
     const milestoneTotal = validMilestones.reduce((s, m) => s + (parseFloat(m.fee) || 0), 0)
-    if (sowProposalTotal > 0 && Math.round(milestoneTotal) !== Math.round(sowProposalTotal)) {
-      alert(`Milestone total ($${milestoneTotal.toLocaleString()}) must equal the proposal total ($${sowProposalTotal.toLocaleString()}). Please adjust your milestone fees.`)
+    const total = parseFloat(f.total_fee) || sowProposalTotal || 0
+    const deposit = parseFloat(f.deposit) || total * 0.5
+    const balance = total - deposit
+    if (balance > 0 && Math.round(milestoneTotal) !== Math.round(balance)) {
+      alert(`Milestone total ($${milestoneTotal.toLocaleString()}) must equal the balance after deposit ($${balance.toLocaleString()}). The deposit of $${deposit.toLocaleString()} is paid upfront and is not part of the milestone schedule.`)
       return
     }
     setSendingSOW(true)
     try {
-      const total = milestoneTotal || parseFloat(f.total_fee) || 0
-      const deposit = parseFloat(f.deposit) || total * 0.5
-      const balance = total - deposit
       const res = await fetch('/api/sows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1553,11 +1553,16 @@ export default function AdminDashboard() {
                     <div className="section-mini-label" style={{color:d.text3}}>Milestone schedule</div>
                     <div style={{fontSize:10,color:d.text3,marginBottom:10}}>
                       Break the project into milestones. Each milestone has deliverables, a due date, and a fee.
-                      {sowProposalTotal > 0 && (
-                        <span style={{marginLeft:8,color:sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)===sowProposalTotal?d.greenText:d.accent}}>
-                          Milestone total: ${sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0).toLocaleString()} / ${sowProposalTotal.toLocaleString()} required
-                        </span>
-                      )}
+                      {sowProposalTotal > 0 && (() => {
+                        const dep = parseFloat(sowForm.deposit) || sowProposalTotal * 0.5
+                        const bal = sowProposalTotal - dep
+                        const mTotal = sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)
+                        return (
+                          <span style={{marginLeft:8,color:mTotal===bal?d.greenText:d.accent}}>
+                            Milestone total: ${mTotal.toLocaleString()} / ${bal.toLocaleString()} required (balance after ${dep.toLocaleString()} deposit)
+                          </span>
+                        )
+                      })()}
                     </div>
                     {sowMilestones.map((milestone, idx) => (
                       <div key={idx} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,marginBottom:10}}>
@@ -1582,12 +1587,25 @@ export default function AdminDashboard() {
                       </div>
                     ))}
                     <button onClick={()=>setSowMilestones([...sowMilestones,{name:'Milestone '+(sowMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
-                    {sowMilestones.some(m=>m.fee) && (
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid '+d.border,marginBottom:12}}>
-                        <div style={{fontSize:12,fontWeight:500,color:d.text}}>Milestone total</div>
-                        <div style={{fontSize:14,fontWeight:600,color:sowProposalTotal>0&&sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)===sowProposalTotal?d.greenText:d.accent}}>${sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0).toLocaleString()}</div>
-                      </div>
-                    )}
+                    {sowMilestones.some(m=>m.fee) && (() => {
+                      const dep = parseFloat(sowForm.deposit) || sowProposalTotal * 0.5
+                      const bal = sowProposalTotal - dep
+                      const mTotal = sowMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)
+                      const isMatch = sowProposalTotal > 0 && Math.round(mTotal) === Math.round(bal)
+                      return (
+                        <div style={{padding:'10px 0',borderTop:'1px solid '+d.border,marginBottom:12}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                            <div style={{fontSize:12,fontWeight:500,color:d.text}}>Milestone total</div>
+                            <div style={{fontSize:14,fontWeight:600,color:isMatch?d.greenText:d.accent}}>${mTotal.toLocaleString()}</div>
+                          </div>
+                          {sowProposalTotal > 0 && !isMatch && (
+                            <div style={{fontSize:10,color:d.accent,marginTop:4,fontFamily:'DM Mono,monospace'}}>
+                              Balance after deposit: ${bal.toLocaleString()} · Difference: ${Math.abs(mTotal - bal).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Payment</div>
                     <div className="form-grid-3">
