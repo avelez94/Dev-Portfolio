@@ -137,7 +137,8 @@ export default function ProposalPage() {
           </div>
           <div className="deposit-note">
             Deposit ({proposal.deposit_pct}% due to begin): <strong>${deposit.toLocaleString()}</strong><br/>
-            Balance due on delivery: <strong>${balance.toLocaleString()}</strong><br/>
+            Remaining balance paid across project milestones.<br/>
+            Exact milestone schedule outlined in the Statement of Work.<br/>
             Change orders billed at $65/hr.
           </div>
         </div>
