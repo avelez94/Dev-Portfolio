@@ -125,7 +125,7 @@ export default function ProposalPage() {
       <div className="done-state">
         <div className="done-mark">✦</div>
         <h1 className="done-title">Proposal accepted.</h1>
-        <p className="done-body">You will receive a Statement of Work shortly for your review. Once you accept the SOW, the contract will follow for your signature.</p>
+        <p className="done-body">Your contract will arrive shortly for your review and signature. Once signed, your deposit invoice will follow to officially kick off the project.</p>
       </div>
     </Shell>
   )

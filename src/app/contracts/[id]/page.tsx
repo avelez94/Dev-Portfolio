@@ -205,8 +205,8 @@ export default function ContractPage() {
     { title: '7. Confidentiality', body: `Both parties agree to keep each other's proprietary information, business processes, and client data confidential during and after the project. This obligation survives termination of this agreement.` },
     { title: '8. Warranties', body: `Alante Velez warrants that all work will be original, will not infringe third-party rights, and will be free of known defects for 30 days following final delivery. Client is responsible for all content provided including text, images, and media.` },
     { title: '9. Limitation of liability', body: `Alante Velez's total liability under this agreement is limited to the total amount paid by Client. Alante Velez is not liable for indirect, incidental, or consequential damages including loss of revenue, data, or business opportunity.` },
-    { title: '10. Dispute resolution', body: `The parties agree to attempt to resolve any disputes informally before pursuing legal action. If informal resolution fails, disputes will be resolved through binding arbitration in the State of Indiana.` },
-    { title: '11. Governing law', body: `This agreement is governed by the laws of the State of Indiana. Any legal action must be brought in courts located in Indiana.` },
+    { title: '10. Dispute resolution', body: `The parties agree to attempt to resolve any disputes informally before pursuing legal action. If informal resolution fails, disputes will be resolved through binding arbitration in the State of Maryland.` },
+    { title: '11. Governing law', body: `This agreement is governed by the laws of the State of Maryland. Any legal action must be brought in courts located in Maryland.` },
     { title: '12. Entire agreement', body: `This contract, together with the accepted Proposal and Statement of Work, constitutes the entire agreement between the parties and supersedes all prior discussions, representations, or agreements.` },
   ]
 

@@ -71,7 +71,7 @@ function getAdminNotifHtml({ proposal, action, declineReason }: any) {
   <div class="label">Project</div><div class="value">${proposal.project_title}</div>
   <div class="label">Total</div><div class="value">$${proposal.total.toLocaleString()}</div>
   ${declineReason ? `<div class="label">Decline reason</div><div class="value">${declineReason}</div>` : ''}
-  ${action === 'accepted' ? '<div style="margin-top:20px;padding:14px 20px;background:#A96860;border-radius:6px;color:#FAF3E8;font-family:monospace;font-size:12px;letter-spacing:0.08em;">Send the SOW next</div>' : ''}
+  ${action === 'accepted' ? '<div style="margin-top:20px;padding:14px 20px;background:#A96860;border-radius:6px;color:#FAF3E8;font-family:monospace;font-size:12px;letter-spacing:0.08em;">Send the contract next</div>' : ''}
   <div class="footer"><p>alante@alantevelez.com · alantevelez.com</p></div>
 </div></body></html>`
 }
@@ -85,7 +85,7 @@ function getClientConfirmHtml({ proposal, action }: any) {
   <div class="divider"></div>
   <h1 class="heading">Proposal<br><em>accepted.</em></h1>
   <p>Hi ${proposal.client_name}, thank you for accepting the proposal for <strong>${proposal.project_title}</strong>.</p>
-  <p>Your Statement of Work will arrive shortly for your review. Once you accept that, you will receive the contract for your signature, followed by your deposit invoice to officially kick things off.</p>
+  <p>Your contract will arrive shortly for your review and signature. Once signed, your deposit invoice will follow to officially kick off the project.</p>
   <div class="footer"><p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p></div>
 </div></body></html>`
 }

@@ -588,7 +588,7 @@ export default function AdminDashboard() {
         { label: 'Kill fee', value: f.kill_fee_pct + '% of total fee if cancelled after work begins' },
         { label: 'Payment method', value: f.payment_method },
         { label: 'Revisions', value: '2 rounds included. Additional at $65/hr.' },
-        { label: 'Governing law', value: 'State of Indiana' },
+        { label: 'Governing law', value: 'State of Maryland' },
       ]
     }
   }
@@ -898,7 +898,7 @@ export default function AdminDashboard() {
       ['6. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
       ['7. WARRANTIES', 'Freelancer warrants work will be original and free of known defects for 30 days post-delivery.'],
       ['8. LIMITATION OF LIABILITY', 'Freelancer liability is limited to the total amount paid under this agreement.'],
-      ['9. GOVERNING LAW', 'This agreement is governed by the laws of the State of Indiana.'],
+      ['9. GOVERNING LAW', 'This agreement is governed by the laws of the State of Maryland.'],
     ]
     clauses.forEach(([title, body]) => {
       addLine(title, 10, true, true); addSpace(0.3)
@@ -1728,7 +1728,7 @@ export default function AdminDashboard() {
                       <div style={{marginBottom:6}}>6. Confidentiality — Both parties keep proprietary info confidential</div>
                       <div style={{marginBottom:6}}>7. Warranties — Work is original, defect-free for 30 days post-delivery</div>
                       <div style={{marginBottom:6}}>8. Limitation of liability — Capped at total amount paid</div>
-                      <div>9. Governing law — State of Indiana</div>
+                      <div>9. Governing law — State of Maryland</div>
                     </div>
                     {contractSent && (
                       <div style={{background:d.green,color:d.greenText,borderRadius:8,padding:'10px 14px',fontSize:12,marginTop:12,textAlign:'center'}}>
