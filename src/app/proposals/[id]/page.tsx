@@ -47,7 +47,7 @@ export default function ProposalPage() {
   async function respond(action: 'accepted' | 'declined') {
     setResponding(true)
     try {
-      const res = await fetch(`/api/proposals/${id}/respond`, {
+      const res = await fetch(`/api/proposals/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, declineReason: action === 'declined' ? declineReason : undefined }),
