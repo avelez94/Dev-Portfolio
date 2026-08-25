@@ -66,6 +66,17 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const PROJECT_TYPES = ['Landing Page','Booking + Payments','Web Application','AI Workflow','Other']
 const MY_EMAIL = 'alante@alantevelez.com'
 
+type LineItemType = { description: string; price: string }
+type MilestoneType = { name: string; deliverables: string; dueDate: string; fee: string }
+type ProposalFormType = {
+  client_name: string; client_email: string; client_business: string
+  project_title: string; project_type: string; understood: string
+  out_of_scope: string; deposit_pct: string; timeline: string
+  next_steps: string; message: string; start_date: string
+  delivery_date: string; revisions: string; hourly_rate: string
+  payment_method: string
+}
+
 export default function AdminDashboard() {
   const [view, setView] = useState<'home'|'pipeline'|'revenue'|'docs'|'schedule'>('home')
   const [dark, setDark] = useState(true)
@@ -144,7 +155,7 @@ export default function AdminDashboard() {
     description:'', deliverables:'', out_of_scope:'', revisions:'2', hourly_rate:'65',
     payment_method:'Stripe, PayPal, Zelle, or Wise',
   })
-  const getSavedProposalForm = () => {
+  const getSavedProposalForm = (): ProposalFormType => {
     try {
       const saved = localStorage.getItem('proposalForm')
       if (saved) return JSON.parse(saved)
@@ -160,32 +171,32 @@ export default function AdminDashboard() {
       payment_method: 'Stripe, PayPal, Zelle, or Wise',
     }
   }
-  const getSavedLineItems = () => {
+  const getSavedLineItems = (): LineItemType[] => {
     try {
       const saved = localStorage.getItem('proposalLineItems')
       if (saved) return JSON.parse(saved)
     } catch {}
     return [{ description: '', price: '' }]
   }
-  const getSavedMilestones = () => {
+  const getSavedMilestones = (): MilestoneType[] => {
     try {
       const saved = localStorage.getItem('proposalMilestones')
       if (saved) return JSON.parse(saved)
     } catch {}
     return [{ name: 'Milestone 1', deliverables: '', dueDate: '', fee: '' }]
   }
-  const [proposalForm, setProposalFormState] = useState(getSavedProposalForm)
-  const setProposalForm = (val: any) => {
+  const [proposalForm, setProposalFormState] = useState<ProposalFormType>(getSavedProposalForm)
+  const setProposalForm = (val: ProposalFormType) => {
     setProposalFormState(val)
     try { localStorage.setItem('proposalForm', JSON.stringify(val)) } catch {}
   }
-  const [lineItems, setLineItemsState] = useState(getSavedLineItems)
-  const setLineItems = (val: any) => {
+  const [lineItems, setLineItemsState] = useState<LineItemType[]>(getSavedLineItems)
+  const setLineItems = (val: LineItemType[]) => {
     setLineItemsState(val)
     try { localStorage.setItem('proposalLineItems', JSON.stringify(val)) } catch {}
   }
-  const [proposalMilestones, setProposalMilestonesState] = useState(getSavedMilestones)
-  const setProposalMilestones = (val: any) => {
+  const [proposalMilestones, setProposalMilestonesState] = useState<MilestoneType[]>(getSavedMilestones)
+  const setProposalMilestones = (val: MilestoneType[]) => {
     setProposalMilestonesState(val)
     try { localStorage.setItem('proposalMilestones', JSON.stringify(val)) } catch {}
   }
