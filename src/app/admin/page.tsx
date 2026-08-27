@@ -640,7 +640,7 @@ export default function AdminDashboard() {
     addLine('WHAT I UNDERSTOOD', 10, true, true); addSpace(0.5)
     addLine(f.understood || 'See attached notes.')
     addSpace(); addDivider()
-    addLine('INVESTMENT', 10, true, true); addSpace(0.5)
+    addLine('INVESTMENT BREAKDOWN', 10, true, true); addSpace(0.5)
     validItems.forEach(item => {
       addLine(item.description + '  —  $' + parseFloat(item.price).toLocaleString())
     })
@@ -648,15 +648,27 @@ export default function AdminDashboard() {
     addLine('TOTAL: $' + total.toLocaleString(), 12, true)
     addSpace(0.5)
     addLine('Deposit (' + f.deposit_pct + '% due to begin): $' + deposit.toLocaleString())
-    addLine('Balance due on delivery: $' + (total - deposit).toLocaleString())
+    addLine('Remaining balance paid across project milestones.')
     addLine('Change orders and additional revisions billed at $65/hr.')
     addSpace(); addDivider()
     if (f.out_of_scope) {
       addLine('WHAT IS NOT INCLUDED', 10, true, true); addSpace(0.5)
       addLine(f.out_of_scope); addSpace(); addDivider()
     }
+    const validMilestones = proposalMilestones.filter(m => m.deliverables && m.fee)
+    if (validMilestones.length > 0) {
+      addLine('MILESTONE SCHEDULE', 10, true, true); addSpace(0.5)
+      validMilestones.forEach((m, i) => {
+        addLine('Milestone ' + (i+1) + ': ' + m.name, 11, true)
+        if (m.dueDate) addLine('Due: ' + new Date(m.dueDate + 'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}), 10)
+        addLine('Fee: $' + parseFloat(m.fee).toLocaleString(), 10)
+        addLine(m.deliverables, 10)
+        addSpace(0.5)
+      })
+      addDivider()
+    }
     addLine('TIMELINE', 10, true, true); addSpace(0.5)
-    addLine(f.timeline || 'Estimated timeline will be confirmed in the Statement of Work once content and scope are finalized.')
+    addLine(f.timeline || 'See milestone schedule above.')
     addSpace(); addDivider()
     addLine('NEXT STEPS', 10, true, true); addSpace(0.5)
     addLine(f.next_steps)
@@ -1200,7 +1212,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="stat-row-3">
                   {[
-                    {label:'Upcoming calls',num:bookings.length,sub:bookings.length===0?'None scheduled':'Scheduled',bg:d.sand,hot:bookings.length>0},
+                    {label:'Upcoming calls',num:bookings.filter(b=>new Date(b.scheduled_at)>new Date()).length,sub:bookings.filter(b=>new Date(b.scheduled_at)>new Date()).length===0?'None scheduled':'Scheduled',bg:d.sand,hot:bookings.filter(b=>new Date(b.scheduled_at)>new Date()).length>0},
                     {label:'Awaiting booking',num:unbooked.length,sub:'No call yet',bg:d.linen,hot:false},
                     {label:'Active projects',num:activeProjects.length,sub:'In progress',bg:d.blush,hot:false},
                   ].map((s,i)=>(
@@ -1269,10 +1281,10 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 <div className="section">
-                  <div className="section-label" style={{color:d.text2}}>Discovery Calls <span className="section-label-count" style={{background:d.surface,color:d.text3}}>{bookings.length}</span></div>
-                  {bookings.length===0 ? <div className="empty-note" style={{color:d.text3}}>No calls scheduled yet.</div> : (
+                  <div className="section-label" style={{color:d.text2}}>Discovery Calls <span className="section-label-count" style={{background:d.surface,color:d.text3}}>{bookings.filter(b=>new Date(b.scheduled_at)>new Date()).length}</span></div>
+                  {bookings.filter(b=>new Date(b.scheduled_at)>new Date()).length===0 ? <div className="empty-note" style={{color:d.text3}}>No upcoming calls scheduled.</div> : (
                     <div className="booking-cards">
-                      {bookings.map((b,i)=>(
+                      {bookings.filter(b=>new Date(b.scheduled_at)>new Date()).map((b,i)=>(
                         <div key={b.id} className={'booking-card'+(focused?.type==='booking'&&focused.data.id===b.id?' selected':'')}
                           style={{background:CARD_COLORS[i%CARD_COLORS.length]}} onClick={()=>setFocused({type:'booking',data:b})}>
                           <div className="bc-type" style={{color:d.text2}}>{b.intake_submissions?.project_type}</div>
