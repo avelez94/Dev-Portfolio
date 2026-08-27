@@ -227,7 +227,8 @@ export default function AdminDashboard() {
   async function fetchBookings() {
     const { data } = await supabase.from('bookings').select('*, intake_submissions(*)').eq('status','scheduled').order('scheduled_at',{ascending:true})
     const b = data || []; setBookings(b)
-    if (b.length > 0 && !focused) setFocused({type:'booking',data:b[0]})
+    const upcoming = b.filter((bk: Booking) => new Date(bk.scheduled_at) > new Date())
+    if (upcoming.length > 0 && !focused) setFocused({type:'booking',data:upcoming[0]})
   }
   async function fetchUnbooked() {
     const { data } = await supabase.from('intake_submissions').select('*').eq('status','pending').order('submitted_at',{ascending:false})
@@ -1672,36 +1673,37 @@ export default function AdminDashboard() {
                   <div className="fill-form-wrap" style={{background:d.surface,borderColor:d.border}}>
                     <div className="fill-form-title" style={{color:d.text}}>Freelance Contract</div>
                     <div className="fill-form-sub" style={{color:d.text3}}>Select an accepted SOW to auto-fill. All legal terms are pre-loaded. Client signs with a drawn signature.</div>
-                    <div className="section-mini-label" style={{color:d.text3}}>Select from accepted SOWs</div>
+                    <div className="section-mini-label" style={{color:d.text3}}>Select from accepted proposals</div>
                     <div className="form-grid">
                       <div className="form-group" style={{gridColumn:'1/-1'}}>
                         <select style={inputStyle} onChange={e=>{
-                          const s = sows.find(sw=>sw.id===e.target.value)
-                          if(s) {
+                          const p = proposals.find(pr=>pr.id===e.target.value)
+                          if(p) {
                             const now = new Date()
-                            const invNum = 'INV-' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + s.client_name.split(' ')[0].toUpperCase()
+                            const invNum = 'INV-' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + p.client_name.split(' ')[0].toUpperCase()
                             const sevenDays = new Date(now.getTime() + 7*24*60*60*1000).toISOString().split('T')[0]
+                            const deposit = p.total * (p.deposit_pct / 100)
                             setContractForm({
                               ...contractForm,
-                              client_name: s.client_name,
-                              client_email: s.client_email,
-                              client_business: s.client_business || '',
-                              project_title: s.project_title,
-                              project_type: s.project_type,
-                              start_date: s.start_date || '',
-                              delivery_date: s.delivery_date || '',
-                              total_fee: String(s.total),
-                              deposit: String(s.deposit),
-                              balance: String(s.balance),
+                              client_name: p.client_name,
+                              client_email: p.client_email,
+                              client_business: p.client_business || '',
+                              project_title: p.project_title,
+                              project_type: p.project_type,
+                              start_date: '',
+                              delivery_date: '',
+                              total_fee: String(p.total),
+                              deposit: String(deposit),
+                              balance: String(p.total - deposit),
                               invoice_number: invNum,
-                              invoice_service_desc: s.project_title + ' — Deposit to begin',
+                              invoice_service_desc: p.project_title + ' — Deposit to begin',
                               invoice_due_date: sevenDays,
                             })
                           }
                         }} defaultValue="">
                           <option value="" disabled>Select a client...</option>
-                          {sows.filter(s=>s.status==='accepted').map(s=>(
-                            <option key={s.id} value={s.id}>{s.client_name} — {s.project_title}</option>
+                          {proposals.filter(p=>p.status==='accepted').map(p=>(
+                            <option key={p.id} value={p.id}>{p.client_name} — {p.project_title}</option>
                           ))}
                         </select>
                       </div>
