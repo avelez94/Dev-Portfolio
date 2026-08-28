@@ -127,6 +127,14 @@ ${invoice ? `<div class="label">Invoice</div><div class="value">${invoice.invoic
       })
     }
 
+    // Send signed contract PDF
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
+    await fetch(`${siteUrl}/api/contracts/send-signed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contractId: id }),
+    }).catch(e => console.error('Send signed contract error:', e))
+
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('Contract sign error:', err)

@@ -204,6 +204,7 @@ export default function AdminDashboard() {
   const [proposalSent, setProposalSent] = useState(false)
   const [proposals, setProposals] = useState<any[]>([])
   const [sows, setSows] = useState<any[]>([])
+  const [contracts, setContracts] = useState<any[]>([])
   const [sowMilestones, setSowMilestones] = useState([{ name: 'Milestone 1', deliverables: '', dueDate: '', fee: '' }])
   const [sowProposalTotal, setSowProposalTotal] = useState(0)
   const [sendingSOW, setSendingSOW] = useState(false)
@@ -221,7 +222,7 @@ export default function AdminDashboard() {
 
   async function fetchAll() {
     setLoading(true)
-    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing(),fetchMeetings(),fetchProposals(),fetchSows()])
+    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing(),fetchMeetings(),fetchProposals(),fetchSows(),fetchContracts()])
     setLoading(false)
   }
   async function fetchBookings() {
@@ -277,6 +278,10 @@ export default function AdminDashboard() {
   async function fetchSows() {
     const { data } = await supabase.from('sows').select('*').order('created_at',{ascending:false})
     setSows(data || [])
+  }
+  async function fetchContracts() {
+    const { data } = await supabase.from('contracts').select('*').order('created_at',{ascending:false})
+    setContracts(data || [])
   }
   async function scheduleMeeting(clientId: string, clientName: string, clientEmail: string) {
     if (!meetingForm.date || !meetingForm.time) return
@@ -843,6 +848,19 @@ export default function AdminDashboard() {
     addLine('Stripe, PayPal, Zelle, or Wise')
     addLine('Reference: Invoice #' + f.invoice_number + ' | ' + clientName)
     save('Invoice_' + f.invoice_number + '_' + clientName.replace(/\s+/g,'_') + '.pdf')
+  }
+
+  async function resendSignedContract(contractId: string) {
+    try {
+      const res = await fetch('/api/contracts/send-signed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contractId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      alert('Signed contract PDF sent successfully.')
+    } catch(e) { alert('Failed to send. Check console.'); console.error(e) }
   }
 
   async function sendContractEmail() {
@@ -1668,6 +1686,23 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
+                {/* SIGNED CONTRACTS */}
+                {contracts.filter(c=>c.status==='signed').length > 0 && (
+                  <div style={{marginBottom:16}}>
+                    <div className="section-mini-label" style={{color:d.text3,marginBottom:8}}>Signed contracts</div>
+                    {contracts.filter(c=>c.status==='signed').map(c=>(
+                      <div key={c.id} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:'12px 16px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:500,color:d.text}}>{c.client_name}</div>
+                          <div style={{fontSize:11,color:d.text3,fontFamily:'DM Mono,monospace'}}>{c.project_title} · Signed {new Date(c.signed_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+                        </div>
+                        <button className="btn-save" style={{fontSize:11,padding:'6px 14px'}} onClick={()=>resendSignedContract(c.id)}>
+                          Resend PDF
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* CONTRACT CARD */}
                 <div className="doc-card" style={{background:d.white,borderColor:d.border}}>
                   <div className="doc-card-header">
