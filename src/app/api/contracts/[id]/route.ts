@@ -34,6 +34,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       signer_ip: ip,
     }).eq('id', id)
 
+    // Auto-create project record on signing
+    await supabaseAdmin.from('projects').insert({
+      name: contract.project_title + ' — ' + contract.client_name,
+      type: contract.project_type,
+      status: 'active',
+      value: contract.total_fee,
+      platform: 'direct',
+      start_date: contract.start_date || new Date().toISOString().split('T')[0],
+      end_date: contract.delivery_date || null,
+      notes: `Client: ${contract.client_name} | ${contract.client_email}`,
+    })
+
     // Find the pending invoice linked to this contract
     const { data: invoice } = await supabaseAdmin
       .from('invoices')
