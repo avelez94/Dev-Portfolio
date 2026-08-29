@@ -86,7 +86,7 @@ export default function Home() {
         .project-row.reverse { direction: rtl; }
         .project-row.reverse > * { direction: ltr; }
         
-        .project-image-large { width: 100%; aspect-ratio: 4/3; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .project-image-large { width: 100%; aspect-ratio: 16/9; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
         .project-image-large img { width: 100%; height: 100%; object-fit: contain; display: block; transition: transform 0.4s ease; }
         .project-image-large:hover img { transform: scale(1.03); }
 
