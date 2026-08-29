@@ -82,25 +82,21 @@ export default function Home() {
         .section-title { font-family: 'Playfair Display', serif; font-size: clamp(36px, 5vw, 56px); font-weight: 900; line-height: 1.1; letter-spacing: -0.015em; color: var(--dark); }
         .section-link { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; }
 
-        .projects-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 28px; }
-        
         .project-row { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-bottom: 80px; }
-        
         .project-row.reverse { direction: rtl; }
-        
         .project-row.reverse > * { direction: ltr; }
         
-        .project-image-large { width: 100%; aspect-ratio: 4/3; background: linear-gradient(135deg, rgba(212,165,116,0.1), rgba(169,104,96,0.1)); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+        .project-image-large { width: 100%; aspect-ratio: 4/3; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .project-image-large img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
+        .project-image-large:hover img { transform: scale(1.03); }
 
         .project-content { display: flex; flex-direction: column; gap: 16px; }
-        .project-icon { font-size: 2rem; margin-bottom: 12px; }
         .project-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; color: var(--dark); }
         .project-subtitle { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); letter-spacing: 0.1em; margin-bottom: 14px; text-transform: uppercase; font-weight: 500; }
         .project-desc { font-size: 0.9rem; line-height: 1.6; color: rgba(42,36,32,0.7); margin-bottom: 18px; }
 
         .tech-stack { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-        
-        .tech-badge { font-family: var(--mono); font-size: 0.7rem; color: var(--pink); background: rgba(169,104,96,0.08); padding: 6px 12px; border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+        .tech-badge { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); background: rgba(169,104,96,0.08); padding: 6px 12px; border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
 
         .project-link { display: inline-flex; align-items: center; gap: 8px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pink); text-decoration: none; transition: gap 0.2s; font-weight: 500; }
         .project-link:hover { gap: 14px; }
@@ -113,27 +109,20 @@ export default function Home() {
         .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2px; }
         .service-card { background: white; border: 1px solid var(--border); padding: 32px 28px; transition: all 0.3s; }
         .service-card:hover { background: rgba(169,104,96,0.03); border-color: var(--pink); }
-
         .service-icon { font-size: 2rem; margin-bottom: 14px; }
         .service-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; color: var(--dark); }
         .service-desc { font-size: 0.85rem; line-height: 1.6; color: rgba(42,36,32,0.65); }
 
         .process-section { background: rgba(250,243,232,0.8); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
         .process-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start; margin-bottom: 60px; }
-        
         .process-left { max-width: 400px; }
         .process-left h3 { font-family: 'Playfair Display', serif; font-size: clamp(32px, 4vw, 44px); font-weight: 900; line-height: 1.2; margin-bottom: 20px; color: var(--dark); }
         .process-left p { font-size: 0.95rem; line-height: 1.7; color: rgba(42,36,32,0.7); margin-bottom: 32px; }
-
         .process-steps { display: flex; flex-direction: column; gap: 2px; }
         .process-step { background: white; border: 1px solid var(--border); padding: 24px 28px; display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
-        
         .process-circle { width: 40px; height: 40px; border-radius: 50%; background: var(--pink); color: white; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
-        
         .process-content h4 { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 700; margin-bottom: 4px; color: var(--dark); }
         .process-content p { font-size: 0.85rem; line-height: 1.6; color: rgba(42,36,32,0.65); }
-
-        .process-image { width: 100%; height: 380px; background: linear-gradient(135deg, rgba(212,165,116,0.08), rgba(169,104,96,0.08)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 4rem; border: 1px solid var(--border); }
 
         .cta-block { text-align: center; padding: 80px 48px; }
         .cta-title { font-family: 'Playfair Display', serif; font-size: clamp(40px, 6vw, 56px); font-weight: 900; line-height: 1.15; margin-bottom: 20px; color: var(--dark); }
@@ -152,10 +141,11 @@ export default function Home() {
           .hero { grid-template-columns: 1fr; padding: 100px 24px 60px; gap: 40px; }
           .hero::before { display: none; }
           .hero-left { max-width: 100%; }
-          .projects-grid { grid-template-columns: 1fr; }
           .stats-row { grid-template-columns: repeat(2, 1fr); }
           .services-grid { grid-template-columns: 1fr; }
           .process-grid { grid-template-columns: 1fr; gap: 40px; }
+          .project-row { grid-template-columns: 1fr; gap: 32px; }
+          .project-row.reverse { direction: ltr; }
           section { padding: 70px 24px; }
           footer { flex-direction: column; gap: 20px; text-align: center; }
         }
@@ -208,7 +198,7 @@ export default function Home() {
 
         <div className="project-row">
           <div className="project-image-large">
-            <div className="image-placeholder">Image Placeholder</div>
+            <img src="/planary.png" alt="Planary travel platform" />
           </div>
           <div className="project-content">
             <div className="project-name">Planary</div>
@@ -220,13 +210,13 @@ export default function Home() {
               <span className="tech-badge">Stripe</span>
               <span className="tech-badge">AI</span>
             </div>
-            <a href="https://planarytravel.com" target="_blank" className="project-link">View Case Study →</a>
+            <a href="https://planarytravel.com" target="_blank" className="project-link">View Live Site →</a>
           </div>
         </div>
 
         <div className="project-row reverse">
           <div className="project-image-large">
-            <div className="image-placeholder">Image Placeholder</div>
+            <img src="/rising-sons.png" alt="Rising Sons Leadership Academy" />
           </div>
           <div className="project-content">
             <div className="project-name">Rising Sons Leadership Academy</div>
@@ -238,13 +228,13 @@ export default function Home() {
               <span className="tech-badge">PayPal</span>
               <span className="tech-badge">Zoom API</span>
             </div>
-            <a href="https://risingsonsacademy.org" target="_blank" className="project-link">View Case Study →</a>
+            <a href="https://risingsonsacademy.org" target="_blank" className="project-link">View Live Site →</a>
           </div>
         </div>
 
         <div className="project-row">
           <div className="project-image-large">
-            <div className="image-placeholder">Image Placeholder</div>
+            <img src="/tramaine.png" alt="Tramaine Crawford coaching platform" />
           </div>
           <div className="project-content">
             <div className="project-name">Tramaine Crawford</div>
@@ -274,7 +264,7 @@ export default function Home() {
           </div>
           <div className="stat-box">
             <div className="stat-num">Ongoing</div>
-            <div className="stat-label">Support, updates & partnership</div>
+            <div className="stat-label">Support, updates and partnership</div>
           </div>
         </div>
       </section>
@@ -331,7 +321,6 @@ export default function Home() {
             <p>Working with me means having a developer who understands your business, ships on time, and stays involved after launch to support growth.</p>
             <a href="#hire" className="btn btn-primary" style={{marginTop: '20px'}}>Start Your Project →</a>
           </div>
-
           <div>
             <div className="process-steps">
               <div className="process-step">
@@ -358,7 +347,7 @@ export default function Home() {
               <div className="process-step">
                 <div className="process-circle">04</div>
                 <div className="process-content">
-                  <h4>Launch & Support</h4>
+                  <h4>Launch and Support</h4>
                   <p>We launch and I stay involved for updates and growth.</p>
                 </div>
               </div>
