@@ -12,18 +12,40 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    const { data: existingDebt, error: fetchError } =
+      await supabaseAdmin
+        .from("debt_payoff")
+        .select("original_balance")
+        .eq("id", id)
+        .single();
+
+    if (fetchError || !existingDebt) {
+      console.error("Debt lookup error:", fetchError);
+
+      return NextResponse.json(
+        { error: "Debt not found." },
+        { status: 404 }
+      );
+    }
+
     const { data, error } = await supabaseAdmin
       .from("debt_payoff")
       .update({
         completed,
-        completed_at: completed ? new Date().toISOString() : null,
+        completed_at: completed
+          ? new Date().toISOString()
+          : null,
+        current_balance: completed
+          ? 0
+          : existingDebt.original_balance,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .select()
       .single();
 
     if (error) {
-      console.error(error);
+      console.error("Debt update error:", error);
 
       return NextResponse.json(
         { error: "Unable to update debt." },
@@ -31,9 +53,11 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ debt: data });
+    return NextResponse.json({
+      debt: data,
+    });
   } catch (error) {
-    console.error(error);
+    console.error("Debt API error:", error);
 
     return NextResponse.json(
       { error: "Something went wrong." },
