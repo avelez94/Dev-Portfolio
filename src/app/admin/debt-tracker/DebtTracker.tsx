@@ -8,6 +8,7 @@ import {
   Trophy,
   Target,
   WalletCards,
+  Plus,
 } from "lucide-react";
 
 type Debt = {
@@ -32,6 +33,9 @@ export default function DebtTracker({
 }) {
   const [debts, setDebts] = useState(initialDebts);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>(
+    {}
+  );
 
   const totalDebt = useMemo(
     () =>
@@ -63,19 +67,56 @@ export default function DebtTracker({
 
     setUpdating(debt.id);
 
-    setDebts((current) =>
-      current.map((item) =>
-        item.id === debt.id
-          ? {
-              ...item,
-              completed: newCompleted,
-              current_balance: newCompleted
-                ? 0
-                : item.original_balance,
-            }
-          : item
-      )
-    );
+    try {
+      const response = await fetch("/api/debt-payoff", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: debt.id,
+          action: "toggle",
+          completed: newCompleted,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update debt.");
+      }
+
+      const result = await response.json();
+
+      setDebts((current) =>
+        current.map((item) =>
+          item.id === debt.id ? result.debt : item
+        )
+      );
+    } catch (error) {
+      console.error(error);
+      alert("Unable to save your change. Please try again.");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  async function addPayment(debt: Debt) {
+    const payment = Number(paymentAmounts[debt.id]);
+
+    if (!payment || payment <= 0) {
+      alert("Enter a valid payment amount.");
+      return;
+    }
+
+    if (payment > Number(debt.current_balance)) {
+      alert(
+        `That payment is more than the remaining balance of ${formatMoney(
+          Number(debt.current_balance)
+        )}.`
+      );
+      return;
+    }
+
+    setUpdating(debt.id);
 
     try {
       const response = await fetch("/api/debt-payoff", {
@@ -85,23 +126,30 @@ export default function DebtTracker({
         },
         body: JSON.stringify({
           id: debt.id,
-          completed: newCompleted,
+          action: "payment",
+          payment,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Unable to update debt.");
+        throw new Error("Unable to add payment.");
       }
-    } catch (error) {
-      console.error(error);
+
+      const result = await response.json();
 
       setDebts((current) =>
         current.map((item) =>
-          item.id === debt.id ? debt : item
+          item.id === debt.id ? result.debt : item
         )
       );
 
-      alert("Unable to save your change. Please try again.");
+      setPaymentAmounts((current) => ({
+        ...current,
+        [debt.id]: "",
+      }));
+    } catch (error) {
+      console.error(error);
+      alert("Unable to save your payment. Please try again.");
     } finally {
       setUpdating(null);
     }
@@ -146,6 +194,7 @@ export default function DebtTracker({
   return (
     <main className="min-h-screen bg-[#f7f3ee] px-4 py-10 text-[#211d1a] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
+
         <div className="mb-10">
           <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-[#9a7455]">
             Debt Freedom Plan
@@ -209,125 +258,208 @@ export default function DebtTracker({
         </section>
 
         <section className="mt-10">
-          <div className="mb-5 flex items-end justify-between">
-            <div>
-              <p className="text-sm font-medium text-[#9a7455]">
-                Payoff order
-              </p>
+          <div className="mb-5">
+            <p className="text-sm font-medium text-[#9a7455]">
+              Payoff order
+            </p>
 
-              <h2 className="mt-1 text-2xl font-semibold">
-                Promotional balances
-              </h2>
-            </div>
+            <h2 className="mt-1 text-2xl font-semibold">
+              Promotional balances
+            </h2>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[...debts]
               .sort((a, b) => a.priority - b.priority)
-              .map((debt) => (
-                <button
-                  key={debt.id}
-                  onClick={() => toggleDebt(debt)}
-                  disabled={updating === debt.id}
-                  className={[
-                    "group w-full rounded-3xl border p-5 text-left transition-all duration-200 sm:p-6",
-                    debt.completed
-                      ? "border-[#a6bba5] bg-[#edf3ec]"
-                      : "border-black/5 bg-white hover:-translate-y-0.5 hover:shadow-md",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center gap-4 sm:gap-5">
-                    <div
-                      className={[
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition",
-                        debt.completed
-                          ? "border-[#637d62] bg-[#637d62] text-white"
-                          : "border-[#d5ccc4] bg-white group-hover:border-[#9a7455]",
-                      ].join(" ")}
-                    >
-                      {debt.completed ? (
-                        <Check size={20} strokeWidth={3} />
-                      ) : (
-                        <Circle
-                          size={16}
-                          className="text-transparent"
-                        />
-                      )}
-                    </div>
+              .map((debt) => {
+                const paid =
+                  Number(debt.original_balance) -
+                  Number(debt.current_balance);
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold uppercase tracking-widest text-[#a38771]">
-                              #{debt.priority}
-                            </span>
+                const debtProgress =
+                  Number(debt.original_balance) > 0
+                    ? Math.round(
+                        (paid /
+                          Number(debt.original_balance)) *
+                          100
+                      )
+                    : 0;
 
-                            <h3
-                              className={[
-                                "font-semibold",
-                                debt.completed
-                                  ? "text-[#6d756a] line-through"
-                                  : "text-[#211d1a]",
-                              ].join(" ")}
-                            >
-                              {debt.creditor}
-                            </h3>
+                return (
+                  <div
+                    key={debt.id}
+                    className={[
+                      "rounded-3xl border p-5 transition-all duration-200 sm:p-6",
+                      debt.completed
+                        ? "border-[#a6bba5] bg-[#edf3ec]"
+                        : "border-black/5 bg-white shadow-sm",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start gap-4 sm:gap-5">
+                      <button
+                        onClick={() => toggleDebt(debt)}
+                        disabled={updating === debt.id}
+                        className={[
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition",
+                          debt.completed
+                            ? "border-[#637d62] bg-[#637d62] text-white"
+                            : "border-[#d5ccc4] bg-white hover:border-[#9a7455]",
+                        ].join(" ")}
+                        aria-label={
+                          debt.completed
+                            ? "Mark debt unpaid"
+                            : "Mark debt paid"
+                        }
+                      >
+                        {debt.completed ? (
+                          <Check size={20} strokeWidth={3} />
+                        ) : (
+                          <Circle
+                            size={16}
+                            className="text-transparent"
+                          />
+                        )}
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold uppercase tracking-widest text-[#a38771]">
+                                #{debt.priority}
+                              </span>
+
+                              <h3
+                                className={[
+                                  "font-semibold",
+                                  debt.completed
+                                    ? "text-[#6d756a] line-through"
+                                    : "text-[#211d1a]",
+                                ].join(" ")}
+                              >
+                                {debt.creditor}
+                              </h3>
+                            </div>
+
+                            {debt.promo_name && (
+                              <p className="mt-1 text-sm text-[#81766e]">
+                                {debt.promo_name}
+                              </p>
+                            )}
+
+                            <div className="mt-2 flex items-center gap-2 text-sm text-[#7a7068]">
+                              <CalendarDays size={15} />
+
+                              <span>
+                                Pay off by{" "}
+                                {formatDeadline(
+                                  debt.promo_deadline,
+                                  debt.deadline_is_estimated
+                                )}
+                              </span>
+                            </div>
                           </div>
 
-                          {debt.promo_name && (
-                            <p className="mt-1 text-sm text-[#81766e]">
-                              {debt.promo_name}
-                            </p>
-                          )}
-
-                          <div className="mt-2 flex items-center gap-2 text-sm text-[#7a7068]">
-                            <CalendarDays size={15} />
-
-                            <span>
-                              Pay off by{" "}
-                              {formatDeadline(
-                                debt.promo_deadline,
-                                debt.deadline_is_estimated
+                          <div className="sm:text-right">
+                            <p className="text-2xl font-semibold">
+                              {formatMoney(
+                                Number(debt.current_balance)
                               )}
-                            </span>
+                            </p>
+
+                            <p className="mt-1 text-xs uppercase tracking-wider text-[#9b9088]">
+                              {debt.completed
+                                ? "Paid off ✓"
+                                : "Remaining"}
+                            </p>
                           </div>
                         </div>
 
-                        <div className="mt-3 sm:mt-0 sm:text-right">
-                          <p
-                            className={[
-                              "text-2xl font-semibold",
-                              debt.completed
-                                ? "text-[#637d62] line-through"
-                                : "text-[#211d1a]",
-                            ].join(" ")}
-                          >
-                            {formatMoney(
-                              Number(debt.current_balance)
-                            )}
-                          </p>
+                        <div className="mt-5">
+                          <div className="mb-2 flex justify-between text-sm">
+                            <span className="text-[#766b63]">
+                              Paid: {formatMoney(paid)}
+                            </span>
 
-                          <p className="mt-1 text-xs uppercase tracking-wider text-[#9b9088]">
-                            {debt.completed
-                              ? "Paid off ✓"
-                              : "Remaining"}
-                          </p>
+                            <span className="font-medium text-[#766b63]">
+                              {debtProgress}%
+                            </span>
+                          </div>
+
+                          <div className="h-2 overflow-hidden rounded-full bg-[#eee7e0]">
+                            <div
+                              className="h-full rounded-full bg-[#637d62] transition-all duration-500"
+                              style={{
+                                width: `${debtProgress}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {!debt.completed && (
+                          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                            <div className="relative flex-1">
+                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#82766e]">
+                                $
+                              </span>
+
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="Payment amount"
+                                value={
+                                  paymentAmounts[debt.id] ?? ""
+                                }
+                                onChange={(e) =>
+                                  setPaymentAmounts(
+                                    (current) => ({
+                                      ...current,
+                                      [debt.id]:
+                                        e.target.value,
+                                    })
+                                  )
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    addPayment(debt);
+                                  }
+                                }}
+                                className="w-full rounded-2xl border border-[#ddd3ca] bg-white py-3 pl-8 pr-4 outline-none transition focus:border-[#9a7455]"
+                              />
+                            </div>
+
+                            <button
+                              onClick={() => addPayment(debt)}
+                              disabled={updating === debt.id}
+                              className="flex items-center justify-center gap-2 rounded-2xl bg-[#211d1a] px-5 py-3 font-medium text-white transition hover:bg-[#403932] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Plus size={18} />
+
+                              {updating === debt.id
+                                ? "Saving..."
+                                : "Add Payment"}
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="mt-3 text-xs text-[#9b9088]">
+                          Original balance:{" "}
+                          {formatMoney(
+                            Number(debt.original_balance)
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
-                </button>
-              ))}
+                );
+              })}
           </div>
         </section>
 
         {remaining === 0 && (
           <section className="mt-8 rounded-3xl bg-[#211d1a] p-8 text-center text-white">
-            <Trophy
-              className="mx-auto mb-4"
-              size={36}
-            />
+            <Trophy className="mx-auto mb-4" size={36} />
 
             <h2 className="text-3xl font-semibold">
               You did it.
