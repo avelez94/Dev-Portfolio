@@ -6,3 +6,12 @@
     }
   ]
 }
+
+{
+  "crons": [
+    {
+      "path": "/api/walks/email",
+      "schedule": "0 9 * * FRI"
+    }
+  ]
+}
