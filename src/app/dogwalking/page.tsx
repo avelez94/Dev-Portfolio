@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 interface Walk {
   id: string;
   date: string;
@@ -45,11 +50,6 @@ export default function Home() {
     start: Date;
     end: Date;
   } | null>(null);
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   useEffect(() => {
     const today = new Date();
@@ -136,8 +136,7 @@ export default function Home() {
         </h1>
         {weekRange && (
           <p style={{ fontSize: "14px", color: "#666666", margin: 0 }}>
-            {formatDateDisplay(weekRange.start)} to{" "}
-            {formatDateDisplay(weekRange.end)}
+            {formatDateDisplay(weekRange.start)} to {formatDateDisplay(weekRange.end)}
           </p>
         )}
       </div>
