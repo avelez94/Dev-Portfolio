@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/walks/email",
-      "schedule": "0 9 * * FRI"
+      "schedule": "0 9 * * 5"
     }
   ]
 }
