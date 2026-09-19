@@ -40,12 +40,27 @@ function formatDateDisplay(date: Date): string {
   });
 }
 
+function getDailySaying(date: Date): string {
+  const dayOfWeek = date.getDay();
+  const sayings = [
+    "💪 Slay Sunday",
+    "💰 Money Monday",
+    "✨ Tuesday the Shiny",
+    "🐕 Pup Pup Wednesday",
+    "🌟 Thriving Thursday",
+    "💖 Fabulous Friday",
+    "🎉 Saturday Strong",
+  ];
+  return sayings[dayOfWeek];
+}
+
 export default function Home() {
   const [walks, setWalks] = useState<Walk[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
   const [weekRange, setWeekRange] = useState<{
     start: Date;
     end: Date;
@@ -87,10 +102,9 @@ export default function Home() {
 
       const today = formatDate(new Date());
 
-      // Check if already logged today
       const alreadyLogged = walks.some((walk) => walk.date === today);
       if (alreadyLogged) {
-        setError("You already logged a walk today!");
+        setError("Already got your steps in today, queen! 👑");
         setSubmitting(false);
         return;
       }
@@ -102,14 +116,16 @@ export default function Home() {
       if (insertError) throw insertError;
 
       setSuccess(true);
+      setCelebrate(true);
       if (weekRange) {
         await fetchWalks(weekRange.start, weekRange.end);
       }
 
-      setTimeout(() => setSuccess(false), 3000);
+      setTimeout(() => setSuccess(false), 4000);
+      setTimeout(() => setCelebrate(false), 5000);
     } catch (err) {
       console.error("Error logging walk:", err);
-      setError("Failed to log walk. Try again.");
+      setError("Oops! Try again babe 💕");
     } finally {
       setSubmitting(false);
     }
@@ -131,6 +147,13 @@ export default function Home() {
 
   const sortedDates = Object.keys(walksByDate).sort().reverse();
 
+  const celebrationEmojis = Array.from({ length: 20 }).map((_, i) => ({
+    id: i,
+    emoji: i % 2 === 0 ? "💰" : "🐕",
+    left: Math.random() * 100,
+    delay: Math.random() * 0.3,
+  }));
+
   return (
     <div
       style={{
@@ -143,25 +166,61 @@ export default function Home() {
         fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
+        position: "relative",
       }}
     >
+      <style>{`
+        @keyframes fall {
+          to {
+            transform: translateY(100vh) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        .falling-emoji {
+          position: fixed;
+          font-size: 48px;
+          animation: fall 3s ease-in forwards;
+          pointer-events: none;
+          z-index: 1000;
+        }
+      `}</style>
+
+      {celebrate &&
+        celebrationEmojis.map((item) => (
+          <div
+            key={item.id}
+            className="falling-emoji"
+            style={{
+              left: `${item.left}%`,
+              top: "-60px",
+              animationDelay: `${item.delay}s`,
+            }}
+          >
+            {item.emoji}
+          </div>
+        ))}
+
       <div style={{ marginBottom: "32px" }}>
         <h1
           style={{
-            fontSize: "48px",
-            fontWeight: "700",
-            marginBottom: "8px",
+            fontSize: "52px",
+            fontWeight: "800",
+            marginBottom: "4px",
             color: "#d4669f",
             letterSpacing: "-1px",
           }}
         >
-          Walk Tracker
+          🚶‍♀️ Walk Tracker
         </h1>
         {weekRange && (
-          <p style={{ fontSize: "18px", color: "#b896c3", margin: "0" }}>
+          <p style={{ fontSize: "18px", color: "#b896c3", margin: "0", fontWeight: "500" }}>
             {formatDateDisplay(weekRange.start)} to {formatDateDisplay(weekRange.end)}
           </p>
         )}
+        <p style={{ fontSize: "16px", color: "#d4669f", margin: "12px 0 0 0", fontWeight: "600" }}>
+          {getDailySaying(new Date())}
+        </p>
       </div>
 
       {error && (
@@ -183,16 +242,17 @@ export default function Home() {
       {success && (
         <div
           style={{
-            background: "#e8f5e9",
+            background: "linear-gradient(135deg, #e8f5e9 0%, #f1f8f6 100%)",
             color: "#6ba587",
-            padding: "16px",
+            padding: "20px",
             borderRadius: "16px",
             marginBottom: "20px",
-            fontSize: "16px",
-            fontWeight: "500",
+            fontSize: "18px",
+            fontWeight: "600",
+            textAlign: "center",
           }}
         >
-          Great work! Walk logged!
+          ✨ YES QUEEN! ✨ Walk logged! Make that money girl 💰
         </div>
       )}
 
@@ -201,29 +261,33 @@ export default function Home() {
         disabled={submitting || loading || alreadyLoggedToday}
         style={{
           width: "100%",
-          padding: "28px",
-          background: alreadyLoggedToday ? "#e0d5e8" : "#d4669f",
+          padding: "32px 28px",
+          background: alreadyLoggedToday
+            ? "linear-gradient(135deg, #e0d5e8 0%, #e8ddf0 100%)"
+            : "linear-gradient(135deg, #d4669f 0%, #c54a8a 100%)",
           color: "#ffffff",
           border: "none",
-          borderRadius: "20px",
-          fontSize: "24px",
-          fontWeight: "700",
+          borderRadius: "24px",
+          fontSize: "26px",
+          fontWeight: "800",
           cursor: alreadyLoggedToday || submitting || loading ? "not-allowed" : "pointer",
           marginBottom: "28px",
           transition: "all 0.2s",
           opacity: alreadyLoggedToday ? 0.7 : 1,
+          boxShadow: alreadyLoggedToday ? "none" : "0 8px 24px rgba(212, 102, 159, 0.3)",
         }}
       >
-        {submitting ? "Logging..." : alreadyLoggedToday ? "Logged Today!" : "Log Walk"}
+        {submitting ? "Logging..." : alreadyLoggedToday ? "💅 Logged Today!" : "🚶‍♀️ Log Walk"}
       </button>
 
       <div
         style={{
-          background: "rgba(255, 255, 255, 0.8)",
-          borderRadius: "20px",
-          padding: "28px",
+          background: "rgba(255, 255, 255, 0.9)",
+          borderRadius: "24px",
+          padding: "32px",
           marginBottom: "32px",
           backdropFilter: "blur(10px)",
+          boxShadow: "0 8px 32px rgba(212, 102, 159, 0.1)",
         }}
       >
         <div
@@ -231,23 +295,23 @@ export default function Home() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "20px",
+            marginBottom: "24px",
           }}
         >
-          <span style={{ fontSize: "18px", color: "#b896c3", fontWeight: "600" }}>
-            This Week
+          <span style={{ fontSize: "20px", color: "#b896c3", fontWeight: "700" }}>
+            This Week 📊
           </span>
           <span
             style={{
-              fontSize: "48px",
-              fontWeight: "800",
+              fontSize: "56px",
+              fontWeight: "900",
               color: "#d4669f",
             }}
           >
             {totalWalks}
           </span>
         </div>
-        <div style={{ height: "2px", background: "rgba(212, 102, 159, 0.1)", margin: "16px 0" }} />
+        <div style={{ height: "2px", background: "rgba(212, 102, 159, 0.15)", margin: "16px 0" }} />
         <div
           style={{
             display: "flex",
@@ -255,13 +319,13 @@ export default function Home() {
             alignItems: "center",
           }}
         >
-          <span style={{ fontSize: "18px", color: "#b896c3", fontWeight: "600" }}>
-            Total Pay
+          <span style={{ fontSize: "20px", color: "#b896c3", fontWeight: "700" }}>
+            Your Earnings 💵
           </span>
           <span
             style={{
-              fontSize: "48px",
-              fontWeight: "800",
+              fontSize: "56px",
+              fontWeight: "900",
               color: "#d4669f",
             }}
           >
@@ -274,15 +338,15 @@ export default function Home() {
         <div>
           <h2
             style={{
-              fontSize: "16px",
-              fontWeight: "700",
+              fontSize: "18px",
+              fontWeight: "800",
               color: "#b896c3",
               marginBottom: "16px",
               textTransform: "uppercase",
-              letterSpacing: "1px",
+              letterSpacing: "1.5px",
             }}
           >
-            Recent Walks
+            💖 Recent Walks
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {sortedDates.map((date) => {
@@ -292,20 +356,21 @@ export default function Home() {
                 <div
                   key={date}
                   style={{
-                    padding: "16px",
-                    background: "rgba(255, 255, 255, 0.8)",
-                    borderRadius: "16px",
+                    padding: "18px 20px",
+                    background: "rgba(255, 255, 255, 0.9)",
+                    borderRadius: "18px",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    fontSize: "16px",
+                    fontSize: "18px",
                     backdropFilter: "blur(10px)",
+                    boxShadow: "0 4px 12px rgba(212, 102, 159, 0.08)",
                   }}
                 >
-                  <span style={{ color: "#b896c3", fontWeight: "500" }}>
-                    {formatDateDisplay(displayDate)}
+                  <span style={{ color: "#b896c3", fontWeight: "600" }}>
+                    🚶‍♀️ {formatDateDisplay(displayDate)}
                   </span>
-                  <span style={{ fontWeight: "700", color: "#d4669f" }}>
+                  <span style={{ fontWeight: "800", color: "#d4669f", fontSize: "20px" }}>
                     ${count * 10}
                   </span>
                 </div>
