@@ -17,7 +17,7 @@ interface Walk {
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -1 : 6);
+  const diff = d.getDate() - day - 1;
   return new Date(d.setDate(diff));
 }
 
@@ -87,6 +87,14 @@ export default function Home() {
 
       const today = formatDate(new Date());
 
+      // Check if already logged today
+      const alreadyLogged = walks.some((walk) => walk.date === today);
+      if (alreadyLogged) {
+        setError("You already logged a walk today!");
+        setSubmitting(false);
+        return;
+      }
+
       const { error: insertError } = await supabase
         .from("walks")
         .insert([{ date: today }]);
@@ -107,6 +115,9 @@ export default function Home() {
     }
   };
 
+  const today = formatDate(new Date());
+  const alreadyLoggedToday = walks.some((walk) => walk.date === today);
+
   const totalWalks = walks.length;
   const totalPay = totalWalks * 10;
 
@@ -124,18 +135,30 @@ export default function Home() {
     <div
       style={{
         width: "100%",
-        maxWidth: "500px",
-        margin: "0 auto",
-        padding: "20px",
+        maxWidth: "100vw",
         minHeight: "100vh",
+        margin: "0",
+        padding: "24px 16px 32px 16px",
+        background: "linear-gradient(135deg, #fff5f9 0%, #f5f0ff 100%)",
+        fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <div style={{ marginBottom: "40px" }}>
-        <h1 style={{ fontSize: "28px", fontWeight: "700", marginBottom: "8px" }}>
+      <div style={{ marginBottom: "32px" }}>
+        <h1
+          style={{
+            fontSize: "48px",
+            fontWeight: "700",
+            marginBottom: "8px",
+            color: "#d4669f",
+            letterSpacing: "-1px",
+          }}
+        >
           Walk Tracker
         </h1>
         {weekRange && (
-          <p style={{ fontSize: "14px", color: "#666666", margin: 0 }}>
+          <p style={{ fontSize: "18px", color: "#b896c3", margin: "0" }}>
             {formatDateDisplay(weekRange.start)} to {formatDateDisplay(weekRange.end)}
           </p>
         )}
@@ -144,12 +167,13 @@ export default function Home() {
       {error && (
         <div
           style={{
-            background: "#fee",
-            color: "#c33",
-            padding: "12px",
-            borderRadius: "4px",
-            marginBottom: "16px",
-            fontSize: "14px",
+            background: "#fde7eb",
+            color: "#d4669f",
+            padding: "16px",
+            borderRadius: "16px",
+            marginBottom: "20px",
+            fontSize: "16px",
+            fontWeight: "500",
           }}
         >
           {error}
@@ -159,70 +183,88 @@ export default function Home() {
       {success && (
         <div
           style={{
-            background: "#efe",
-            color: "#3c3",
-            padding: "12px",
-            borderRadius: "4px",
-            marginBottom: "16px",
-            fontSize: "14px",
+            background: "#e8f5e9",
+            color: "#6ba587",
+            padding: "16px",
+            borderRadius: "16px",
+            marginBottom: "20px",
+            fontSize: "16px",
+            fontWeight: "500",
           }}
         >
-          Walk logged!
+          Great work! Walk logged!
         </div>
       )}
 
       <button
         onClick={handleLogWalk}
-        disabled={submitting || loading}
+        disabled={submitting || loading || alreadyLoggedToday}
         style={{
           width: "100%",
-          padding: "16px",
-          background: submitting || loading ? "#cccccc" : "#111111",
+          padding: "28px",
+          background: alreadyLoggedToday ? "#e0d5e8" : "#d4669f",
           color: "#ffffff",
           border: "none",
-          borderRadius: "8px",
-          fontSize: "16px",
-          fontWeight: "600",
-          cursor: submitting || loading ? "not-allowed" : "pointer",
-          marginBottom: "16px",
+          borderRadius: "20px",
+          fontSize: "24px",
+          fontWeight: "700",
+          cursor: alreadyLoggedToday || submitting || loading ? "not-allowed" : "pointer",
+          marginBottom: "28px",
+          transition: "all 0.2s",
+          opacity: alreadyLoggedToday ? 0.7 : 1,
         }}
       >
-        {submitting ? "Logging..." : "Log Walk"}
+        {submitting ? "Logging..." : alreadyLoggedToday ? "Logged Today!" : "Log Walk"}
       </button>
 
       <div
         style={{
-          background: "#f5f5f5",
-          borderRadius: "8px",
-          padding: "16px",
+          background: "rgba(255, 255, 255, 0.8)",
+          borderRadius: "20px",
+          padding: "28px",
           marginBottom: "32px",
+          backdropFilter: "blur(10px)",
         }}
       >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "baseline",
-            marginBottom: "12px",
+            alignItems: "center",
+            marginBottom: "20px",
           }}
         >
-          <span style={{ fontSize: "14px", color: "#666666" }}>
-            Walks this week
+          <span style={{ fontSize: "18px", color: "#b896c3", fontWeight: "600" }}>
+            This Week
           </span>
-          <span style={{ fontSize: "24px", fontWeight: "700" }}>
+          <span
+            style={{
+              fontSize: "48px",
+              fontWeight: "800",
+              color: "#d4669f",
+            }}
+          >
             {totalWalks}
           </span>
         </div>
-        <div style={{ height: "1px", background: "#e0e0e0", margin: "12px 0" }} />
+        <div style={{ height: "2px", background: "rgba(212, 102, 159, 0.1)", margin: "16px 0" }} />
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "baseline",
+            alignItems: "center",
           }}
         >
-          <span style={{ fontSize: "14px", color: "#666666" }}>Total pay</span>
-          <span style={{ fontSize: "24px", fontWeight: "700" }}>
+          <span style={{ fontSize: "18px", color: "#b896c3", fontWeight: "600" }}>
+            Total Pay
+          </span>
+          <span
+            style={{
+              fontSize: "48px",
+              fontWeight: "800",
+              color: "#d4669f",
+            }}
+          >
             ${totalPay}
           </span>
         </div>
@@ -232,40 +274,44 @@ export default function Home() {
         <div>
           <h2
             style={{
-              fontSize: "14px",
-              fontWeight: "600",
-              color: "#666666",
-              marginBottom: "12px",
+              fontSize: "16px",
+              fontWeight: "700",
+              color: "#b896c3",
+              marginBottom: "16px",
               textTransform: "uppercase",
-              letterSpacing: "0.5px",
+              letterSpacing: "1px",
             }}
           >
-            Logged Walks
+            Recent Walks
           </h2>
-          {sortedDates.map((date) => {
-            const count = walksByDate[date];
-            const displayDate = new Date(date + "T00:00:00");
-            return (
-              <div
-                key={date}
-                style={{
-                  padding: "12px 0",
-                  borderBottom: "1px solid #f0f0f0",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "14px",
-                }}
-              >
-                <span style={{ color: "#666666" }}>
-                  {formatDateDisplay(displayDate)}
-                </span>
-                <span style={{ fontWeight: "600", color: "#111111" }}>
-                  {count} walk{count > 1 ? "s" : ""} ({count * 10} dollars)
-                </span>
-              </div>
-            );
-          })}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {sortedDates.map((date) => {
+              const count = walksByDate[date];
+              const displayDate = new Date(date + "T00:00:00");
+              return (
+                <div
+                  key={date}
+                  style={{
+                    padding: "16px",
+                    background: "rgba(255, 255, 255, 0.8)",
+                    borderRadius: "16px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: "16px",
+                    backdropFilter: "blur(10px)",
+                  }}
+                >
+                  <span style={{ color: "#b896c3", fontWeight: "500" }}>
+                    {formatDateDisplay(displayDate)}
+                  </span>
+                  <span style={{ fontWeight: "700", color: "#d4669f" }}>
+                    ${count * 10}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
