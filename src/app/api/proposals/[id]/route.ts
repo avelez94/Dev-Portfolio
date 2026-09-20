@@ -8,7 +8,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const { data, error } = await supabaseAdmin.from('proposals').select('*').eq('id', id).single()
   if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  // Fetch linked SOW milestones
   const { data: sow } = await supabaseAdmin.from('sows').select('line_items').eq('proposal_id', id).single()
   return NextResponse.json({ ...data, milestones: sow?.line_items || [] })
 }
@@ -53,7 +52,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         from: 'Alante Velez <alante@alantevelez.com>',
         to: proposal.client_email,
         subject: `Proposal accepted — next steps for ${proposal.project_title}`,
-        html: getClientConfirmHtml({ proposal, action: 'accepted' }),
+        html: getClientConfirmHtml({ proposal }),
+      })
+      // Send full proposal copy to both
+      await resend.emails.send({
+        from: 'Alante Velez <alante@alantevelez.com>',
+        to: [proposal.client_email, 'alante@alantevelez.com'],
+        subject: `Your proposal — ${proposal.project_title}`,
+        html: getProposalCopyHtml({ proposal }),
       })
     } else {
       await resend.emails.send({
@@ -88,7 +94,7 @@ function getAdminNotifHtml({ proposal, action, declineReason }: any) {
 </div></body></html>`
 }
 
-function getClientConfirmHtml({ proposal, action }: any) {
+function getClientConfirmHtml({ proposal }: any) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>*{margin:0;padding:0;box-sizing:border-box}body{background:#FAF3E8;font-family:Georgia,serif}.wrap{max-width:600px;margin:0 auto;padding:48px 24px}.logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}.logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:40px}.divider{height:1px;background:rgba(169,104,96,0.2);margin:32px 0}.heading{font-size:32px;font-weight:700;color:#2A2420;line-height:1.1;margin-bottom:20px}.heading em{font-style:italic;color:#A96860}p{font-size:15px;line-height:1.75;color:#3D3630;margin-bottom:16px}.footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.15)}.footer p{font-size:12px;color:#8B7D73;font-family:monospace;letter-spacing:0.06em}</style>
 </head><body><div class="wrap">
@@ -98,6 +104,62 @@ function getClientConfirmHtml({ proposal, action }: any) {
   <h1 class="heading">Proposal<br><em>accepted.</em></h1>
   <p>Hi ${proposal.client_name}, thank you for accepting the proposal for <strong>${proposal.project_title}</strong>.</p>
   <p>Your contract will arrive shortly for your review and signature. Once signed, your deposit invoice will follow to officially kick off the project.</p>
+  <p>A full copy of your accepted proposal has been sent in a separate email for your records.</p>
+  <div class="footer"><p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p></div>
+</div></body></html>`
+}
+
+function getProposalCopyHtml({ proposal }: any) {
+  const lineItems: { description: string; price: string }[] = proposal.line_items || []
+  const lineItemRows = lineItems.map(item => `
+    <tr>
+      <td style="padding:12px 0;border-bottom:1px solid rgba(169,104,96,0.12);font-size:14px;color:#2A2420;">${item.description}</td>
+      <td style="padding:12px 0;border-bottom:1px solid rgba(169,104,96,0.12);font-size:14px;color:#2A2420;text-align:right;">$${Number(item.price).toLocaleString()}</td>
+    </tr>`).join('')
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#FAF3E8;font-family:Georgia,serif}.wrap{max-width:600px;margin:0 auto;padding:48px 24px}.logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}.logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:32px}.divider{height:1px;background:rgba(169,104,96,0.2);margin:28px 0}.section-label{font-family:monospace;font-size:11px;color:#A96860;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px;margin-top:24px}.value{font-size:14px;color:#2A2420;line-height:1.7}table{width:100%;border-collapse:collapse;margin-top:8px}.total-row td{padding:14px 0;font-size:15px;font-weight:700;color:#2A2420;border-top:2px solid rgba(169,104,96,0.3)}.scope-box{background:#fff8f0;border:1px solid rgba(169,104,96,0.2);padding:16px;margin-top:8px;font-size:13px;color:#3D3630;line-height:1.7}.footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.15)}.footer p{font-size:12px;color:#8B7D73;font-family:monospace;letter-spacing:0.06em}</style>
+</head><body><div class="wrap">
+  <div class="logo">Alante Velez</div>
+  <div class="logo-sub">Proposal — Accepted Copy</div>
+  <div class="divider"></div>
+
+  <div class="section-label">Client</div>
+  <div class="value">${proposal.client_name}<br>${proposal.client_email}<br>${proposal.client_business}</div>
+
+  <div class="section-label">Project</div>
+  <div class="value">${proposal.project_title} · ${proposal.project_type}</div>
+
+  <div class="section-label">Project Understanding</div>
+  <div class="value">${proposal.understood}</div>
+
+  <div class="section-label">Scope of Work</div>
+  <table>
+    ${lineItemRows}
+    <tr class="total-row">
+      <td>Total</td>
+      <td style="text-align:right;">$${Number(proposal.total).toLocaleString()}</td>
+    </tr>
+  </table>
+
+  <div class="section-label">Deposit (${proposal.deposit_pct}%)</div>
+  <div class="value">$${(proposal.total * proposal.deposit_pct / 100).toLocaleString()} due at project start</div>
+
+  <div class="section-label">Timeline</div>
+  <div class="value">${proposal.timeline}</div>
+
+  <div class="section-label">Out of Scope</div>
+  <div class="scope-box">${proposal.out_of_scope}</div>
+
+  <div class="section-label">Payment</div>
+  <div class="value">${proposal.payment_method}</div>
+
+  <div class="section-label">Next Steps</div>
+  <div class="value">${proposal.next_steps}</div>
+
+  <div class="section-label">Accepted</div>
+  <div class="value">${new Date(proposal.responded_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+
   <div class="footer"><p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p></div>
 </div></body></html>`
 }
