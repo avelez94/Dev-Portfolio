@@ -17,8 +17,8 @@ interface Walk {
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day - 1;
-  return new Date(d.setDate(diff));
+  const daysBack = (day + 1) % 7;
+  return new Date(d.setDate(d.getDate() - daysBack));
 }
 
 function getWeekEnd(date: Date): Date {
