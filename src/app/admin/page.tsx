@@ -50,10 +50,15 @@ type Document = {
   id: string; client_id: string | null; name: string; type: string; storage_path: string; created_at: string
 }
 
-// Preview types for document preview modal
 type PreviewDoc = {
   title: string
   sections: { label: string; value: string }[]
+}
+
+type InvoiceMilestone = {
+  id: string; invoice_id: string; name: string
+  deliverables: string | null; due_date: string | null
+  fee: number; status: string; paid_date: string | null; created_at: string
 }
 
 const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa']
@@ -107,7 +112,7 @@ export default function AdminDashboard() {
   const [showNewProject, setShowNewProject] = useState(false)
   const [showAddClient, setShowAddClient] = useState(false)
   const [showClientInvoice, setShowClientInvoice] = useState(false)
-  const [invoiceType, setInvoiceType] = useState<'project'|'revision'|null>(null)
+  const [invoiceType, setInvoiceType] = useState<'project'|'revision'|'milestone'|'fixed_fee'|null>(null)
   const [showActiveProjectPopup, setShowActiveProjectPopup] = useState(false)
   const [pendingAdvanceClient, setPendingAdvanceClient] = useState<Client|null>(null)
   const [activeProjectForm, setActiveProjectForm] = useState({ value:'', end_date:'' })
@@ -123,8 +128,11 @@ export default function AdminDashboard() {
   const [emailForm, setEmailForm] = useState({ subject:'', message:'' })
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+  const [milestones, setMilestones] = useState<InvoiceMilestone[]>([])
+  const [selectedSowId, setSelectedSowId] = useState('')
+  const [milestoneInvoiceNumber, setMilestoneInvoiceNumber] = useState('')
+  const [fixedFeeForm, setFixedFeeForm] = useState({ invoice_number:'', total_fee:'', due_date:'', service_desc:'' })
 
-  // Document preview modal
   const [previewDoc, setPreviewDoc] = useState<PreviewDoc|null>(null)
   const [previewOnConfirm, setPreviewOnConfirm] = useState<(() => void)|null>(null)
   const [previewAction, setPreviewAction] = useState<'download'|'send'>('download')
@@ -222,7 +230,7 @@ export default function AdminDashboard() {
 
   async function fetchAll() {
     setLoading(true)
-    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing(),fetchMeetings(),fetchProposals(),fetchSows(),fetchContracts()])
+    await Promise.all([fetchBookings(),fetchUnbooked(),fetchClients(),fetchAvailability(),fetchBlockedDates(),fetchBlockedSlots(),fetchProjects(),fetchInvoices(),fetchDocuments(),fetchPricing(),fetchMeetings(),fetchProposals(),fetchSows(),fetchContracts(),fetchMilestones()])
     setLoading(false)
   }
   async function fetchBookings() {
@@ -282,6 +290,10 @@ export default function AdminDashboard() {
   async function fetchContracts() {
     const { data } = await supabase.from('contracts').select('*').order('created_at',{ascending:false})
     setContracts(data || [])
+  }
+  async function fetchMilestones() {
+    const { data } = await supabase.from('invoice_milestones').select('*').order('created_at',{ascending:true})
+    setMilestones(data || [])
   }
   async function scheduleMeeting(clientId: string, clientName: string, clientEmail: string) {
     if (!meetingForm.date || !meetingForm.time) return
@@ -428,6 +440,132 @@ export default function AdminDashboard() {
     setShowClientInvoice(false); setInvoiceType(null)
     await fetchInvoices()
   }
+
+  async function createMilestoneInvoice(clientId: string, clientName: string, clientEmail: string) {
+    if (!selectedSowId || !milestoneInvoiceNumber) return
+    const sow = sows.find((s: any) => s.id === selectedSowId)
+    if (!sow?.line_items?.length) return
+    const totalFee = sow.line_items.reduce((sum: number, m: any) => sum + parseFloat(m.fee || '0'), 0)
+    const { data: inv } = await supabase.from('invoices').insert({
+      client_id: clientId,
+      invoice_number: milestoneInvoiceNumber,
+      invoice_type: 'milestone',
+      total_fee: totalFee,
+      deposit_amount: 0,
+      amount: totalFee,
+      sow_id: selectedSowId,
+      status: 'pending',
+      service_desc: sow.project_title,
+    }).select().single()
+    if (!inv) return
+    await supabase.from('invoice_milestones').insert(
+      sow.line_items.map((m: any) => ({
+        invoice_id: inv.id,
+        name: m.name,
+        deliverables: m.deliverables || null,
+        due_date: m.dueDate || null,
+        fee: parseFloat(m.fee || '0'),
+        status: 'pending',
+      }))
+    )
+    setMilestoneInvoiceNumber(''); setSelectedSowId('')
+    setShowClientInvoice(false); setInvoiceType(null)
+    await fetchInvoices(); await fetchMilestones()
+  }
+
+  async function createFixedFeeInvoice(clientId: string, clientName: string, clientEmail: string, action: 'download'|'send') {
+    if (!fixedFeeForm.invoice_number || !fixedFeeForm.total_fee) return
+    const fee = parseFloat(fixedFeeForm.total_fee)
+    const { data: inv } = await supabase.from('invoices').insert({
+      client_id: clientId,
+      invoice_number: fixedFeeForm.invoice_number,
+      invoice_type: 'fixed_fee',
+      total_fee: fee,
+      deposit_amount: fee,
+      amount: fee,
+      due_date: fixedFeeForm.due_date || null,
+      service_desc: fixedFeeForm.service_desc || null,
+      status: 'pending',
+    }).select().single()
+    if (action === 'download') {
+      generateFixedFeePDF(clientName, fee)
+    } else if (action === 'send' && inv) {
+      await sendInvoiceEmail(clientName, clientEmail, inv)
+    }
+    setFixedFeeForm({ invoice_number:'', total_fee:'', due_date:'', service_desc:'' })
+    setShowClientInvoice(false); setInvoiceType(null)
+    await fetchInvoices()
+  }
+
+  async function markMilestonePaid(milestone: InvoiceMilestone) {
+    const today = new Date().toISOString().split('T')[0]
+    await supabase.from('invoice_milestones').update({ status: 'paid', paid_date: today }).eq('id', milestone.id)
+    await fetchMilestones()
+  }
+
+  function generateFixedFeePDF(clientName: string, fee: number) {
+    const { addLine, addSpace, addDivider, save } = makePDF()
+    addLine('INVOICE', 16, true, true)
+    addLine('Alante Velez | Full Stack Web Developer', 10)
+    addDivider(); addSpace()
+    addLine('INVOICE #' + fixedFeeForm.invoice_number, 12, true); addSpace(0.5)
+    addLine('Due Date: ' + (fixedFeeForm.due_date || 'Upon receipt'))
+    addSpace(); addDivider()
+    addLine('BILL TO', 10, true, true); addSpace(0.5)
+    addLine(clientName)
+    addSpace(); addDivider()
+    addLine('SERVICE', 10, true, true); addSpace(0.5)
+    addLine(fixedFeeForm.service_desc || 'Web development services')
+    addSpace(); addDivider()
+    addLine('PAYMENT', 10, true, true); addSpace(0.5)
+    addLine('Total due: $' + fee.toLocaleString(), 12, true)
+    addSpace(0.5)
+    addLine('Payment method: Zelle')
+    addLine('Reference: Invoice #' + fixedFeeForm.invoice_number + ' | ' + clientName)
+    save('Invoice_' + fixedFeeForm.invoice_number + '_' + clientName.replace(/\s+/g,'_') + '.pdf')
+  }
+
+  function generateMilestonePDF(clientName: string, clientEmail: string, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
+    const { addLine, addSpace, addDivider, save } = makePDF()
+    addLine('INVOICE', 16, true, true)
+    addLine('Alante Velez | Full Stack Web Developer', 10)
+    addDivider(); addSpace()
+    addLine('INVOICE #' + invoiceNumber + ' — Milestone ' + (index+1) + ' of ' + totalCount, 12, true); addSpace(0.5)
+    addLine('Due Date: ' + (milestone.due_date || 'Upon completion'))
+    addSpace(); addDivider()
+    addLine('BILL TO', 10, true, true); addSpace(0.5)
+    addLine(clientName); addLine(clientEmail)
+    addSpace(); addDivider()
+    addLine('MILESTONE', 10, true, true); addSpace(0.5)
+    addLine(milestone.name, 12, true)
+    if (milestone.deliverables) { addSpace(0.5); addLine(milestone.deliverables) }
+    addSpace(); addDivider()
+    addLine('PAYMENT', 10, true, true); addSpace(0.5)
+    addLine('Milestone fee: $' + milestone.fee.toLocaleString(), 12, true)
+    addSpace(0.5)
+    addLine('Payment method: Zelle')
+    addLine('Reference: Invoice #' + invoiceNumber + ' | ' + milestone.name)
+    save('Invoice_' + invoiceNumber + '_M' + (index+1) + '.pdf')
+  }
+
+  async function sendMilestoneEmail(clientName: string, clientEmail: string, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
+    try {
+      await fetch('/api/invoices/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientEmail, clientName, cc: MY_EMAIL,
+          invoiceNumber: invoiceNumber + ' (Milestone ' + (index+1) + ' of ' + totalCount + ')',
+          invoiceType: 'milestone',
+          totalFee: milestone.fee,
+          depositAmount: milestone.fee,
+          dueDate: milestone.due_date,
+          serviceDesc: milestone.name + (milestone.deliverables ? '\n' + milestone.deliverables : ''),
+        })
+      })
+    } catch(e) { console.error(e) }
+  }
+
   async function sendInvoiceEmail(clientName: string, clientEmail: string, inv: Invoice) {
     setSendingInvoice(true)
     try {
@@ -531,7 +669,6 @@ export default function AdminDashboard() {
     return { doc, addLine, addSpace, addDivider, save: (name: string) => doc.save(name) }
   }
 
-  // ─── Preview helpers ────────────────────────────────────────────────────────
   function openPreview(doc: PreviewDoc, action: 'download'|'send', onConfirm: () => void) {
     setPreviewDoc(doc)
     setPreviewAction(action)
@@ -621,7 +758,6 @@ export default function AdminDashboard() {
       ]
     }
   }
-  // ─── End preview helpers ────────────────────────────────────────────────────
 
   function generateProposalDoc() {
     const f = proposalForm
@@ -1490,7 +1626,7 @@ export default function AdminDashboard() {
                     const statusLabel = inv.status==='awaiting_deposit'?'Awaiting Dep':inv.status==='deposit_paid'?'Dep Paid':inv.status==='paid'?'Paid':'Pending'
                     return (
                       <div key={inv.id} className="dt-row" style={{gridTemplateColumns:'1fr 1fr 1fr 1fr 80px',borderColor:d.border}}>
-                        <div className="dt-cell" style={{color:d.text}}>{inv.invoice_number}{inv.invoice_type==='revision'?' (rev)':''}</div>
+                        <div className="dt-cell" style={{color:d.text}}>{inv.invoice_number}{inv.invoice_type==='revision'?' (rev)':inv.invoice_type==='milestone'?' (ms)':inv.invoice_type==='fixed_fee'?' (fixed)':''}</div>
                         <div className="dt-cell" style={{color:d.accent,fontWeight:500}}>{fmtMoney(inv.total_fee||inv.amount)}</div>
                         <div className="dt-cell" style={{color:d.text2}}>{inv.due_date?fmtShort(inv.due_date):'none'}</div>
                         <div className="dt-cell"><span className="status-pill" style={pillStyle}>{statusLabel}</span></div>
@@ -2054,10 +2190,66 @@ export default function AdminDashboard() {
                       <div className="form-title" style={{color:d.text}}>Invoice for {focusedClient.name}</div>
                       {!invoiceType ? (
                         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                          <button className="ra-btn fill" onClick={()=>setInvoiceType('project')}>Project Invoice</button>
-                          <button className="ra-btn" style={{background:d.surface2,color:d.text2,border:'1px solid '+d.border}} onClick={()=>setInvoiceType('revision')}>Revision Invoice</button>
+                          <button className="ra-btn fill" onClick={()=>setInvoiceType('milestone')}>Milestone Invoice</button>
+                          <button className="ra-btn" style={{background:d.surface2,color:d.text2,border:'1px solid '+d.border}} onClick={()=>setInvoiceType('fixed_fee')}>Fixed Fee Invoice</button>
+                          <button className="ra-btn" style={{background:d.surface,color:d.text3,border:'1px solid '+d.border,fontSize:11}} onClick={()=>setInvoiceType('project')}>Project Invoice (deposit / balance)</button>
+                          <button className="ra-btn" style={{background:d.surface,color:d.text3,border:'1px solid '+d.border,fontSize:11}} onClick={()=>setInvoiceType('revision')}>Revision Invoice (hourly)</button>
                           <button className="btn-cancel" style={{borderColor:d.border,color:d.text2,marginTop:4}} onClick={()=>{setShowClientInvoice(false);setInvoiceType(null)}}>Cancel</button>
                         </div>
+                      ) : invoiceType === 'milestone' ? (
+                        <>
+                          <div style={{fontSize:10,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Milestone Invoice</div>
+                          <div className="form-group" style={{marginBottom:10}}>
+                            <div className="form-label" style={{color:d.text3}}>Invoice #</div>
+                            <input style={inputStyle} value={milestoneInvoiceNumber} onChange={e=>setMilestoneInvoiceNumber(e.target.value)} placeholder="INV-165"/>
+                          </div>
+                          <div className="form-group" style={{marginBottom:12}}>
+                            <div className="form-label" style={{color:d.text3}}>Select SOW</div>
+                            <select style={inputStyle} value={selectedSowId} onChange={e=>setSelectedSowId(e.target.value)}>
+                              <option value="">Choose a SOW...</option>
+                              {sows.map((s:any)=>(
+                                <option key={s.id} value={s.id}>{s.project_title}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {selectedSowId && (() => {
+                            const sow = sows.find((s:any)=>s.id===selectedSowId)
+                            if (!sow?.line_items?.length) return null
+                            return (
+                              <div style={{background:d.surface2,borderRadius:10,padding:'10px 12px',marginBottom:12}}>
+                                <div style={{fontSize:10,color:d.text3,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>Milestones</div>
+                                {sow.line_items.map((m:any,i:number)=>(
+                                  <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:i<sow.line_items.length-1?'1px solid '+d.border:'none'}}>
+                                    <div>
+                                      <div style={{fontSize:12,color:d.text,fontWeight:500}}>{m.name}</div>
+                                      {m.deliverables&&<div style={{fontSize:10,color:d.text3,marginTop:2}}>{m.deliverables}</div>}
+                                    </div>
+                                    <div style={{fontSize:12,color:d.accent,fontWeight:500,flexShrink:0,paddingLeft:12}}>${parseFloat(m.fee||'0').toLocaleString()}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          })()}
+                          <div className="form-actions">
+                            <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
+                            <button className="btn-save" disabled={!selectedSowId||!milestoneInvoiceNumber} onClick={()=>createMilestoneInvoice(focusedClient.id,focusedClient.name,focusedClient.email)}>Create</button>
+                          </div>
+                        </>
+                      ) : invoiceType === 'fixed_fee' ? (
+                        <>
+                          <div style={{fontSize:10,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Fixed Fee Invoice</div>
+                          <div className="form-grid">
+                            <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice #</div><input style={inputStyle} value={fixedFeeForm.invoice_number} onChange={e=>setFixedFeeForm({...fixedFeeForm,invoice_number:e.target.value})} placeholder="INV-164"/></div>
+                            <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total Fee ($)</div><input style={inputStyle} type="number" value={fixedFeeForm.total_fee} onChange={e=>setFixedFeeForm({...fixedFeeForm,total_fee:e.target.value})} placeholder="650"/></div>
+                            <div className="form-group"><div className="form-label" style={{color:d.text3}}>Due date</div><input style={inputStyle} type="date" value={fixedFeeForm.due_date} onChange={e=>setFixedFeeForm({...fixedFeeForm,due_date:e.target.value})}/></div>
+                            <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Description</div><input style={inputStyle} value={fixedFeeForm.service_desc} onChange={e=>setFixedFeeForm({...fixedFeeForm,service_desc:e.target.value})} placeholder="V7 Site Restructure — Change Order"/></div>
+                          </div>
+                          <div className="form-actions">
+                            <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setInvoiceType(null)}>Back</button>
+                            <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>createFixedFeeInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'download')}>Download PDF</button>
+                            <button className="btn-save" onClick={()=>createFixedFeeInvoice(focusedClient.id,focusedClient.name,focusedClient.email,'send')}>Send to Client</button>
+                          </div>
+                        </>
                       ) : invoiceType === 'project' ? (
                         <>
                           <div style={{fontSize:10,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Project Invoice</div>
@@ -2152,11 +2344,46 @@ export default function AdminDashboard() {
                         const sc = statusColors[inv.status] || {bg:d.surface2,text:d.text3}
                         const statusLabel = inv.status==='awaiting_deposit'?'Awaiting Deposit':inv.status==='deposit_paid'?'Deposit Paid':inv.status==='paid'?'Paid in Full':'Pending'
                         const nextAction = inv.status==='awaiting_deposit'?'Mark Deposit Paid':inv.status==='deposit_paid'?'Mark Final Paid':inv.status==='pending'?'Mark Paid':null
+
+                        if (inv.invoice_type === 'milestone') {
+                          const invMilestones = milestones.filter(m => m.invoice_id === inv.id)
+                          const total = invMilestones.length
+                          return (
+                            <div key={inv.id} className="inv-row" style={{background:d.surface}}>
+                              <div style={{fontSize:12,color:d.text,fontWeight:500,width:'100%'}}>#{inv.invoice_number} · Milestone Schedule</div>
+                              <div style={{fontSize:11,color:d.text2,width:'100%'}}>{inv.service_desc} · {total} milestones</div>
+                              {invMilestones.map((m,idx)=>{
+                                const ms = m.status==='paid'?{bg:d.green,text:d.greenText}:{bg:d.amber,text:d.amberText}
+                                return (
+                                  <div key={m.id} style={{width:'100%',background:d.surface2,borderRadius:8,padding:'8px 10px'}}>
+                                    <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+                                      <div style={{flex:1}}>
+                                        <div style={{fontSize:11,color:d.text,fontWeight:500}}>{m.name}</div>
+                                        {m.deliverables&&<div style={{fontSize:10,color:d.text3,marginTop:1}}>{m.deliverables}</div>}
+                                        {m.due_date&&<div style={{fontSize:10,color:d.text3}}>Due {fmtShort(m.due_date)}</div>}
+                                      </div>
+                                      <div style={{flexShrink:0,textAlign:'right'}}>
+                                        <div style={{fontSize:12,color:d.accent,fontWeight:500}}>{fmtMoney(m.fee)}</div>
+                                        <span className="status-pill" style={{background:ms.bg,color:ms.text,marginTop:3,display:'inline-flex'}}>{m.status==='paid'?'Paid':'Pending'}</span>
+                                      </div>
+                                    </div>
+                                    <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+                                      <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'3px 8px'}} onClick={()=>generateMilestonePDF(focusedClient.name,focusedClient.email,m,inv.invoice_number,total,idx)}>Download PDF</button>
+                                      <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'3px 8px'}} onClick={()=>sendMilestoneEmail(focusedClient.name,focusedClient.email,m,inv.invoice_number,total,idx)}>Send</button>
+                                      {m.status!=='paid'&&<button className="cr-btn" style={{background:d.accentBg,color:d.accent,fontSize:10,padding:'3px 8px'}} onClick={()=>markMilestonePaid(m)}>Mark Paid</button>}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        }
+
                         return (
                           <div key={inv.id} className="inv-row" style={{background:d.surface}}>
                             <div style={{display:'flex',alignItems:'center',gap:8,width:'100%'}}>
                               <div style={{flex:1}}>
-                                <div style={{fontSize:12,color:d.text,fontWeight:500}}>#{inv.invoice_number}{inv.invoice_type==='revision'?' · Revision':''}</div>
+                                <div style={{fontSize:12,color:d.text,fontWeight:500}}>#{inv.invoice_number}{inv.invoice_type==='revision'?' · Revision':inv.invoice_type==='fixed_fee'?' · Fixed Fee':''}</div>
                                 <div style={{fontSize:11,color:d.text2}}>{fmtMoney(inv.total_fee||inv.amount)}{inv.due_date?' · Due '+fmtShort(inv.due_date):''}</div>
                               </div>
                               <span className="status-pill" style={{background:sc.bg,color:sc.text}}>{statusLabel}</span>
@@ -2254,15 +2481,15 @@ export default function AdminDashboard() {
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:20}}>
               {[
-                {label:'Type',val:(viewingInvoice.invoice_type==='revision'?'Revision Invoice':'Project Invoice')},
+                {label:'Type',val:(viewingInvoice.invoice_type==='revision'?'Revision Invoice':viewingInvoice.invoice_type==='fixed_fee'?'Fixed Fee Invoice':viewingInvoice.invoice_type==='milestone'?'Milestone Schedule':'Project Invoice')},
                 {label:'Service',val:viewingInvoice.service_desc||'Web development services'},
                 {label:'Total fee',val:fmtMoney(viewingInvoice.total_fee||viewingInvoice.amount)},
                 ...(viewingInvoice.invoice_type==='project'?[
                   {label:'Deposit',val:fmtMoney(viewingInvoice.deposit_amount||viewingInvoice.total_fee*0.5)},
                   {label:'Balance',val:fmtMoney((viewingInvoice.total_fee||0)-(viewingInvoice.deposit_amount||0))},
-                ]:[
+                ]:viewingInvoice.invoice_type==='revision'?[
                   {label:'Hours',val:viewingInvoice.hours+'h x $'+viewingInvoice.hourly_rate+'/hr'},
-                ]),
+                ]:[]),
                 {label:'Due date',val:viewingInvoice.due_date?fmtShort(viewingInvoice.due_date):'Upon receipt'},
                 {label:'Status',val:viewingInvoice.status==='awaiting_deposit'?'Awaiting Deposit':viewingInvoice.status==='deposit_paid'?'Deposit Paid':viewingInvoice.status==='paid'?'Paid in Full':'Pending'},
               ].map((row,i)=>(
