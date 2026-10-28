@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -12,6 +12,12 @@ interface Walk {
   id: string;
   date: string;
   created_at: string;
+}
+
+interface Location {
+  lat: number;
+  lng: number;
+  accuracy: number;
 }
 
 function getWeekStart(date: Date): Date {
@@ -57,6 +63,25 @@ function getDailySaying(date: Date): string {
   return sayings[dayOfWeek];
 }
 
+function getCurrentLocation(): Promise<Location> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("no-geolocation"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        }),
+      () => reject(new Error("location-denied")),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+}
+
 export default function Home() {
   const [walks, setWalks] = useState<Walk[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +94,11 @@ export default function Home() {
     end: Date;
   } | null>(null);
 
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [pendingLocation, setPendingLocation] = useState<Location | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   useEffect(() => {
     const today = new Date();
     const start = getWeekStart(today);
@@ -76,6 +106,17 @@ export default function Home() {
     setWeekRange({ start, end });
     fetchWalks(start, end);
   }, []);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
+
+  useEffect(() => {
+    if (cameraOpen && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraOpen]);
 
   const fetchWalks = async (start: Date, end: Date) => {
     try {
@@ -97,39 +138,104 @@ export default function Home() {
     }
   };
 
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  };
+
+  const closeCamera = () => {
+    stopCamera();
+    setCameraOpen(false);
+    setPendingLocation(null);
+    setSubmitting(false);
+  };
+
   const handleLogWalk = async () => {
+    setError("");
+    setSuccess(false);
+
+    const today = formatDate(new Date());
+    if (walks.some((walk) => walk.date === today)) {
+      setError("Already got your steps in today, queen! 👑");
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      setError("");
-      setSuccess(false);
+      const location = await getCurrentLocation();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setPendingLocation(location);
+      setCameraOpen(true);
+    } catch (err) {
+      console.error("Permission or device error:", err);
+      const message = err instanceof Error ? err.message : "";
+      if (message === "location-denied" || message === "no-geolocation") {
+        setError(
+          "We need your location to log this walk. Turn it on in your phone settings and try again 💕"
+        );
+      } else {
+        setError(
+          "We need your camera to log this walk. Allow it in your phone settings and try again 💕"
+        );
+      }
+      stopCamera();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const takePhotoAndSave = async () => {
+    const video = videoRef.current;
+    if (!video || !pendingLocation) return;
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d")!.drawImage(video, 0, 0);
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.85)
+      );
+      if (!blob) throw new Error("capture-failed");
 
       const today = formatDate(new Date());
+      const path = `${today}/${Date.now()}.jpg`;
 
-      const alreadyLogged = walks.some((walk) => walk.date === today);
-      if (alreadyLogged) {
-        setError("Already got your steps in today, queen! 👑");
-        setSubmitting(false);
-        return;
-      }
+      const { error: uploadError } = await supabase.storage
+        .from("walk-photos")
+        .upload(path, blob, { contentType: "image/jpeg" });
+      if (uploadError) throw uploadError;
 
-      const { error: insertError } = await supabase
-        .from("walks")
-        .insert([{ date: today }]);
-
+      const { error: insertError } = await supabase.from("walks").insert([
+        {
+          date: today,
+          lat: pendingLocation.lat,
+          lng: pendingLocation.lng,
+          accuracy_m: pendingLocation.accuracy,
+          photo_path: path,
+        },
+      ]);
       if (insertError) throw insertError;
 
+      closeCamera();
       setSuccess(true);
       setCelebrate(true);
       if (weekRange) {
         await fetchWalks(weekRange.start, weekRange.end);
       }
-
       setTimeout(() => setSuccess(false), 4000);
       setTimeout(() => setCelebrate(false), 5000);
     } catch (err) {
-      console.error("Error logging walk:", err);
+      console.error("Error saving walk:", err);
       setError("Oops! Try again babe 💕");
-    } finally {
       setSubmitting(false);
     }
   };
@@ -203,6 +309,80 @@ export default function Home() {
             {item.emoji}
           </div>
         ))}
+
+      {cameraOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "#000000",
+            zIndex: 2000,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <p
+            style={{
+              color: "#ffffff",
+              fontSize: "18px",
+              fontWeight: "600",
+              marginBottom: "16px",
+              textAlign: "center",
+            }}
+          >
+            📸 Take a photo of you and the pup
+          </p>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              borderRadius: "24px",
+              background: "#111111",
+            }}
+          />
+          <button
+            onClick={takePhotoAndSave}
+            disabled={submitting}
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              padding: "28px",
+              marginTop: "20px",
+              background: "linear-gradient(135deg, #d4669f 0%, #c54a8a 100%)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "24px",
+              fontSize: "24px",
+              fontWeight: "800",
+              cursor: submitting ? "not-allowed" : "pointer",
+              opacity: submitting ? 0.7 : 1,
+            }}
+          >
+            {submitting ? "Saving..." : "📷 Take Photo"}
+          </button>
+          <button
+            onClick={closeCamera}
+            disabled={submitting}
+            style={{
+              marginTop: "12px",
+              padding: "12px",
+              background: "transparent",
+              color: "#ffffff",
+              border: "none",
+              fontSize: "16px",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div style={{ marginBottom: "32px" }}>
         <h1
@@ -305,7 +485,7 @@ export default function Home() {
 
       <button
         onClick={handleLogWalk}
-        disabled={submitting || loading || alreadyLoggedToday}
+        disabled={submitting || loading || alreadyLoggedToday || cameraOpen}
         style={{
           width: "100%",
           padding: "32px 28px",
@@ -324,7 +504,11 @@ export default function Home() {
           boxShadow: alreadyLoggedToday ? "none" : "0 8px 24px rgba(212, 102, 159, 0.3)",
         }}
       >
-        {submitting ? "Logging..." : alreadyLoggedToday ? "💅 Logged Today!" : "🚶‍♀️ Log Walk"}
+        {submitting && !cameraOpen
+          ? "Checking..."
+          : alreadyLoggedToday
+            ? "💅 Logged Today!"
+            : "🚶‍♀️ Log Walk"}
       </button>
 
       <div
