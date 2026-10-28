@@ -468,7 +468,7 @@ export default function Home() {
         >
           <li>Tap Log Walk.</li>
           <li>Allow location and camera.</li>
-          <li>Take a photo of Chloe on your walk, right then.</li>
+          <li>Take a photo of Chloe on your walk. You can only take a new photo in the app, not upload one.</li>
         </ol>
       </div>
 
