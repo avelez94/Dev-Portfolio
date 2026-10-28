@@ -470,16 +470,6 @@ export default function Home() {
           <li>Allow location and camera.</li>
           <li>Take a photo right then.</li>
         </ol>
-        <p
-          style={{
-            fontSize: "15px",
-            color: "#b896c3",
-            marginTop: "16px",
-            marginBottom: 0,
-          }}
-        >
-          Location is only saved when you log a walk.
-        </p>
       </div>
 
       <button
