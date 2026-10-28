@@ -259,6 +259,50 @@ export default function Home() {
         </div>
       )}
 
+      <div
+        style={{
+          background: "rgba(255, 255, 255, 0.9)",
+          borderRadius: "24px",
+          padding: "28px",
+          marginBottom: "28px",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "22px",
+            fontWeight: "800",
+            color: "#d4669f",
+            marginBottom: "16px",
+          }}
+        >
+          How to log your walk 🐾
+        </h2>
+        <ol
+          style={{
+            fontSize: "18px",
+            color: "#8a6a9a",
+            lineHeight: "1.6",
+            paddingLeft: "24px",
+            margin: 0,
+          }}
+        >
+          <li>Tap Log Walk while you're out with the dog.</li>
+          <li>Allow location and camera when your phone asks. The app needs both.</li>
+          <li>Take a photo right then. Photos can't be uploaded from your camera roll.</li>
+          <li>You can log one walk per day.</li>
+        </ol>
+        <p
+          style={{
+            fontSize: "15px",
+            color: "#b896c3",
+            marginTop: "20px",
+            marginBottom: 0,
+          }}
+        >
+          Your location and photo are saved with each walk so the records stay accurate. Nothing is tracked between walks.
+        </p>
+      </div>
+
       <button
         onClick={handleLogWalk}
         disabled={submitting || loading || alreadyLoggedToday}
