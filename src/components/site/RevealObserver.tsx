@@ -1,20 +1,23 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 
 /**
  * Progressive scroll reveal. Content is fully visible without JavaScript:
  * elements with [data-reveal] are only hidden after this component adds
  * `reveal-ready` to <html>, and never when the visitor prefers reduced motion.
+ * Re-runs on every route change so client side navigation reveals new pages.
  */
 export default function RevealObserver() {
+  const pathname = usePathname()
+
   useEffect(() => {
     const root = document.documentElement
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
     if (reduce.matches || !('IntersectionObserver' in window)) return
 
     const els = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
-    // Anything already on screen shows immediately, so nothing blinks on load.
     els.forEach((el) => {
       const r = el.getBoundingClientRect()
       if (r.top < window.innerHeight && r.bottom > 0) el.classList.add('is-visible')
@@ -47,9 +50,11 @@ export default function RevealObserver() {
     return () => {
       io.disconnect()
       reduce.removeEventListener('change', onChange)
+      // Leave everything visible while the next route mounts.
+      els.forEach((el) => el.classList.add('is-visible'))
       root.classList.remove('reveal-ready')
     }
-  }, [])
+  }, [pathname])
 
   return null
 }

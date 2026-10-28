@@ -1,8 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import s from '@/app/home.module.css'
-import { helpOptions } from '@/content/site'
+import { useSearchParams } from 'next/navigation'
+import s from './site.module.css'
+import { CONTACT_EMAIL, UNSURE, interestGroups, interestLabel, parseInterest, type InterestKey } from '@/content/site'
 
 // Budget and timeline options match the detailed intake so admin data stays consistent.
 const budgetOptions = ['Under $500', '$500 to $1,000', '$1,000 to $2,500', '$2,500 to $5,000', '$5,000+', 'Not sure yet']
@@ -13,42 +14,66 @@ type Fields = {
   email: string
   business: string
   website: string
-  type: string
+  interest: string
   description: string
   budget: string
   timeline: string
 }
 
-const empty: Fields = { name: '', email: '', business: '', website: '', type: '', description: '', budget: '', timeline: '' }
-
 type Errors = Partial<Record<keyof Fields, string>>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+const URL_RE = /^(https?:\/\/)?[^\s.]+\.[^\s]{2,}$/i
 
 function validate(f: Fields): Errors {
   const e: Errors = {}
   if (!f.name.trim()) e.name = 'Please add your name.'
   if (!f.email.trim()) e.email = 'Please add your email so I can reply.'
   else if (!EMAIL_RE.test(f.email.trim())) e.email = 'That email doesn’t look quite right.'
-  if (f.website.trim() && !/^(https?:\/\/)?[^\s.]+\.[^\s]{2,}$/i.test(f.website.trim()))
-    e.website = 'That doesn’t look like a web address. Leave it blank if you don’t have one.'
-  if (!f.type) e.type = 'Pick the closest option, or “Not sure yet”.'
+  if (f.website.trim() && !URL_RE.test(f.website.trim())) e.website = 'That doesn’t look like a web address. Leave it blank if you don’t have one.'
+  if (!f.interest) e.interest = 'Pick the closest option, or “Not sure yet”.'
   if (f.description.trim().length < 10) e.description = 'A sentence or two is plenty.'
   return e
 }
 
-const order: (keyof Fields)[] = ['name', 'email', 'business', 'website', 'type', 'description', 'budget', 'timeline']
+const order: (keyof Fields)[] = ['name', 'email', 'business', 'website', 'interest', 'description', 'budget', 'timeline']
 
 type Result = { id: string; emailed: boolean; firstName: string; email: string }
 
-export default function InquiryForm() {
-  const [f, setF] = useState<Fields>(empty)
+/** Reads ?interest= from the URL. Wrap in <Suspense> with <InquiryForm interestParam={null} /> as fallback. */
+export default function InquiryFormFromUrl() {
+  const params = useSearchParams()
+  return <InquiryForm interestParam={parseInterest(params.get('interest'))} />
+}
+
+export function InquiryForm({ interestParam }: { interestParam: InterestKey | null }) {
+  const [f, setF] = useState<Fields>(() => ({
+    name: '',
+    email: '',
+    business: '',
+    website: '',
+    interest: interestParam ?? '',
+    description: '',
+    budget: '',
+    timeline: '',
+  }))
   const [errors, setErrors] = useState<Errors>({})
   const [touched, setTouched] = useState<Partial<Record<keyof Fields, boolean>>>({})
-  const [status, setStatus] = useState<'idle' | 'sending' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'sending' | 'error' | 'limited'>('idle')
   const [result, setResult] = useState<Result | null>(null)
+  const [lastParam, setLastParam] = useState(interestParam)
+  const startedAt = useRef(0)
   const formRef = useRef<HTMLFormElement>(null)
   const successRef = useRef<HTMLHeadingElement>(null)
+
+  // Following another "Ask about" link while on the homepage updates the choice.
+  if (interestParam !== lastParam) {
+    setLastParam(interestParam)
+    if (interestParam) {
+      setF((prev) => ({ ...prev, interest: interestParam }))
+      setErrors((prev) => ({ ...prev, interest: undefined }))
+    }
+  }
 
   function set<K extends keyof Fields>(k: K, v: string) {
     const next = { ...f, [k]: v }
@@ -61,7 +86,7 @@ export default function InquiryForm() {
     setErrors((prev) => ({ ...prev, [k]: validate(f)[k] }))
   }
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const errs = validate(f)
     setErrors(errs)
@@ -71,6 +96,8 @@ export default function InquiryForm() {
       formRef.current?.querySelector<HTMLElement>(`[name="${firstBad}"]`)?.focus()
       return
     }
+
+    const honeypot = (new FormData(e.currentTarget).get('company_fax') as string | null) ?? ''
 
     setStatus('sending')
     try {
@@ -82,17 +109,23 @@ export default function InquiryForm() {
           name: f.name.trim(),
           email: f.email.trim(),
           business: f.business.trim(),
-          type: f.type,
+          type: interestLabel(f.interest) ?? UNSURE.label,
           description: f.description.trim(),
           budget: f.budget,
           timeline: f.timeline,
           heard: 'Portfolio site',
           anything: website ? `Existing website: ${website}` : '',
           source: 'homepage',
+          company_fax: honeypot,
+          elapsed_ms: startedAt.current ? Date.now() - startedAt.current : undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.id) throw new Error(data?.error || 'Request failed')
+      if (res.status === 429) {
+        setStatus('limited')
+        return
+      }
+      if (!res.ok || !data?.id) throw new Error('Request failed')
 
       setResult({
         id: String(data.id),
@@ -151,7 +184,16 @@ export default function InquiryForm() {
     ) : null
 
   return (
-    <form ref={formRef} className={s.formCard} onSubmit={onSubmit} noValidate>
+    <form
+      ref={formRef}
+      className={s.formCard}
+      onSubmit={onSubmit}
+      onFocus={() => {
+        if (!startedAt.current) startedAt.current = Date.now()
+      }}
+      noValidate
+      aria-label="Project inquiry"
+    >
       <div className={s.formGrid}>
         <div className={s.field}>
           <label htmlFor="inq-name">
@@ -184,18 +226,23 @@ export default function InquiryForm() {
           {err('website')}
         </div>
         <div className={`${s.field} ${s.fieldWide}`}>
-          <label htmlFor="inq-type">
+          <label htmlFor="inq-interest">
             What can I help with? <span className={s.req}>(required)</span>
           </label>
-          <select {...fieldProps('type')} required onChange={(e) => set('type', e.target.value)}>
+          <select {...fieldProps('interest')} required onChange={(e) => set('interest', e.target.value)}>
             <option value="">Choose one</option>
-            {helpOptions.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
+            {interestGroups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
+            <option value={UNSURE.key}>{UNSURE.label}</option>
           </select>
-          {err('type')}
+          {err('interest')}
         </div>
         <div className={`${s.field} ${s.fieldWide}`}>
           <label htmlFor="inq-description">
@@ -238,16 +285,28 @@ export default function InquiryForm() {
         </div>
       </div>
 
+      {/* Spam trap: hidden from people and assistive tech, bots tend to fill it. */}
+      <div className={s.trap} aria-hidden="true">
+        <label htmlFor="inq-company-fax">Leave this empty</label>
+        <input id="inq-company-fax" name="company_fax" type="text" tabIndex={-1} autoComplete="off" defaultValue="" />
+      </div>
+
       <p className={s.formFine}>Please don’t include passwords or account logins. I’ll never need them here.</p>
 
       {status === 'error' && (
         <div className={s.formError} role="alert">
           Something went wrong and your message wasn’t sent. Please try again, or email me at{' '}
-          <a href="mailto:alante@alantevelez.com">alante@alantevelez.com</a>.
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        </div>
+      )}
+      {status === 'limited' && (
+        <div className={s.formError} role="alert">
+          Looks like a few notes came through from you already, so I paused this one. Please email me at{' '}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> and I’ll take it from there.
         </div>
       )}
 
-      <button type="submit" className={`${s.btn} ${s.btnPrimary} ${s.btnBlock}`} disabled={status === 'sending'} aria-disabled={status === 'sending'}>
+      <button type="submit" className={`${s.btn} ${s.btnPrimary} ${s.btnBlock}`} disabled={status === 'sending'}>
         {status === 'sending' ? 'Sending…' : 'Send My Note'}
       </button>
     </form>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
+import { SITE_URL } from '@/content/site'
+import { clientIp, hit } from '@/lib/rate-limit'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -19,12 +21,42 @@ function esc(v: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
+/** Submissions per IP per window (per server instance). */
+const IP_LIMIT = 5
+const IP_WINDOW_MS = 10 * 60 * 1000
+/** Submissions per email address per hour (checked in the database). */
+const EMAIL_LIMIT = 3
+const EMAIL_WINDOW_MS = 60 * 60 * 1000
+/** Faster than any person can fill in the homepage form. */
+const MIN_FILL_MS = 2500
+
 export async function POST(req: NextRequest) {
-  let body: Record<string, unknown>
+  let raw: unknown
   try {
-    body = await req.json()
+    raw = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
+  const body = raw as Record<string, unknown>
+
+  // Spam signals: a filled hidden field, or a form completed impossibly fast.
+  // Answer like a success so bots learn nothing, but store and send nothing.
+  const honeypot = str(body.company_fax, 200)
+  const elapsed = typeof body.elapsed_ms === 'number' ? body.elapsed_ms : null
+  if (honeypot || (elapsed !== null && elapsed < MIN_FILL_MS)) {
+    console.warn('Intake dropped as likely spam', { honeypot: Boolean(honeypot), elapsed })
+    return NextResponse.json({ success: true, id: null, emailed: false })
+  }
+
+  const ipCheck = hit(`intake:${clientIp(req.headers)}`, IP_LIMIT, IP_WINDOW_MS)
+  if (!ipCheck.ok) {
+    return NextResponse.json(
+      { error: 'Too many submissions. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(ipCheck.retryAfterSec) } }
+    )
   }
 
   const name = str(body.name, 200)
@@ -40,6 +72,23 @@ export async function POST(req: NextRequest) {
 
   if (!name || !email || !EMAIL_RE.test(email) || !type || !description || !heard) {
     return NextResponse.json({ error: 'Please fill in the required fields.' }, { status: 400 })
+  }
+
+  // Shared limit per email address. If the count itself fails, let the
+  // submission through rather than turning a real inquiry away.
+  try {
+    const since = new Date(Date.now() - EMAIL_WINDOW_MS).toISOString()
+    const { count, error: countError } = await supabaseAdmin
+      .from('intake_submissions')
+      .select('id', { count: 'exact', head: true })
+      .ilike('email', email)
+      .gte('submitted_at', since)
+    if (countError) throw countError
+    if ((count ?? 0) >= EMAIL_LIMIT) {
+      return NextResponse.json({ error: 'Too many submissions. Please try again later.' }, { status: 429 })
+    }
+  } catch (limitErr) {
+    console.error('Intake email rate check failed:', limitErr)
   }
 
   try {
@@ -62,10 +111,11 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+    if (!submission?.id) throw new Error('Insert returned no id')
 
     // The submission is saved at this point. Email problems are logged and
     // reported back (emailed: false) instead of telling the visitor it failed.
-    const bookingUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/book?ref=${submission.id}`
+    const bookingUrl = `${SITE_URL}/book?ref=${encodeURIComponent(String(submission.id))}`
     let emailed = false
 
     try {
@@ -90,7 +140,7 @@ export async function POST(req: NextRequest) {
         html: getAdminEmailHtml({
           name: esc(name), email: esc(email), business: esc(business), type: esc(type),
           description: esc(description), budget: esc(budget), timeline: esc(timeline),
-          heard: esc(heard), priority: esc(priority), anything: esc(anything), submissionId: submission.id,
+          heard: esc(heard), priority: esc(priority), anything: esc(anything),
         }),
       })
       if (adminErr) throw adminErr
@@ -150,7 +200,7 @@ function getClientEmailHtml({ name, bookingUrl }: { name: string; bookingUrl: st
 }
 
 function getAdminEmailHtml({ name, email, business, type, description, budget, timeline, heard, priority, anything }: Record<string, string>) {
-  const adminUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/admin`
+  const adminUrl = `${SITE_URL}/admin`
   return `<!DOCTYPE html>
 <html>
 <head>

@@ -1,19 +1,27 @@
 'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import s from '@/app/home.module.css'
+import s from './site.module.css'
+import { inquiryHref, navLinks } from '@/content/site'
 
-const links = [
-  { href: '#work', label: 'Work' },
-  { href: '#services', label: 'Services' },
-  { href: '#pricing', label: 'Pricing' },
-  { href: '#about', label: 'About' },
-]
+function isCurrent(pathname: string, href: string) {
+  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`)
+}
 
 export default function SiteHeader() {
+  const pathname = usePathname() || '/'
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [lastPath, setLastPath] = useState(pathname)
   const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Close the mobile menu whenever the route changes.
+  if (pathname !== lastPath) {
+    setLastPath(pathname)
+    setOpen(false)
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -31,7 +39,7 @@ export default function SiteHeader() {
       }
     }
     const onResize = () => {
-      if (window.innerWidth > 900) setOpen(false)
+      if (window.innerWidth > 1000) setOpen(false)
     }
     document.addEventListener('keydown', onKey)
     window.addEventListener('resize', onResize)
@@ -41,33 +49,40 @@ export default function SiteHeader() {
     }
   }, [open])
 
+  const links = navLinks.map((l) => {
+    const current = isCurrent(pathname, l.href)
+    return { ...l, current }
+  })
+
   return (
     <header className={`${s.header} ${scrolled ? s.headerScrolled : ''}`}>
       <a className={s.skip} href="#main">
         Skip to content
       </a>
       <div className={s.headerInner}>
-        <a href="#top" className={s.logo} aria-label="Alante Velez, back to top">
+        <Link href="/" className={s.logo} aria-label="Alante Velez, home">
           <span className={s.logoMark} aria-hidden="true">
             AV
           </span>
           <span className={s.logoText}>Alante Velez</span>
-        </a>
+        </Link>
 
         <nav aria-label="Main" className={s.navDesktop}>
           <ul>
             {links.map((l) => (
               <li key={l.href}>
-                <a href={l.href}>{l.label}</a>
+                <Link href={l.href} aria-current={l.current ? 'page' : undefined} className={l.current ? s.navCurrent : undefined}>
+                  {l.label}
+                </Link>
               </li>
             ))}
           </ul>
         </nav>
 
         <div className={s.headerActions}>
-          <a href="#contact" className={`${s.btn} ${s.btnPrimary} ${s.btnSmall}`}>
+          <Link href={inquiryHref()} className={`${s.btn} ${s.btnPrimary} ${s.btnSmall}`} onClick={() => setOpen(false)}>
             Let’s Talk
-          </a>
+          </Link>
           <button
             ref={buttonRef}
             type="button"
@@ -85,24 +100,24 @@ export default function SiteHeader() {
         </div>
       </div>
 
-      <nav
-        id="mobile-menu"
-        aria-label="Main"
-        className={`${s.navMobile} ${open ? s.navMobileOpen : ''}`}
-        hidden={!open}
-      >
+      <nav id="mobile-menu" aria-label="Main" className={s.navMobile} hidden={!open}>
         <ul>
           {links.map((l) => (
             <li key={l.href}>
-              <a href={l.href} onClick={() => setOpen(false)}>
+              <Link
+                href={l.href}
+                aria-current={l.current ? 'page' : undefined}
+                className={l.current ? s.navCurrent : undefined}
+                onClick={() => setOpen(false)}
+              >
                 {l.label}
-              </a>
+              </Link>
             </li>
           ))}
           <li>
-            <a href="#contact" onClick={() => setOpen(false)} className={s.navMobileCta}>
+            <Link href={inquiryHref()} onClick={() => setOpen(false)} className={s.navMobileCta}>
               Let’s Talk
-            </a>
+            </Link>
           </li>
         </ul>
       </nav>
