@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/pricing-guide.mjs check",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "guide:pdf": "node scripts/pricing-guide.mjs generate",
+    "guide:stamp": "node scripts/pricing-guide.mjs stamp",
+    "guide:check": "node scripts/pricing-guide.mjs check"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

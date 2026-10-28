@@ -14,6 +14,9 @@ import 'server-only'
  *   NODE_ENV=development        (npm run dev)
  * Any other build, including production on hosts other than Vercel, hides them.
  *
+ * After editing this file, regenerate the pricing guide PDF (docs/OFFER_UPDATES.md).
+ * `npm run build` fails until the PDF matches.
+ *
  * Copy rule: no dashes of any kind in visitor facing text.
  */
 

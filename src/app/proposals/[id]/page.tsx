@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { proposalChangeOrderLine } from '@/lib/terms'
+import { proposalChangeOrderLine, proposalPaymentLines, usesCurrentTerms } from '@/lib/terms'
 
 type LineItem = { description: string; price: number }
 type Proposal = {
@@ -24,6 +24,7 @@ type Proposal = {
   status: string
   terms_version?: string | null
   hourly_rate?: number | null
+  payment_plan?: string | null
 }
 
 const STYLES = `
@@ -184,12 +185,24 @@ export default function ProposalPage() {
             <span>Total</span>
             <span className="total-amount">${proposal.total.toLocaleString()}</span>
           </div>
-          <div className="deposit-note">
-            Deposit ({proposal.deposit_pct}% due to begin): <strong>${deposit.toLocaleString()}</strong><br/>
-            Remaining balance paid across project milestones.<br/>
-            Exact milestone schedule outlined in the Statement of Work.<br/>
-            {proposalChangeOrderLine(proposal)}
-          </div>
+          {usesCurrentTerms(proposal) ? (
+            <div className="deposit-note">
+              {proposalPaymentLines(proposal, proposal.total).map((line) => (
+                <span key={line}>
+                  {line}
+                  <br />
+                </span>
+              ))}
+              {proposalChangeOrderLine(proposal)}
+            </div>
+          ) : (
+            <div className="deposit-note">
+              Deposit ({proposal.deposit_pct}% due to begin): <strong>${deposit.toLocaleString()}</strong><br/>
+              Remaining balance paid across project milestones.<br/>
+              Exact milestone schedule outlined in the Statement of Work.<br/>
+              {proposalChangeOrderLine(proposal)}
+            </div>
+          )}
         </div>
       )}
 

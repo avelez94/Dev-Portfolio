@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { contractRevisionsClausePdf, contractServicesClause } from '@/lib/terms'
+import { balanceLabel, contractPaymentClausePdf, contractRevisionsClausePdf, contractServicesClause, contractWarrantyClausePdf, depositLabel, usesCurrentTerms } from '@/lib/terms'
 import { Resend } from 'resend'
 import jsPDF from 'jspdf'
 
@@ -64,21 +64,26 @@ export async function POST(req: NextRequest) {
 
     addLine('PAYMENT', 10, true, true); addSpace(0.5)
     addLine('Total Fee: $' + Number(contract.total_fee).toLocaleString())
-    addLine('Deposit (due to begin): $' + Number(contract.deposit).toLocaleString())
-    addLine('Balance (paid across milestones): $' + Number(contract.balance).toLocaleString())
+    if (usesCurrentTerms(contract)) {
+      addLine(depositLabel(contract) + ': $' + Number(contract.deposit).toLocaleString())
+      addLine(balanceLabel(contract) + ': $' + Number(contract.balance).toLocaleString())
+    } else {
+      addLine('Deposit (due to begin): $' + Number(contract.deposit).toLocaleString())
+      addLine('Balance (paid across milestones): $' + Number(contract.balance).toLocaleString())
+    }
     addLine('Payment Method: ' + contract.payment_method)
     addLine('Kill Fee: ' + contract.kill_fee_pct + '% of total if cancelled after work begins')
     addSpace(); addDivider()
 
     const clauses = [
       ['1. SERVICES', contractServicesClause(contract)],
-      ['2. PAYMENT', 'Total fee: $' + Number(contract.total_fee).toLocaleString() + '. Deposit of $' + Number(contract.deposit).toLocaleString() + ' is due before work begins. Remaining balance of $' + Number(contract.balance).toLocaleString() + ' is paid across project milestones. Late payments accrue 1.5% interest per month after 14 days.'],
+      ['2. PAYMENT', contractPaymentClausePdf(contract)],
       ['3. KILL FEE', 'If Client cancels after work has begun, a kill fee of ' + contract.kill_fee_pct + '% of the total project fee ($' + Math.round(contract.total_fee * contract.kill_fee_pct / 100).toLocaleString() + ') is due immediately, in addition to payment for all work completed to date.'],
       ['4. INTELLECTUAL PROPERTY', 'Full ownership of all deliverables transfers to Client upon receipt of final payment. Until then, all work remains the property of Alante Velez. Alante Velez retains the right to display completed work in portfolio.'],
       ['5. REVISIONS', contractRevisionsClausePdf(contract)],
       ['6. CLIENT RESPONSIBILITIES', 'Client agrees to provide all required content, assets, and feedback in a timely manner. Delays caused by Client may result in timeline adjustments.'],
       ['7. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
-      ['8. WARRANTIES', 'Work will be original, free of known defects for 30 days following final delivery.'],
+      ['8. WARRANTIES', contractWarrantyClausePdf(contract)],
       ['9. LIMITATION OF LIABILITY', 'Alante Velez liability is limited to the total amount paid by Client.'],
       ['10. DISPUTE RESOLUTION', 'Disputes will be resolved through informal negotiation first, then binding arbitration in the State of Maryland.'],
       ['11. GOVERNING LAW', 'This agreement is governed by the laws of the State of Maryland.'],

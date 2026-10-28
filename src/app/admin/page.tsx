@@ -2,9 +2,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import jsPDF from 'jspdf'
-import { STANDARD_HOURLY_RATE, TERMS_VERSION, additionalWorkSentence, contractRevisionsClausePdf, contractServicesClause, formatRate } from '@/lib/terms'
+import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, additionalWorkSentence, contractPaymentClausePdf, contractRevisionsClausePdf, contractServicesClause, contractWarrantyClausePdf, formatRate, proposalPaymentLines, type PaymentPlan } from '@/lib/terms'
 
 const CURRENT_TERMS = { terms_version: TERMS_VERSION, hourly_rate: STANDARD_HOURLY_RATE }
+const currentTerms = (plan: string) => ({ ...CURRENT_TERMS, payment_plan: plan })
+const contractTermsDoc = (f: { total_fee: string; deposit: string; balance: string; payment_method: string; payment_plan: string }) => {
+  const total = parseFloat(f.total_fee) || 0
+  const standard = f.payment_plan !== 'milestones'
+  const deposit = standard ? total * (STANDARD_DEPOSIT_PCT / 100) : parseFloat(f.deposit) || 0
+  return { ...currentTerms(standard ? 'standard' : 'milestones'), total_fee: total, deposit, balance: standard ? total - deposit : parseFloat(f.balance) || 0, payment_method: f.payment_method }
+}
+
+/** Reads a JSON error from the document APIs, including the migration block. */
+async function apiError(res: Response): Promise<string> {
+  const data = await res.json().catch(() => ({}))
+  return data?.message || data?.error || 'Something went wrong. Nothing was sent.'
+}
 
 type Submission = {
   id: string; name: string; email: string; business: string | null
@@ -82,7 +95,7 @@ type ProposalFormType = {
   out_of_scope: string; deposit_pct: string; timeline: string
   next_steps: string; message: string; start_date: string
   delivery_date: string; revisions: string; hourly_rate: string
-  payment_method: string
+  payment_method: string; payment_plan: string
 }
 
 export default function AdminDashboard() {
@@ -150,14 +163,14 @@ export default function AdminDashboard() {
     client_name:string; client_email:string; client_business:string
     project_title:string; project_type:string
     start_date:string; delivery_date:string; total_fee:string
-    deposit:string; balance:string; kill_fee_pct:string; payment_method:string
+    deposit:string; balance:string; kill_fee_pct:string; payment_method:string; payment_plan:string
     invoice_number:string; invoice_service_desc:string; invoice_due_date:string
   }>({
     client_name:'', client_email:'', client_business:'',
     project_title:'', project_type:'Landing Page',
     start_date:'', delivery_date:'', total_fee:'',
     deposit:'', balance:'', kill_fee_pct:'25',
-    payment_method:'Stripe, PayPal, Zelle, or Wise',
+    payment_method:'Stripe, PayPal, Zelle, or Wise', payment_plan:'standard',
     invoice_number:'', invoice_service_desc:'', invoice_due_date:'',
   })
   const [sowForm, setSowForm] = useState({
@@ -173,6 +186,7 @@ export default function AdminDashboard() {
         const parsed = JSON.parse(saved)
         // Drafts saved under the old $65 default pick up the standard rate.
         if (parsed && parsed.hourly_rate === '65') parsed.hourly_rate = String(STANDARD_HOURLY_RATE)
+        if (parsed && parsed.payment_plan !== 'standard' && parsed.payment_plan !== 'milestones') parsed.payment_plan = 'standard'
         return parsed
       }
     } catch {}
@@ -185,6 +199,7 @@ export default function AdminDashboard() {
       message: '', start_date: '', delivery_date: '',
       revisions: '2', hourly_rate: String(STANDARD_HOURLY_RATE),
       payment_method: 'Stripe, PayPal, Zelle, or Wise',
+      payment_plan: 'standard',
     }
   }
   const getSavedLineItems = (): LineItemType[] => {
@@ -227,6 +242,7 @@ export default function AdminDashboard() {
   const [sowSent, setSOWSent] = useState(false)
   const [sendingContract, setSendingContract] = useState(false)
   const [contractSent, setContractSent] = useState(false)
+  const [docError, setDocError] = useState<{ kind: 'proposal' | 'sow' | 'contract'; message: string } | null>(null)
 
   const clockRef = useRef<ReturnType<typeof setInterval>|null>(null)
 
@@ -687,7 +703,6 @@ export default function AdminDashboard() {
     const f = proposalForm
     const validItems = lineItems.filter(i => i.description && i.price)
     const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
-    const deposit = total * (parseFloat(f.deposit_pct) / 100)
     const itemsText = validItems.length > 0
       ? validItems.map(i => i.description + '  —  $' + parseFloat(i.price).toLocaleString()).join('\n') + '\n\nTotal: $' + total.toLocaleString()
       : 'No line items added yet.'
@@ -698,7 +713,7 @@ export default function AdminDashboard() {
         { label: 'Project', value: f.project_title + ' (' + f.project_type + ')' },
         { label: 'What I understood', value: f.understood || 'See attached notes.' },
         { label: 'Investment breakdown', value: itemsText },
-        { label: 'Deposit required', value: f.deposit_pct + '% ($' + deposit.toLocaleString() + ') upfront to begin' },
+        { label: 'Payment schedule', value: proposalPaymentLines({ ...currentTerms(f.payment_plan), deposit_pct: f.payment_plan === 'standard' ? STANDARD_DEPOSIT_PCT : parseFloat(f.deposit_pct) }, total).join('\n') },
         ...(f.out_of_scope ? [{ label: 'What is not included', value: f.out_of_scope }] : []),
         { label: 'Timeline', value: f.timeline || 'To be confirmed in SOW.' },
         { label: 'Next steps', value: f.next_steps },
@@ -734,11 +749,11 @@ export default function AdminDashboard() {
         { label: 'Project', value: f.project_title + ' (' + f.project_type + ')' },
         { label: 'Dates', value: 'Start: ' + (f.start_date || 'TBD') + '  |  Delivery: ' + (f.delivery_date || 'TBD') },
         { label: 'Total fee', value: f.total_fee ? '$' + f.total_fee : 'TBD' },
-        { label: 'Deposit', value: f.deposit ? '$' + f.deposit : 'TBD' },
-        { label: 'Balance', value: f.balance ? '$' + f.balance : 'TBD' },
+        { label: 'Payment', value: contractPaymentClausePdf(contractTermsDoc(f)) },
         { label: 'Kill fee', value: f.kill_fee_pct + '% of total fee if cancelled after work begins' },
         { label: 'Payment method', value: f.payment_method },
         { label: 'Revisions', value: '2 rounds included. ' + additionalWorkSentence() },
+        { label: 'Defects after launch', value: contractWarrantyClausePdf(CURRENT_TERMS) },
         { label: 'Governing law', value: 'State of Maryland' },
       ]
     }
@@ -771,7 +786,6 @@ export default function AdminDashboard() {
     const f = proposalForm
     const validItems = lineItems.filter(i => i.description && i.price)
     const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
-    const deposit = total * (parseFloat(f.deposit_pct) / 100)
     const { addLine, addSpace, addDivider, save } = makePDF()
     addLine('PROJECT PROPOSAL', 16, true, true)
     addLine('Alante Velez  |  Full Stack Web Developer', 10)
@@ -796,15 +810,14 @@ export default function AdminDashboard() {
     addSpace(0.5)
     addLine('TOTAL: $' + total.toLocaleString(), 12, true)
     addSpace(0.5)
-    addLine('Deposit (' + f.deposit_pct + '% due to begin): $' + deposit.toLocaleString())
-    addLine('Remaining balance paid across project milestones.')
+    proposalPaymentLines({ ...currentTerms(f.payment_plan), deposit_pct: f.payment_plan === 'standard' ? STANDARD_DEPOSIT_PCT : parseFloat(f.deposit_pct) }, total).forEach((l) => addLine(l))
     addLine('Change orders and additional revisions: ' + additionalWorkSentence(parseFloat(f.hourly_rate) || STANDARD_HOURLY_RATE))
     addSpace(); addDivider()
     if (f.out_of_scope) {
       addLine('WHAT IS NOT INCLUDED', 10, true, true); addSpace(0.5)
       addLine(f.out_of_scope); addSpace(); addDivider()
     }
-    const validMilestones = proposalMilestones.filter(m => m.deliverables && m.fee)
+    const validMilestones = f.payment_plan === 'milestones' ? proposalMilestones.filter(m => m.deliverables && m.fee) : []
     if (validMilestones.length > 0) {
       addLine('MILESTONE SCHEDULE', 10, true, true); addSpace(0.5)
       validMilestones.forEach((m, i) => {
@@ -833,19 +846,28 @@ export default function AdminDashboard() {
   async function sendProposalEmail() {
     const f = proposalForm
     if (!f.client_email || !f.client_name) return
+    setDocError(null)
+    const plan = (f.payment_plan === 'milestones' ? 'milestones' : 'standard') as PaymentPlan
     const validItems = lineItems.filter(i => i.description && i.price)
     const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
-    const deposit = total * (parseFloat(f.deposit_pct) / 100)
+    const depositPct = plan === 'standard' ? STANDARD_DEPOSIT_PCT : parseFloat(f.deposit_pct)
+    const deposit = total * (depositPct / 100)
     const balance = total - deposit
-    const validMilestones = proposalMilestones.filter(m => m.deliverables && m.fee)
-    const milestoneTotal = validMilestones.reduce((s, m) => s + (parseFloat(m.fee) || 0), 0)
-    if (validMilestones.length > 0 && balance > 0 && Math.round(milestoneTotal) !== Math.round(balance)) {
-      alert(`Milestone total ($${milestoneTotal.toLocaleString()}) must equal the balance after deposit ($${balance.toLocaleString()}).`)
-      return
+    const validMilestones = plan === 'milestones' ? proposalMilestones.filter(m => m.deliverables && m.fee) : []
+    if (plan === 'milestones') {
+      const milestoneTotal = validMilestones.reduce((s, m) => s + (parseFloat(m.fee) || 0), 0)
+      if (validMilestones.length === 0) {
+        setDocError({ kind: 'proposal', message: 'A milestone payment schedule needs at least one milestone with deliverables and a fee.' })
+        return
+      }
+      if (balance > 0 && Math.round(milestoneTotal) !== Math.round(balance)) {
+        setDocError({ kind: 'proposal', message: `Milestone total ($${milestoneTotal.toLocaleString()}) must equal the balance after deposit ($${balance.toLocaleString()}).` })
+        return
+      }
     }
     setSendingProposal(true)
     try {
-      await fetch('/api/proposals', {
+      const res = await fetch('/api/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -859,7 +881,8 @@ export default function AdminDashboard() {
           milestones: validMilestones,
           total,
           outOfScope: f.out_of_scope,
-          depositPct: f.deposit_pct,
+          depositPct: String(depositPct),
+          paymentPlan: plan,
           timeline: f.timeline,
           startDate: f.start_date,
           deliveryDate: f.delivery_date,
@@ -870,9 +893,16 @@ export default function AdminDashboard() {
           cc: MY_EMAIL,
         })
       })
-      setProposalSent(true)
-      setTimeout(() => setProposalSent(false), 3000)
-    } catch(e) { console.error(e) }
+      if (!res.ok) {
+        setDocError({ kind: 'proposal', message: await apiError(res) })
+      } else {
+        setProposalSent(true)
+        setTimeout(() => setProposalSent(false), 3000)
+      }
+    } catch(e) {
+      console.error(e)
+      setDocError({ kind: 'proposal', message: 'Could not reach the server. Nothing was sent.' })
+    }
     setSendingProposal(false)
   }
 
@@ -910,13 +940,18 @@ export default function AdminDashboard() {
           revisions: f.revisions,
           hourlyRate: parseFloat(f.hourly_rate),
           paymentMethod: f.payment_method,
+          paymentPlan: 'milestones',
         })
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setSOWSent(true)
-      setTimeout(() => setSOWSent(false), 3000)
-    } catch(e) { console.error(e) }
+      if (!res.ok) {
+        const message = await apiError(res)
+        setDocError({ kind: 'sow', message })
+        alert(message)
+      } else {
+        setSOWSent(true)
+        setTimeout(() => setSOWSent(false), 3000)
+      }
+    } catch(e) { console.error(e); setDocError({ kind: 'sow', message: 'Could not reach the server. Nothing was sent.' }) }
     setSendingSOW(false)
   }
 
@@ -942,8 +977,8 @@ export default function AdminDashboard() {
     addLine(f.out_of_scope || 'Anything not listed above.'); addSpace(); addDivider()
     addLine('PAYMENT', 10, true, true); addSpace(0.5)
     addLine('Total Project Fee: $' + f.total_fee)
-    addLine('Deposit (50% due upfront): $' + f.deposit)
-    addLine('Final Payment (50% on delivery): $' + f.balance)
+    addLine('Deposit (due to begin): $' + f.deposit)
+    addLine('Remaining balance (paid across the milestones in this Statement of Work): $' + f.balance)
     addLine('Hourly Rate (change orders): $' + f.hourly_rate + '/hr')
     addLine('Payment Method: ' + f.payment_method)
     addLine('Invoice Terms: Due within 7 days')
@@ -1014,6 +1049,11 @@ export default function AdminDashboard() {
       alert('Please fill in the invoice number before sending.')
       return
     }
+    setDocError(null)
+    const plan = (f.payment_plan === 'milestones' ? 'milestones' : 'standard') as PaymentPlan
+    const totalFee = parseFloat(f.total_fee) || 0
+    const deposit = plan === 'standard' ? totalFee * (STANDARD_DEPOSIT_PCT / 100) : parseFloat(f.deposit) || 0
+    const balance = plan === 'standard' ? totalFee - deposit : parseFloat(f.balance) || 0
     setSendingContract(true)
     try {
       const res = await fetch('/api/contracts', {
@@ -1027,9 +1067,10 @@ export default function AdminDashboard() {
           projectType: f.project_type,
           startDate: f.start_date,
           deliveryDate: f.delivery_date,
-          totalFee: parseFloat(f.total_fee) || 0,
-          deposit: parseFloat(f.deposit) || 0,
-          balance: parseFloat(f.balance) || 0,
+          totalFee,
+          deposit,
+          balance,
+          paymentPlan: plan,
           killFeePct: parseFloat(f.kill_fee_pct) || 25,
           paymentMethod: f.payment_method,
           lineItems: [],
@@ -1038,11 +1079,16 @@ export default function AdminDashboard() {
           invoiceDueDate: f.invoice_due_date,
         })
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setContractSent(true)
-      setTimeout(() => setContractSent(false), 3000)
-    } catch(e) { console.error(e) }
+      if (!res.ok) {
+        setDocError({ kind: 'contract', message: await apiError(res) })
+      } else {
+        setContractSent(true)
+        setTimeout(() => setContractSent(false), 3000)
+      }
+    } catch(e) {
+      console.error(e)
+      setDocError({ kind: 'contract', message: 'Could not reach the server. Nothing was sent.' })
+    }
     setSendingContract(false)
   }
 
@@ -1066,12 +1112,12 @@ export default function AdminDashboard() {
     addSpace(); addDivider()
     const clauses: [string,string][] = [
       ['1. SERVICES', contractServicesClause(CURRENT_TERMS)],
-      ['2. PAYMENT', 'Total Fee: $' + f.total_fee + '  Deposit: $' + f.deposit + '  Balance: $' + f.balance + '  Payment Method: ' + f.payment_method + '  Late payments accrue 1.5% interest per month after 14 days.'],
+      ['2. PAYMENT', contractPaymentClausePdf(contractTermsDoc(f))],
       ['3. KILL FEE', 'If Client cancels after work has begun, a kill fee of ' + f.kill_fee_pct + '% of the total fee is due immediately, plus payment for all work completed to date.'],
       ['4. INTELLECTUAL PROPERTY', 'Full ownership of all deliverables transfers to Client upon receipt of final payment. Freelancer retains the right to display work in portfolio.'],
       ['5. REVISIONS', contractRevisionsClausePdf(CURRENT_TERMS)],
       ['6. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
-      ['7. WARRANTIES', 'Freelancer warrants work will be original and free of known defects for 30 days post-delivery.'],
+      ['7. WARRANTIES', contractWarrantyClausePdf(CURRENT_TERMS)],
       ['8. LIMITATION OF LIABILITY', 'Freelancer liability is limited to the total amount paid under this agreement.'],
       ['9. GOVERNING LAW', 'This agreement is governed by the laws of the State of Maryland.'],
     ]
@@ -1764,7 +1810,8 @@ export default function AdminDashboard() {
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Payment and timeline</div>
                     <div className="form-grid">
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit (%)</div><input style={inputStyle} value={proposalForm.deposit_pct} onChange={e=>setProposalForm({...proposalForm,deposit_pct:e.target.value})}/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Payment schedule</div><select style={inputStyle} value={proposalForm.payment_plan} onChange={e=>setProposalForm({...proposalForm,payment_plan:e.target.value})}><option value="standard">Standard website: 50% upfront, 50% at delivery</option><option value="milestones">Custom project: deposit, then milestones in this proposal</option></select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit (%)</div><input style={inputStyle} disabled={proposalForm.payment_plan!=='milestones'} value={proposalForm.payment_plan==='milestones'?proposalForm.deposit_pct:String(STANDARD_DEPOSIT_PCT)} onChange={e=>setProposalForm({...proposalForm,deposit_pct:e.target.value})}/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Timeline estimate</div><input style={inputStyle} value={proposalForm.timeline} onChange={e=>setProposalForm({...proposalForm,timeline:e.target.value})} placeholder="4 to 6 weeks from deposit"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date (est.)</div><input style={inputStyle} type="date" value={proposalForm.start_date} onChange={e=>setProposalForm({...proposalForm,start_date:e.target.value})}/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Delivery date (est.)</div><input style={inputStyle} type="date" value={proposalForm.delivery_date} onChange={e=>setProposalForm({...proposalForm,delivery_date:e.target.value})}/></div>
@@ -1772,6 +1819,7 @@ export default function AdminDashboard() {
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Hourly rate ($)</div><input style={inputStyle} value={proposalForm.hourly_rate} onChange={e=>setProposalForm({...proposalForm,hourly_rate:e.target.value})}/></div>
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
+                    {proposalForm.payment_plan === 'milestones' ? (<>
                     <div className="section-mini-label" style={{color:d.text3}}>Milestone schedule</div>
                     <div style={{fontSize:10,color:d.text3,marginBottom:10}}>
                       Break the balance into milestones. Each has deliverables, a due date, and a fee.
@@ -1806,6 +1854,9 @@ export default function AdminDashboard() {
                       </div>
                     ))}
                     <button onClick={()=>setProposalMilestones([...proposalMilestones,{name:'Milestone '+(proposalMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
+                    </>) : (
+                    <div style={{fontSize:11,color:d.text3,marginBottom:10}}>Standard website project: 50% upfront to reserve the project and begin work, remaining 50% due at delivery, before public launch or final handoff. Switch to milestones for larger custom projects.</div>
+                    )}
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Next steps</div>
                     <div className="form-group" style={{marginBottom:12}}>
@@ -1818,6 +1869,11 @@ export default function AdminDashboard() {
                       <div className="form-label" style={{color:d.text3}}>Your message to the client</div>
                       <textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:100}} value={proposalForm.message} onChange={e=>setProposalForm({...proposalForm,message:e.target.value})} placeholder={'Hi ' + (proposalForm.client_name.split(' ')[0] || 'there') + ',\n\nGreat speaking with you today. Please find your proposal attached...'}/>
                     </div>
+                    {docError?.kind === 'proposal' && (
+                      <div role="alert" style={{background:'#FDECEA',color:'#8A2A1B',border:'1px solid #E8B4AA',borderRadius:8,padding:'10px 14px',fontSize:12,marginBottom:12,lineHeight:1.5}}>
+                        {docError.message}
+                      </div>
+                    )}
                     {proposalSent && (
                       <div style={{background:d.green,color:d.greenText,borderRadius:8,padding:'10px 14px',fontSize:12,marginBottom:12,textAlign:'center'}}>
                         Proposal sent to {proposalForm.client_email}
@@ -1890,6 +1946,7 @@ export default function AdminDashboard() {
                               total_fee: String(p.total),
                               deposit: String(deposit),
                               balance: String(p.total - deposit),
+                              payment_plan: (p as { payment_plan?: string | null }).payment_plan === 'standard' ? 'standard' : (p as { payment_plan?: string | null }).payment_plan === 'milestones' ? 'milestones' : contractForm.payment_plan,
                               invoice_number: invNum,
                               invoice_service_desc: p.project_title + ' — Deposit to begin',
                               invoice_due_date: sevenDays,
@@ -1918,8 +1975,9 @@ export default function AdminDashboard() {
                     <div className="section-mini-label" style={{color:d.text3}}>Payment</div>
                     <div className="form-grid-3">
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total fee ($)</div><input style={inputStyle} type="number" value={contractForm.total_fee} onChange={e=>setContractForm({...contractForm,total_fee:e.target.value})} placeholder="0"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit ($)</div><input style={inputStyle} type="number" value={contractForm.deposit} onChange={e=>setContractForm({...contractForm,deposit:e.target.value})} placeholder="0"/></div>
-                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Balance ($)</div><input style={inputStyle} type="number" value={contractForm.balance} onChange={e=>setContractForm({...contractForm,balance:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Payment schedule</div><select style={inputStyle} value={contractForm.payment_plan} onChange={e=>setContractForm({...contractForm,payment_plan:e.target.value})}><option value="standard">Standard website: 50% upfront, 50% at delivery</option><option value="milestones">Custom project: milestones defined in the proposal</option></select></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit ($)</div><input style={inputStyle} type="number" disabled={contractForm.payment_plan!=='milestones'} value={contractForm.payment_plan==='milestones'?contractForm.deposit:String(contractTermsDoc(contractForm).deposit)} onChange={e=>setContractForm({...contractForm,deposit:e.target.value})} placeholder="0"/></div>
+                      <div className="form-group"><div className="form-label" style={{color:d.text3}}>Balance ($)</div><input style={inputStyle} type="number" disabled={contractForm.payment_plan!=='milestones'} value={contractForm.payment_plan==='milestones'?contractForm.balance:String(contractTermsDoc(contractForm).balance)} onChange={e=>setContractForm({...contractForm,balance:e.target.value})} placeholder="0"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Kill fee (%)</div><input style={inputStyle} value={contractForm.kill_fee_pct} onChange={e=>setContractForm({...contractForm,kill_fee_pct:e.target.value})}/></div>
                       <div className="form-group" style={{gridColumn:'2/-1'}}><div className="form-label" style={{color:d.text3}}>Payment method</div><input style={inputStyle} value={contractForm.payment_method} onChange={e=>setContractForm({...contractForm,payment_method:e.target.value})}/></div>
                     </div>
@@ -1935,15 +1993,20 @@ export default function AdminDashboard() {
                     <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>
                     <div style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,fontSize:11,color:d.text2,lineHeight:1.8}}>
                       <div style={{marginBottom:6}}>1. Services — Scope and change order rate ({formatRate(STANDARD_HOURLY_RATE)}, one hour minimum, estimate approved first)</div>
-                      <div style={{marginBottom:6}}>2. Payment — Total, deposit, balance, late payment interest (1.5%/month)</div>
+                      <div style={{marginBottom:6}}>2. Payment — {contractForm.payment_plan === 'milestones' ? 'Deposit, then milestones defined in the proposal' : '50% upfront, 50% at delivery before launch or handoff'}, late payment interest (1.5%/month)</div>
                       <div style={{marginBottom:6}}>3. Kill fee — {contractForm.kill_fee_pct}% of total if cancelled after work begins</div>
                       <div style={{marginBottom:6}}>4. Intellectual property — Full ownership transfers on final payment</div>
                       <div style={{marginBottom:6}}>5. Revisions — 2 rounds included, additional at {formatRate(STANDARD_HOURLY_RATE)} with an approved estimate</div>
                       <div style={{marginBottom:6}}>6. Confidentiality — Both parties keep proprietary info confidential</div>
-                      <div style={{marginBottom:6}}>7. Warranties — Work is original, defect-free for 30 days post-delivery</div>
+                      <div style={{marginBottom:6}}>7. Warranties — Original work; defects reported within 30 days of launch are fixed without using care time</div>
                       <div style={{marginBottom:6}}>8. Limitation of liability — Capped at total amount paid</div>
                       <div>9. Governing law — State of Maryland</div>
                     </div>
+                    {docError?.kind === 'contract' && (
+                      <div role="alert" style={{background:'#FDECEA',color:'#8A2A1B',border:'1px solid #E8B4AA',borderRadius:8,padding:'10px 14px',fontSize:12,marginTop:12,lineHeight:1.5}}>
+                        {docError.message}
+                      </div>
+                    )}
                     {contractSent && (
                       <div style={{background:d.green,color:d.greenText,borderRadius:8,padding:'10px 14px',fontSize:12,marginTop:12,textAlign:'center'}}>
                         Contract sent to {contractForm.client_email} for signature

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
-import { insertWithOptionalColumns } from '@/lib/insert-compat'
-import { STANDARD_HOURLY_RATE, TERMS_VERSION } from '@/lib/terms'
+import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, balanceLabel, depositLabel, parsePaymentPlan } from '@/lib/terms'
+import { MigrationRequiredError, assertTermsSchema, migrationResponse, throwIfMissingColumn } from '@/lib/terms-schema'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -13,10 +13,23 @@ export async function POST(req: NextRequest) {
       clientName, clientEmail, clientBusiness,
       projectTitle, projectType, startDate, deliveryDate,
       totalFee, deposit, balance, killFeePct, paymentMethod, lineItems,
-      invoiceNumber, invoiceServiceDesc, invoiceDueDate,
+      invoiceNumber, invoiceServiceDesc, invoiceDueDate, paymentPlan,
     } = body
 
-    const { data: contract, error } = await insertWithOptionalColumns<{ id: string }>('contracts', {
+    const plan = parsePaymentPlan(paymentPlan)
+    if (!plan) {
+      return NextResponse.json({ error: 'INVALID', message: 'Choose a payment schedule: standard (50/50) or milestones.' }, { status: 400 })
+    }
+    if (plan === 'standard') {
+      const expected = (Number(totalFee) || 0) * (STANDARD_DEPOSIT_PCT / 100)
+      if (Math.abs((Number(deposit) || 0) - expected) > 1 || Math.abs((Number(balance) || 0) - ((Number(totalFee) || 0) - expected)) > 1) {
+        return NextResponse.json({ error: 'INVALID', message: 'Standard website projects use a 50% deposit and a 50% balance at delivery. Check the deposit and balance.' }, { status: 400 })
+      }
+    }
+
+    await assertTermsSchema(['proposals', 'sows', 'contracts'])
+
+    const { data: contract, error } = await supabaseAdmin.from('contracts').insert({
       client_name: clientName,
       client_email: clientEmail,
       client_business: clientBusiness || null,
@@ -36,8 +49,10 @@ export async function POST(req: NextRequest) {
       signature_image: null,
       terms_version: TERMS_VERSION,
       hourly_rate: STANDARD_HOURLY_RATE,
-    }, ['terms_version', 'hourly_rate'])
+      payment_plan: plan,
+    }).select().single()
 
+    throwIfMissingColumn(error, 'contracts')
     if (error || !contract) throw error
 
     // Store invoice data in a separate record so it's ready when they sign
@@ -100,9 +115,9 @@ export async function POST(req: NextRequest) {
     <div class="detail-value">${projectTitle}</div>
     <div class="detail-label">Total fee</div>
     <div class="detail-value">$${Number(totalFee).toLocaleString()}</div>
-    <div class="detail-label">Deposit due to begin</div>
+    <div class="detail-label">${depositLabel(contract)}</div>
     <div class="detail-value">$${Number(deposit).toLocaleString()}</div>
-    <div class="detail-label">Balance paid across milestones</div>
+    <div class="detail-label">${balanceLabel(contract)}</div>
     <div class="detail-value">$${Number(balance).toLocaleString()}</div>
   </div>
   <div class="cta-wrap">
@@ -119,6 +134,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, id: contract.id })
   } catch (err) {
+    if (err instanceof MigrationRequiredError) return migrationResponse(err)
     console.error('Create contract error:', err)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }

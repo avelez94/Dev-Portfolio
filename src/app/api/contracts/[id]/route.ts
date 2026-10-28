@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { balanceLabel, depositLabel, invoiceDepositLabel } from '@/lib/terms'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -96,8 +97,8 @@ ${invoice ? `<div class="label">Invoice</div><div class="value">${invoice.invoic
   <div class="label">Signed by</div><div class="value">${signerName}</div>
   <div class="label">Signed on</div><div class="value">${signedDate}</div>
   <div class="label">Total fee</div><div class="value">$${contract.total_fee.toLocaleString()}</div>
-  <div class="label">Deposit due to begin</div><div class="value">$${contract.deposit.toLocaleString()}</div>
-  <div class="label">Balance paid across milestones</div><div class="value">$${contract.balance.toLocaleString()}</div>
+  <div class="label">${depositLabel(contract)}</div><div class="value">$${contract.deposit.toLocaleString()}</div>
+  <div class="label">${balanceLabel(contract)}</div><div class="value">$${contract.balance.toLocaleString()}</div>
 </div>
 <p>Your deposit invoice has been sent separately. Once payment is received the project officially begins. Keep this email for your records.</p>
 <div class="footer">alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</div>
@@ -125,9 +126,9 @@ ${invoice ? `<div class="label">Invoice</div><div class="value">${invoice.invoic
   <div class="value">${invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : 'Within 7 days'}</div>
   <div class="label">Total project fee</div>
   <div class="value">$${Number(invoice.total_fee).toLocaleString()}</div>
-  <div class="label">Deposit due now (50%)</div>
+  <div class="label">${invoiceDepositLabel(contract)}</div>
   <div class="value highlight">$${Number(invoice.deposit_amount).toLocaleString()}</div>
-  <div class="label">Balance paid across milestones</div>
+  <div class="label">${balanceLabel(contract)}</div>
   <div class="value">$${(Number(invoice.total_fee) - Number(invoice.deposit_amount)).toLocaleString()}</div>
 </div>
 <div class="payment-label">Payment methods</div>

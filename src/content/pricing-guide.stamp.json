@@ -1,0 +1,11 @@
+{
+  "sourcesFingerprint": "277388973560f4cdf468a2fa6fb7bea10f39c6e0f9caa18362c9b2aca31c5eee",
+  "pdfSha256": "9ea61aa4995f615128059c3e01e3f404d7094304507152c0438173e905846271",
+  "generatedAt": "2026-10-28T22:52:08.796Z",
+  "sources": [
+    "src/content/offers.ts",
+    "src/content/guide.ts",
+    "src/app/pricing-guide/page.tsx",
+    "src/app/pricing-guide/guide.module.css"
+  ]
+}

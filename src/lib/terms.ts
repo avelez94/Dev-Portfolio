@@ -77,3 +77,94 @@ export function sowRevisionsText(doc: Versioned & { revisions?: string | number 
   }
   return `${rounds} rounds of revisions included. One revision round equals one consolidated list of feedback submitted at one time. Additional revisions are billed at ${formatRate(rateOf(doc))} with a one hour minimum, after you approve an estimate.`
 }
+
+/* ---- Payment schedule ------------------------------------------------ */
+
+/**
+ * standard   : standard website projects, 50% upfront and 50% at delivery.
+ * milestones : larger custom projects, schedule defined in the proposal.
+ * Documents without the current terms stamp render their original wording.
+ */
+export type PaymentPlan = 'standard' | 'milestones'
+export const STANDARD_DEPOSIT_PCT = 50
+
+type PaymentDoc = Versioned & { payment_plan?: string | null }
+
+export function parsePaymentPlan(v: unknown): PaymentPlan | null {
+  return v === 'standard' || v === 'milestones' ? v : null
+}
+
+function planOf(doc: PaymentDoc): PaymentPlan | 'legacy' {
+  if (!usesCurrentTerms(doc)) return 'legacy'
+  return doc?.payment_plan === 'standard' ? 'standard' : 'milestones'
+}
+
+const usd = (n: number) => `$${Number(n || 0).toLocaleString('en-US')}`
+
+export function depositLabel(doc: PaymentDoc): string {
+  return planOf(doc) === 'standard' ? 'Deposit due to begin (50%)' : 'Deposit due to begin'
+}
+
+export function invoiceDepositLabel(doc: PaymentDoc): string {
+  return planOf(doc) === 'milestones' ? 'Deposit due now' : 'Deposit due now (50%)'
+}
+
+export function balanceLabel(doc: PaymentDoc): string {
+  const plan = planOf(doc)
+  if (plan === 'standard') return 'Remaining 50% due at delivery, before launch or handoff'
+  if (plan === 'milestones') return 'Balance paid across the milestones in your proposal'
+  return 'Balance paid across milestones'
+}
+
+/** Lines under the proposal total. */
+export function proposalPaymentLines(doc: PaymentDoc & { deposit_pct?: number }, total: number): string[] {
+  const plan = planOf(doc)
+  const pct = Number(doc?.deposit_pct) || STANDARD_DEPOSIT_PCT
+  const deposit = (total * pct) / 100
+  if (plan === 'standard') {
+    return [
+      `Deposit (50% due upfront to reserve the project and begin work): ${usd(deposit)}`,
+      `Remaining 50% (${usd(total - deposit)}) is due at delivery, before public launch or final handoff.`,
+    ]
+  }
+  if (plan === 'milestones') {
+    return [`Deposit (${pct}% due to begin): ${usd(deposit)}`, 'Remaining balance is paid across the milestones defined in this proposal and its Statement of Work.']
+  }
+  return [`Deposit (${pct}% due to begin): ${usd(deposit)}`, 'Remaining balance paid across project milestones.', 'Exact milestone schedule outlined in the Statement of Work.']
+}
+
+type ContractMoney = PaymentDoc & { total_fee: number; deposit: number; balance: number; payment_method?: string }
+
+export function contractPaymentClausePage(c: ContractMoney): string {
+  const plan = planOf(c)
+  const tail = `Payment via ${c.payment_method}. Invoices are due within 7 days. Late payments accrue 1.5% interest per month after 14 days.`
+  if (plan === 'standard') {
+    return `Total fee: ${usd(c.total_fee)}. A deposit of ${usd(c.deposit)} (50%) is due before work begins and reserves the project. The remaining ${usd(c.balance)} (50%) is due at delivery, before public launch or final handoff. ${tail}`
+  }
+  if (plan === 'milestones') {
+    return `Total fee: ${usd(c.total_fee)}. Deposit of ${usd(c.deposit)} is due before work begins. The remaining balance of ${usd(c.balance)} is paid across the milestones defined in the accepted proposal and Statement of Work. ${tail}`
+  }
+  return `Total fee: ${usd(c.total_fee)}. Deposit of ${usd(c.deposit)} is due before work begins. Remaining balance of ${usd(c.balance)} is paid across project milestones as outlined in the Statement of Work. ${tail}`
+}
+
+export function contractPaymentClausePdf(c: ContractMoney): string {
+  const plan = planOf(c)
+  if (plan === 'legacy') {
+    return `Total fee: ${usd(c.total_fee)}. Deposit of ${usd(c.deposit)} is due before work begins. Remaining balance of ${usd(c.balance)} is paid across project milestones. Late payments accrue 1.5% interest per month after 14 days.`
+  }
+  return contractPaymentClausePage(c)
+}
+
+/* ---- Defects after launch ------------------------------------------- */
+
+export function contractWarrantyClausePage(doc: Versioned): string {
+  if (!usesCurrentTerms(doc)) {
+    return `Alante Velez warrants that all work will be original, will not infringe third-party rights, and will be free of known defects for 30 days following final delivery. Client is responsible for all content provided including text, images, and media.`
+  }
+  return `Alante Velez warrants that all work will be original and will not infringe third party rights. For 30 days from launch, Client may report defects in the delivered work, measured against the agreed scope, and Alante Velez will correct them. Correcting covered defects does not use paid care time. New requests, Client changes, and changes made by outside services are handled separately. Client is responsible for all content provided, including text, images, and media.`
+}
+
+export function contractWarrantyClausePdf(doc: Versioned): string {
+  if (!usesCurrentTerms(doc)) return 'Work will be original, free of known defects for 30 days following final delivery.'
+  return contractWarrantyClausePage(doc)
+}

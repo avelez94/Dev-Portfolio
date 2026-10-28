@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { proposalPaymentLines, usesCurrentTerms } from '@/lib/terms'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -142,8 +143,11 @@ function getProposalCopyHtml({ proposal }: any) {
     </tr>
   </table>
 
-  <div class="section-label">Deposit (${proposal.deposit_pct}%)</div>
-  <div class="value">$${(proposal.total * proposal.deposit_pct / 100).toLocaleString()} due at project start</div>
+  ${usesCurrentTerms(proposal)
+    ? `<div class="section-label">Payment schedule</div>
+  <div class="value">${proposalPaymentLines(proposal, Number(proposal.total)).join('<br>')}</div>`
+    : `<div class="section-label">Deposit (${proposal.deposit_pct}%)</div>
+  <div class="value">$${(proposal.total * proposal.deposit_pct / 100).toLocaleString()} due at project start</div>`}
 
   <div class="section-label">Timeline</div>
   <div class="value">${proposal.timeline}</div>

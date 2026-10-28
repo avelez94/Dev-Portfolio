@@ -17,7 +17,7 @@ import { guideFaqs, guideFit, providerCosts, providerExamples, quoteFactors } fr
 /**
  * Printable pricing guide. Source for public/Website_Pricing_Guide.pdf.
  * Regenerate the PDF after changing offers: open /pricing-guide and print to PDF
- * (Letter, no margins, background graphics on). Steps: scripts/build-pricing-guide.md.
+ * after any offer change: see docs/OFFER_UPDATES.md (npm run build fails until it is).
  */
 
 export const metadata: Metadata = {

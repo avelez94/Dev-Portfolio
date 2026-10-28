@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { insertWithOptionalColumns } from '@/lib/insert-compat'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { MigrationRequiredError, assertTermsSchema, migrationResponse, throwIfMissingColumn } from '@/lib/terms-schema'
 import { STANDARD_HOURLY_RATE, TERMS_VERSION } from '@/lib/terms'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -15,7 +16,9 @@ export async function POST(req: NextRequest) {
       startDate, deliveryDate, revisions, hourlyRate, paymentMethod,
     } = body
 
-    const { data: sow, error } = await insertWithOptionalColumns<{ id: string }>('sows', {
+    await assertTermsSchema(['proposals', 'sows', 'contracts'])
+
+    const { data: sow, error } = await supabaseAdmin.from('sows').insert({
       client_name: clientName,
       client_email: clientEmail,
       project_title: projectTitle,
@@ -35,8 +38,10 @@ export async function POST(req: NextRequest) {
       payment_method: paymentMethod || 'Stripe, PayPal, Zelle, or Wise',
       status: 'pending',
       terms_version: TERMS_VERSION,
-    }, ['terms_version'])
+      payment_plan: 'milestones',
+    }).select().single()
 
+    throwIfMissingColumn(error, 'sows')
     if (error || !sow) throw error
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
@@ -88,6 +93,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, id: sow.id })
   } catch (err) {
+    if (err instanceof MigrationRequiredError) return migrationResponse(err)
     console.error('Create SOW error:', err)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
