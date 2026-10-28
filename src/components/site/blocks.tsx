@@ -1,25 +1,26 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import s from './site.module.css'
-import { ArrowUpRight, Check, NotIncluded } from './Shapes'
-import { projects, type Project } from '@/content/site'
+import { ArrowUpRight, Check } from './Shapes'
+import { inquiryHref, projects, type Project } from '@/content/site'
 import {
   SHOW_DRAFTS,
   UPTIME_MONITORING_CONFIGURED,
   carePlans,
-  careExcludes,
-  careIncludes,
+  careBoundaries,
+  careUpdatesNote,
+  costs,
+  costsNote,
   formatUSD,
   isDraft,
   packages,
   shown,
+  updateExamples,
   type Faq,
-  type Offer,
 } from '@/content/offers'
-import { inquiryHref } from '@/content/site'
 
 /* ------------------------------------------------------------------ */
-/* Draft helpers                                                        */
+/* Draft helpers (only used for the few policies still awaiting review) */
 /* ------------------------------------------------------------------ */
 
 export function Draft({ children = 'Draft' }: { children?: React.ReactNode }) {
@@ -27,62 +28,14 @@ export function Draft({ children = 'Draft' }: { children?: React.ReactNode }) {
   return <span className={s.draft}>{children}</span>
 }
 
-/** Renders an offer value (with a Draft badge) or nothing at all. */
-export function OfferText({ offer }: { offer: Offer<string | null> }) {
-  const v = shown(offer)
-  if (v === null && !SHOW_DRAFTS) return null
-  return (
-    <>
-      {v ?? <span className={s.blank}>pending</span>}
-      {isDraft(offer) && <Draft />}
-    </>
-  )
-}
-
-export function DraftBanner({ children }: { children: React.ReactNode }) {
-  if (!SHOW_DRAFTS) return null
-  return (
-    <p className={s.draftBanner}>
-      <strong>Preview only.</strong> {children}
-    </p>
-  )
-}
-
-function Price({ price, suffix }: { price: Offer<number | null> | 'discuss'; suffix?: string }) {
-  if (price === 'discuss') {
-    return (
-      <p className={s.price}>
-        <span className={`${s.priceValue} ${s.priceQuote}`}>Let’s discuss your project</span>
-      </p>
-    )
-  }
-  const v = shown(price)
-  if (typeof v === 'number') {
-    return (
-      <p className={s.price}>
-        <span className={s.priceLabel}>Starting at</span>
-        <span className={s.priceValue}>
-          {formatUSD(v)}
-          {suffix && <span className={s.priceSuffix}>{suffix}</span>}
-          {isDraft(price) && <Draft>Price pending approval</Draft>}
-        </span>
-      </p>
-    )
-  }
-  if (SHOW_DRAFTS) {
-    return (
-      <p className={s.price}>
-        <span className={s.priceLabel}>Starting at</span>
-        <span className={`${s.priceValue} ${s.pricePending}`}>
-          $ TBD{suffix && <span className={s.priceSuffix}>{suffix}</span>}
-          <Draft>Price pending approval</Draft>
-        </span>
-      </p>
-    )
-  }
+function Price({ label, amount, suffix }: { label?: string; amount: number; suffix?: string }) {
   return (
     <p className={s.price}>
-      <span className={`${s.priceValue} ${s.priceQuote}`}>Pricing in your proposal</span>
+      {label && <span className={s.priceLabel}>{label}</span>}
+      <span className={s.priceValue}>
+        {formatUSD(amount)}
+        {suffix && <span className={s.priceSuffix}>{suffix}</span>}
+      </span>
     </p>
   )
 }
@@ -221,172 +174,121 @@ export function ProjectGrid() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Packages                                                             */
+/* Project categories                                                   */
 /* ------------------------------------------------------------------ */
 
 export function PackageCards() {
   return (
     <div className={s.packages}>
-      {packages.map((pk, i) => {
-        const specs = pk.specs.filter((sp) => shown(sp.value) !== null)
-        return (
-          <article key={pk.id} className={s.packageCard} data-tone={i} data-reveal aria-labelledby={`pkg-${pk.id}`}>
-            <h3 id={`pkg-${pk.id}`} className={s.packageName}>
-              {pk.name}
-            </h3>
-            <p className={s.packageFor}>{pk.forWho}</p>
-            <Price price={pk.price} />
-            {specs.length > 0 && (
-              <dl className={s.packageSpecs}>
-                {specs.map((sp) => (
-                  <div key={sp.label}>
-                    <dt>{sp.label}</dt>
-                    <dd>
-                      <OfferText offer={sp.value} />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            <ul className={s.checkList}>
-              {pk.includes.map((x) => (
-                <li key={x}>
-                  <Check />
-                  <span>{x}</span>
-                </li>
-              ))}
-            </ul>
-            <Link href={inquiryHref(pk.interest)} className={`${s.btn} ${i === 1 ? s.btnPrimary : s.btnGhost} ${s.btnBlock}`}>
-              Ask About {pk.name}
-            </Link>
-          </article>
-        )
-      })}
+      {packages.map((pk, i) => (
+        <article key={pk.id} className={s.packageCard} data-tone={i} data-reveal aria-labelledby={`pkg-${pk.id}`}>
+          <h3 id={`pkg-${pk.id}`} className={s.packageName}>
+            {pk.name}
+          </h3>
+          <p className={s.packageFor}>{pk.forWho}</p>
+          <Price label={pk.priceLabel} amount={pk.price} />
+          <p className={s.listLabel}>{pk.listLabel}</p>
+          <ul className={s.checkList}>
+            {pk.items.map((x) => (
+              <li key={x}>
+                <Check />
+                <span>{x}</span>
+              </li>
+            ))}
+          </ul>
+          <div className={s.packageNotes}>
+            {pk.notes.map((n) => (
+              <p key={n}>{n}</p>
+            ))}
+          </div>
+          <Link href={inquiryHref(pk.interest)} className={`${s.btn} ${i === 1 ? s.btnPrimary : s.btnGhost} ${s.btnBlock}`}>
+            {pk.cta}
+          </Link>
+        </article>
+      ))}
     </div>
   )
+}
+
+/** The three separate costs of a website. `compact` is the short version for the care page. */
+export function CostBreakdown({ compact = false }: { compact?: boolean }) {
+  return (
+    <ol className={`${s.costs} ${compact ? s.costsCompact : ''}`}>
+      {costs.map((c, i) => (
+        <li key={c.name} data-reveal style={{ '--i': i } as React.CSSProperties}>
+          <span className={s.costNum} aria-hidden="true">
+            {i + 1}
+          </span>
+          <span>
+            <strong className={s.costName}>{c.name}</strong>
+            {!compact && <span className={s.costBody}>{c.body}</span>}
+          </span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+export function CostsNote() {
+  return <p className={s.costsNote}>{costsNote}</p>
 }
 
 /* ------------------------------------------------------------------ */
 /* Care plans                                                           */
 /* ------------------------------------------------------------------ */
 
-/** True when visitors can actually see what makes the two plans different. */
-export function plansDiffer() {
-  return carePlans.some((p) => shown(p.timeAllowance) !== null || (p.priority && shown(p.priority) !== null) || shown(p.monthlyPrice) !== null)
-}
-
-function SharedIncludes() {
-  return (
-    <>
-      {careIncludes.map((x) => (
-        <li key={x}>
-          <Check />
-          <span>{x}</span>
-        </li>
-      ))}
-      {UPTIME_MONITORING_CONFIGURED && (
-        <li>
-          <Check />
-          <span>Uptime monitoring, so I hear about outages quickly</span>
-        </li>
-      )}
-    </>
-  )
-}
-
 export function CarePlanCards() {
-  if (!plansDiffer()) {
-    // Nothing that separates the plans is approved yet, so show one honest card.
-    return (
-      <div className={s.carePlans}>
-        <article className={`${s.carePlan} ${s.carePlanSingle}`} data-reveal aria-labelledby="care-single">
-          <h3 id="care-single" className={s.carePlanName}>
-            Monthly website care
-          </h3>
-          <p className={s.packageFor}>
-            Two levels, {carePlans.map((p) => p.name).join(' and ')}, depending on how often your site changes. Both include everything listed
-            under What’s covered below, and your proposal spells out the details and cost.
-          </p>
-          <div className={s.planButtons}>
-            {carePlans.map((p) => (
-              <Link key={p.id} href={inquiryHref(p.interest)} className={`${s.btn} ${s.btnGhost}`}>
-                Ask About {p.name}
-              </Link>
-            ))}
-          </div>
-        </article>
-      </div>
-    )
-  }
-
   return (
     <div className={s.carePlans}>
-      {carePlans.map((cp, i) => {
-        const time = shown(cp.timeAllowance)
-        const priority = cp.priority ? shown(cp.priority) : null
-        const response = shown(cp.responseTime)
-        return (
-          <article key={cp.id} className={s.carePlan} data-reveal aria-labelledby={`care-${cp.id}`}>
-            <h3 id={`care-${cp.id}`} className={s.carePlanName}>
-              {cp.name}
-            </h3>
-            <p className={s.packageFor}>{cp.forWho}</p>
-            <Price price={cp.monthlyPrice} suffix=" / month" />
-            <ul className={s.checkList}>
-              {time !== null && (
-                <li>
-                  <Check />
-                  <span>
-                    Up to {time} a month for content updates and fixes <Draft />
-                  </span>
-                </li>
-              )}
-              <SharedIncludes />
-              {priority !== null && (
-                <li>
-                  <Check />
-                  <span>
-                    {priority} <Draft />
-                  </span>
-                </li>
-              )}
-            </ul>
-            {(response !== null || SHOW_DRAFTS) && (
-              <p className={s.careResponse}>
-                Response time: <OfferText offer={cp.responseTime} />
-              </p>
+      {carePlans.map((cp, i) => (
+        <article key={cp.id} className={s.carePlan} data-tone={i} data-reveal aria-labelledby={`care-${cp.id}`}>
+          <h3 id={`care-${cp.id}`} className={s.carePlanName}>
+            {cp.name}
+          </h3>
+          <p className={s.packageFor}>{cp.forWho}</p>
+          <Price amount={cp.monthly} suffix=" / month" />
+          <ul className={s.checkList}>
+            {cp.items.map((x) => (
+              <li key={x}>
+                <Check />
+                <span>{x}</span>
+              </li>
+            ))}
+            {UPTIME_MONITORING_CONFIGURED && (
+              <li>
+                <Check />
+                <span>Uptime monitoring</span>
+              </li>
             )}
-            <Link href={inquiryHref(cp.interest)} className={`${s.btn} ${i === 1 ? s.btnPrimary : s.btnGhost} ${s.btnBlock}`}>
-              Ask About {cp.name}
-            </Link>
-          </article>
-        )
-      })}
+          </ul>
+          <Link href={inquiryHref(cp.interest)} className={`${s.btn} ${i === 1 ? s.btnPrimary : s.btnGhost} ${s.btnBlock}`}>
+            {cp.cta}
+          </Link>
+        </article>
+      ))}
     </div>
   )
 }
 
-/** Side by side comparison. Only rows with something visible are rendered. */
+/** Side by side comparison of the three plans. */
 export function CareCompare() {
-  if (!plansDiffer()) return null
-  const rows: { label: string; cells: React.ReactNode[] }[] = []
-  const add = (label: string, cells: (React.ReactNode | null)[]) => {
-    if (cells.some((c) => c !== null)) rows.push({ label, cells: cells.map((c, i) => c ?? <span key={i} className={s.cellNone}>Not included</span>) })
-  }
-  add(
-    'Monthly time for updates and fixes',
-    carePlans.map((p) => (shown(p.timeAllowance) !== null ? <OfferText key={p.id} offer={p.timeAllowance} /> : null))
-  )
-  add('Form and booking link checks', carePlans.map(() => 'Included'))
-  add('Software updates and backups', carePlans.map(() => 'Where your platform needs them'))
-  add(
-    'Priority handling',
-    carePlans.map((p) => (p.priority && shown(p.priority) !== null ? <OfferText key={p.id} offer={p.priority} /> : null))
-  )
-  if (SHOW_DRAFTS || carePlans.some((p) => shown(p.responseTime) !== null)) {
-    rows.push({ label: 'Response time', cells: carePlans.map((p) => <OfferText key={p.id} offer={p.responseTime} />) })
-  }
-
+  const rows: { label: string; cells: React.ReactNode[] }[] = [
+    { label: 'Monthly price', cells: carePlans.map((p) => `${formatUSD(p.monthly)} / month`) },
+    { label: 'Monthly checks of agreed pages, forms, and booking links', cells: carePlans.map(() => 'Included') },
+    { label: 'Brief monthly status update', cells: carePlans.map(() => 'Included') },
+    {
+      label: 'Time for content updates or troubleshooting',
+      cells: carePlans.map((p) =>
+        p.minutes ? (
+          `Up to ${p.minutes} minutes a month`
+        ) : (
+          <span key={p.id} className={s.cellNone}>
+            Quoted separately
+          </span>
+        )
+      ),
+    },
+  ]
   return (
     <div className={s.compareWrap} data-reveal>
       <table className={s.compare}>
@@ -418,29 +320,28 @@ export function CareCompare() {
   )
 }
 
-export function CareScope() {
+export function CareTime() {
   return (
     <div className={s.scope}>
       <div className={s.scopeCol} data-reveal>
-        <h3 className={s.scopeTitle}>Every plan includes</h3>
+        <h3 className={s.scopeTitle}>What a content update looks like</h3>
         <ul className={s.checkList}>
-          <SharedIncludes />
-        </ul>
-      </div>
-      <div className={`${s.scopeCol} ${s.scopeNot}`} data-reveal>
-        <h3 className={s.scopeTitle}>Not part of care plans</h3>
-        <ul className={s.minusList}>
-          {careExcludes.map((x) => (
+          {updateExamples.map((x) => (
             <li key={x}>
-              <NotIncluded />
+              <Check />
               <span>{x}</span>
             </li>
           ))}
         </ul>
-        <p className={s.scopeNote}>
-          Those are quoted as their own projects. Care plans don’t include unlimited edits or around the clock support, and no one can promise a
-          site will never have a problem. What a care plan does mean is that you won’t be figuring it out alone.
-        </p>
+        <p className={s.scopeNote}>{careUpdatesNote}</p>
+      </div>
+      <div className={`${s.scopeCol} ${s.scopeNot}`} data-reveal>
+        <h3 className={s.scopeTitle}>Good to know</h3>
+        <ul className={s.dotList}>
+          {careBoundaries.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
       </div>
     </div>
   )

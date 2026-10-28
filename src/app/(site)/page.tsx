@@ -7,6 +7,7 @@ import InquiryFormFromUrl, { InquiryForm } from '@/components/site/InquiryForm'
 import { ProjectGrid } from '@/components/site/blocks'
 import { Blob, Ring, ServiceIcon, Sparkle, Squiggle, Wave } from '@/components/site/Shapes'
 import { CONTACT_EMAIL, services } from '@/content/site'
+import { carePlans, formatUSD, packages } from '@/content/offers'
 
 const title = 'Alante Velez | Website Design, Redesigns, and Care'
 const description =
@@ -106,6 +107,14 @@ export default function Home() {
             Whatever stage you’re at, <em>we can start there.</em>
           </h2>
           <p className={s.sectionLede}>From a first website to something fully custom, plus help keeping it running.</p>
+          <ul className={s.startingPoints}>
+            {packages.map((pk) => (
+              <li key={pk.id}>
+                <span>{pk.name}</span>
+                <strong>from {formatUSD(pk.price)}</strong>
+              </li>
+            ))}
+          </ul>
           <Link href="/services" className={`${s.btn} ${s.btnGhost}`}>
             See Services and Pricing
           </Link>
@@ -134,8 +143,9 @@ export default function Home() {
             Need a hand after launch?
           </h2>
           <p className={s.careLede}>
-            Monthly care plans cover small content updates, checks on your forms and booking links, and troubleshooting when something breaks.
-            Bigger changes are quoted separately, so you always know what you’re paying for.
+            Optional care plans start at {formatUSD(Math.min(...carePlans.map((c) => c.monthly)))} a month for scheduled checks and a monthly status
+            update, with plans that add time for updates and troubleshooting. Prefer to ask only when you need something? Occasional support works
+            too.
           </p>
         </div>
         <Link href="/care" className={`${s.btn} ${s.btnLight} ${s.btnLarge}`}>

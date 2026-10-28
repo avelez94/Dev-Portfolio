@@ -1,14 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import s from '@/components/site/site.module.css'
-import { CtaBand, DraftBanner, FaqList, PackageCards, PageHeader, SubNav } from '@/components/site/blocks'
+import { CostBreakdown, CostsNote, CtaBand, FaqList, PackageCards, PageHeader, SubNav } from '@/components/site/blocks'
 import { ServiceIcon } from '@/components/site/Shapes'
 import { inquiryHref, processSteps, services, youllNeed } from '@/content/site'
-import { projectFaqs } from '@/content/offers'
+import { projectFaqs, projectTerms } from '@/content/offers'
 
 const title = 'Services & Pricing'
 const description =
-  'New websites, redesigns, online stores, booking and payments, custom web applications, and maintenance. See packages, what’s included, and how a project works.'
+  'Business websites from $1,500, booking and payment sites from $2,500, and custom websites or applications from $5,000. See what’s included, how projects work, and what costs to expect.'
 
 export const metadata: Metadata = {
   title,
@@ -28,12 +28,13 @@ export default function ServicesPage() {
             Whatever stage you’re at, <em>we can start there.</em>
           </>
         }
-        lede="Brand new, long overdue for a refresh, or needing something custom. Here’s what I do, where packages start, and how we’d work together."
+        lede="Brand new, long overdue for a refresh, or needing something custom. Here’s what I help with, where projects start, and how we’d work together."
       >
         <SubNav
           items={[
             { href: '#services', label: 'Services' },
-            { href: '#packages', label: 'Packages' },
+            { href: '#pricing', label: 'Pricing' },
+            { href: '#costs', label: 'Costs' },
             { href: '#process', label: 'How it works' },
             { href: '#questions', label: 'Questions' },
           ]}
@@ -46,6 +47,7 @@ export default function ServicesPage() {
           <h2 id="services-title" className={s.sectionTitleSm}>
             Six ways I can help
           </h2>
+          <p className={s.sectionLede}>These are the needs I help with. Each one fits into one of the three project types below, depending on scope.</p>
         </div>
         <ul className={s.serviceGrid}>
           {services.map((sv, i) => (
@@ -72,24 +74,35 @@ export default function ServicesPage() {
         </ul>
       </section>
 
-      {/* ---------------- Packages ---------------- */}
-      <section id="packages" className={s.pricing} aria-labelledby="packages-title">
+      {/* ---------------- Pricing ---------------- */}
+      <section id="pricing" className={s.pricing} aria-labelledby="pricing-title">
         <div className={s.sectionHead} data-reveal>
-          <p className={s.eyebrow}>Packages</p>
-          <h2 id="packages-title" className={s.sectionTitle}>
-            Clear starting points, <em>no guesswork.</em>
+          <p className={s.eyebrow}>Pricing</p>
+          <h2 id="pricing-title" className={s.sectionTitle}>
+            Three ways to start, <em>no guesswork.</em>
           </h2>
           <p className={s.sectionLede}>
-            Every project gets a written proposal with the exact scope and price before any work begins. These packages show where things usually start.
+            Starting prices cover the baseline scope listed on each card. Your final price depends on your requirements and is confirmed in a written
+            proposal before any work begins.
           </p>
-          <DraftBanner>Prices, page limits, revision rounds, and writing help below are proposals awaiting approval. Production builds leave them out.</DraftBanner>
         </div>
         <PackageCards />
-        <div className={s.pricingNotes} data-reveal>
-          <p>
-            <strong>Good to know:</strong> extra pages, online stores, and integrations beyond a package are quoted separately. Third party
-            subscriptions like domains, hosting, booking tools, or email services are paid to those providers and may add monthly costs.
-          </p>
+      </section>
+
+      {/* ---------------- Costs ---------------- */}
+      <section id="costs" className={s.section} aria-labelledby="costs-title">
+        <div className={s.costsPanel} data-reveal>
+          <div>
+            <p className={s.eyebrow}>What you’ll pay for</p>
+            <h2 id="costs-title" className={s.sectionTitleSm}>
+              Three costs, kept separate
+            </h2>
+            <CostsNote />
+            <p className={s.costsNote}>
+              Ongoing care is optional. See <Link href="/care">Website Care</Link> for plans and occasional support.
+            </p>
+          </div>
+          <CostBreakdown />
         </div>
       </section>
 
@@ -112,6 +125,16 @@ export default function ServicesPage() {
             </li>
           ))}
         </ol>
+
+        <div className={s.termsGrid}>
+          {projectTerms.map((term, i) => (
+            <div key={term.title} className={s.termCard} data-reveal style={{ '--i': i } as React.CSSProperties}>
+              <h3 className={s.termTitle}>{term.title}</h3>
+              <p>{term.body}</p>
+            </div>
+          ))}
+        </div>
+
         <div className={s.needCard} data-reveal>
           <h3 className={s.needTitle}>What I’ll need from you</h3>
           <ul>
@@ -130,7 +153,7 @@ export default function ServicesPage() {
             Good questions <em>to ask.</em>
           </h2>
           <p className={s.sectionLede}>
-            Questions about care plans and maintenance live on the <Link href="/care">Website Care</Link> page.
+            Questions about care plans and occasional support are answered on the <Link href="/care">Website Care</Link> page.
           </p>
         </div>
         <FaqList faqs={projectFaqs} />

@@ -38,18 +38,20 @@ export const interestGroups = [
     ],
   },
   {
-    label: 'Packages',
+    label: 'Project types',
     options: [
-      { key: 'pkg-essentials', label: 'Website Essentials package' },
-      { key: 'pkg-business', label: 'Business Website package' },
-      { key: 'pkg-custom', label: 'Custom Build package' },
+      { key: 'pkg-business', label: 'Business Website' },
+      { key: 'pkg-booking', label: 'Booking & Payments' },
+      { key: 'pkg-custom', label: 'Custom Website or Application' },
     ],
   },
   {
     label: 'Care plans',
     options: [
-      { key: 'care-steady', label: 'Steady Care plan' },
-      { key: 'care-active', label: 'Active Care plan' },
+      { key: 'care-essential', label: 'Essential Care plan' },
+      { key: 'care-business', label: 'Business Care plan' },
+      { key: 'care-premium', label: 'Premium Care plan' },
+      { key: 'support', label: 'Occasional support' },
     ],
   },
 ] as const
@@ -179,7 +181,7 @@ export const services: Service[] = [
     id: 'redesign',
     name: 'Website Redesigns',
     short: 'Keep what works, rebuild the rest.',
-    body: 'Outdated, hard to update, or just not you anymore? I keep what’s working and rebuild the rest.',
+    body: 'Outdated, hard to update, or just not you anymore? I keep what’s working and rebuild the rest. A redesign can fit any project type, depending on scope.',
   },
   {
     id: 'store',
@@ -214,7 +216,7 @@ export const services: Service[] = [
 export const processSteps = [
   { name: 'Let’s Chat', body: 'Tell me about your business and what isn’t working. We hop on a short call to see if we’re a good fit.' },
   { name: 'Plan and Design', body: 'We agree on the pages, the content, and the feel. You see the design direction before I build anything.' },
-  { name: 'Build and Review', body: 'I build it, you click around, and we refine it together in the review rounds set in your proposal.' },
+  { name: 'Build and Review', body: 'I build it, you click around, and we refine it together through two consolidated revision rounds.' },
   { name: 'Launch and Ongoing Care', body: 'We go live together. If you’d like me to keep looking after it, a care plan picks up from there.' },
 ]
 

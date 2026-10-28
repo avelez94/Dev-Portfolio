@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import s from '@/components/site/site.module.css'
-import { CareCompare, CarePlanCards, plansDiffer, CareScope, CtaBand, DraftBanner, FaqList, PageHeader, SubNav } from '@/components/site/blocks'
+import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, PageHeader, SubNav } from '@/components/site/blocks'
 import { inquiryHref } from '@/content/site'
-import { careBenefits, careFaqs } from '@/content/offers'
+import { careBenefits, occasionalSupport } from '@/content/offers'
 
 const title = 'Website Care'
 const description =
-  'Monthly website care plans for content updates, form and booking link checks, troubleshooting, and software updates. See what’s included and what isn’t.'
+  'Optional monthly care plans from $59 a month: scheduled checks, a monthly status update, and time for content updates or troubleshooting. Occasional support is also available.'
 
 export const metadata: Metadata = {
   title,
@@ -24,13 +24,13 @@ export default function CarePage() {
         tone="teal"
         eyebrow="Website care"
         title="Launch day isn’t goodbye."
-        lede="If you’d like me to keep looking after your site, a care plan covers the small stuff each month so things keep running smoothly and you always know who to call."
+        lede="If you’d like me to keep looking after your site, a care plan covers regular checks and, on most plans, time each month for updates. If you’d rather ask for help only when you need it, that works too."
       >
         <SubNav
           items={[
             { href: '#plans', label: 'Plans' },
-            { href: '#scope', label: 'What’s covered' },
-            { href: '#questions', label: 'Questions' },
+            { href: '#time', label: 'How time works' },
+            { href: '#support', label: 'Occasional support' },
           ]}
         />
       </PageHeader>
@@ -38,7 +38,7 @@ export default function CarePage() {
       {/* ---------------- Benefits ---------------- */}
       <section className={s.section} aria-labelledby="benefits-title">
         <h2 id="benefits-title" className={s.srOnly}>
-          Why a care plan helps
+          What a care plan gives you
         </h2>
         <ul className={s.benefits}>
           {careBenefits.map((b, i) => (
@@ -61,42 +61,62 @@ export default function CarePage() {
             Pick the pace <em>that fits.</em>
           </h2>
           <p className={s.sectionLede}>
-            {plansDiffer()
-              ? 'Both plans include the same checks and care. The difference is how much monthly time you get for updates and fixes.'
-              : 'Choose the level of care that matches how often your site changes.'}
+            Every plan includes scheduled checks and a monthly status update. Business and Premium Care add monthly time for content updates or
+            troubleshooting. Care plans are optional.
           </p>
-          <DraftBanner>Prices, monthly time allowances, response times, and priority handling below are proposals awaiting approval. Production builds leave them out.</DraftBanner>
         </div>
         <CarePlanCards />
         <CareCompare />
       </section>
 
-      {/* ---------------- Scope ---------------- */}
-      <section id="scope" className={s.section} aria-labelledby="scope-title">
+      {/* ---------------- Included time ---------------- */}
+      <section id="time" className={s.section} aria-labelledby="time-title">
         <div className={s.sectionHead} data-reveal>
-          <p className={s.eyebrow}>What’s covered</p>
-          <h2 id="scope-title" className={s.sectionTitle}>
-            Care keeps things running. <em>New work is its own project.</em>
+          <p className={s.eyebrow}>How included time works</p>
+          <h2 id="time-title" className={s.sectionTitle}>
+            Clear time, <em>no surprises.</em>
           </h2>
           <p className={s.sectionLede}>
-            Want new pages, features, or a fresh look? See <Link href="/services">Services & Pricing</Link>.
+            Business and Premium Care include a set amount of time each month instead of a count of edits, so small changes and quick fixes fit
+            naturally.
           </p>
         </div>
-        <CareScope />
+        <CareTime />
       </section>
 
-      {/* ---------------- FAQ ---------------- */}
-      <section id="questions" className={s.faq} aria-labelledby="faq-title">
-        <div className={s.faqIntro} data-reveal>
-          <p className={s.eyebrow}>Questions</p>
-          <h2 id="faq-title" className={s.sectionTitle}>
-            About <em>website care.</em>
+      {/* ---------------- Occasional support ---------------- */}
+      <section id="support" className={s.section} aria-labelledby="support-title">
+        <div className={s.supportPanel} data-reveal>
+          <div>
+            <p className={s.eyebrow}>Occasional support</p>
+            <h2 id="support-title" className={s.sectionTitleSm}>
+              Need help now and then?
+            </h2>
+            <p className={s.sectionLede}>No plan required. Ask when something comes up.</p>
+            <Link href={inquiryHref('support')} className={`${s.btn} ${s.btnGhost}`}>
+              Ask About Occasional Support
+            </Link>
+          </div>
+          <ul className={s.dotList}>
+            {occasionalSupport.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ---------------- Costs reference ---------------- */}
+      <section className={s.section} aria-labelledby="costs-ref-title">
+        <div className={s.costsRef} data-reveal>
+          <h2 id="costs-ref-title" className={s.sectionTitleSm}>
+            Care is one of three separate costs
           </h2>
-          <p className={s.sectionLede}>
-            Questions about new projects live on the <Link href="/services#questions">Services & Pricing</Link> page.
+          <CostBreakdown compact />
+          <p className={s.costsNote}>
+            Hosting, domains, provider subscriptions, and transaction fees are paid separately from any care plan.{' '}
+            <Link href="/services#costs">How the costs work</Link>.
           </p>
         </div>
-        <FaqList faqs={careFaqs} />
       </section>
 
       <CtaBand

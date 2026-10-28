@@ -1,19 +1,20 @@
 import 'server-only'
 
 /**
- * Offers awaiting approval. SERVER ONLY.
+ * Offers and policies. SERVER ONLY.
  *
- * Every price, limit, allowance, response time, priority promise, and policy
- * answer is wrapped in `proposed(...)`. Proposed values are rendered ONLY when
- * drafts are visible, and are left out of the page entirely otherwise. Hiding a
- * badge is never enough. To publish a value, change `proposed(x)` to
- * `approved(x)` after you have signed off on it.
+ * Everything in this file is approved by Alante (October 2026) EXCEPT values
+ * wrapped in `proposed(...)`. Proposed values render only when drafts are
+ * visible and are left out of the page entirely otherwise. To publish one,
+ * change `proposed(x)` to `approved(x)` after signing off on it.
  *
  * Drafts are visible only when one of these is true:
  *   SHOW_DRAFTS=true            (any host, set it on preview builds only)
  *   VERCEL_ENV=preview          (Vercel preview deployments)
  *   NODE_ENV=development        (npm run dev)
  * Any other build, including production on hosts other than Vercel, hides them.
+ *
+ * Copy rule: no dashes of any kind in visitor facing text.
  */
 
 export const SHOW_DRAFTS =
@@ -31,131 +32,233 @@ export function shown<T>(o: Offer<T>): T | null {
   return o.approved || SHOW_DRAFTS ? o.value : null
 }
 
-/** True when a value is visible only because drafts are on. */
 export function isDraft(o: Offer<unknown>): boolean {
   return !o.approved
 }
 
-/* ------------------------------------------------------------------ */
-/* Packages                                                             */
-/* ------------------------------------------------------------------ */
+export function formatUSD(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
 
-export type PackageSpec = { label: string; value: Offer<string> }
+/* ------------------------------------------------------------------ */
+/* Project categories (approved)                                        */
+/* ------------------------------------------------------------------ */
 
 export type Package = {
-  id: 'essentials' | 'business' | 'custom'
-  interest: 'pkg-essentials' | 'pkg-business' | 'pkg-custom'
+  id: 'business' | 'booking' | 'custom'
+  interest: 'pkg-business' | 'pkg-booking' | 'pkg-custom'
   name: string
   forWho: string
-  /** 'quote' = price set per proposal. Numbers stay proposed until approved. */
-  price: Offer<number | null> | 'discuss'
-  specs: PackageSpec[]
-  includes: string[]
+  priceLabel: string
+  price: number
+  listLabel: string
+  items: string[]
+  notes: string[]
+  cta: string
 }
 
 export const packages: Package[] = [
   {
-    id: 'essentials',
-    interest: 'pkg-essentials',
-    name: 'Website Essentials',
-    forWho: 'A clear, polished home online for a new or small business.',
-    price: proposed(null),
-    specs: [
-      { label: 'Pages', value: proposed('Up to 3 pages') },
-      { label: 'Revisions', value: proposed('2 rounds') },
-      { label: 'Writing your copy', value: proposed('Not included') },
-      { label: 'Adding your content', value: proposed('Included for the text and photos you provide') },
-    ],
-    includes: ['Design that works beautifully on phones', 'Contact form or booking link', 'Page titles and descriptions for search', 'Help connecting your domain'],
-  },
-  {
     id: 'business',
     interest: 'pkg-business',
     name: 'Business Website',
-    forWho: 'A fuller site for an established business ready to look the part.',
-    price: proposed(null),
-    specs: [
-      { label: 'Pages', value: proposed('Up to 7 pages') },
-      { label: 'Revisions', value: proposed('3 rounds') },
-      { label: 'Writing your copy', value: proposed('Editing and polishing of your text') },
-      { label: 'Adding your content', value: proposed('Included for the text and photos you provide') },
+    forWho: 'For businesses that need a professional online presence and a clear way for visitors to inquire.',
+    priceLabel: 'Starting at',
+    price: 1500,
+    listLabel: 'Includes',
+    items: [
+      'Up to five core pages',
+      'Design tailored to your business',
+      'Layouts that work well on phones',
+      'One inquiry form and links to your social profiles',
+      'Basic page titles and search descriptions',
+      'Entry of the text and images you provide, with light editing',
+      'Two consolidated revision rounds within the agreed scope',
+      'Connecting your domain',
+      'A handoff walkthrough',
     ],
-    includes: ['Custom design shaped around your brand', 'Booking, contact, or newsletter signup', 'Connections to tools you already use', 'A walkthrough so you know how it all works'],
+    notes: [
+      'A simple link to a booking page you already use can be included.',
+      'Full copywriting, branding, photography, extra pages, large content moves, and new functionality are quoted separately.',
+    ],
+    cta: 'Ask About a Business Website',
+  },
+  {
+    id: 'booking',
+    interest: 'pkg-booking',
+    name: 'Booking & Payments',
+    forWho: 'For businesses that want customers to book appointments and pay online.',
+    priceLabel: 'Starting at',
+    price: 2500,
+    listLabel: 'Everything in Business Website, plus',
+    items: [
+      'Setup and connection of one agreed booking service',
+      'One agreed payment flow, such as an appointment deposit',
+      'The standard confirmations your chosen services support',
+      'Testing of the full booking and payment journey',
+    ],
+    notes: [
+      'I use existing booking and payment services where they fit. Fully custom scheduling, complex pricing rules, multiple workflows, and extra integrations are quoted separately.',
+      'Provider subscriptions and transaction fees are separate.',
+    ],
+    cta: 'Ask About Booking & Payments',
   },
   {
     id: 'custom',
     interest: 'pkg-custom',
-    name: 'Custom Build',
-    forWho: 'Stores, payments, member areas, and anything that needs custom features.',
-    price: 'discuss',
-    specs: [
-      { label: 'Pages', value: approved('Scoped together') },
-      { label: 'Revisions', value: approved('Set in your proposal') },
-      { label: 'Writing your copy', value: proposed('Available as an add on') },
+    name: 'Custom Website or Application',
+    forWho: 'For online stores, portals, membership sites, academies, dashboards, and custom business tools.',
+    priceLabel: 'Projects starting at',
+    price: 5000,
+    listLabel: 'Possible features',
+    items: [
+      'Accounts and logins',
+      'Permissions for different kinds of users',
+      'Databases for your records',
+      'Payments, subscriptions, or online sales',
+      'Lessons and course content',
+      'Reporting and dashboards',
+      'Automated emails and workflows',
     ],
-    includes: ['Online stores and payment flows', 'Logins, portals, or member areas', 'Integrations with outside services', 'A written plan before any building starts'],
+    notes: [
+      'Not every feature is included at the starting price. We choose what your project needs together.',
+      'Every custom project starts with discovery and a written scope. Larger projects may use milestone payments.',
+    ],
+    cta: 'Discuss a Custom Project',
   },
 ]
 
 /* ------------------------------------------------------------------ */
-/* Care plans                                                           */
+/* Payments, revisions, and the period after launch (approved)          */
+/* ------------------------------------------------------------------ */
+
+export const projectTerms = [
+  {
+    title: 'Payments',
+    body: 'For standard website projects, 50% is due upfront to reserve your spot and begin work. The remaining 50% is due at delivery, before public launch or final handoff. Larger custom projects use payment milestones defined in the proposal.',
+  },
+  {
+    title: 'Revisions',
+    body: 'You get two consolidated revision rounds within the agreed scope. A round is one collected list of feedback, so gather everything you’d like changed and send it together.',
+  },
+  {
+    title: 'Changes to the plan',
+    body: 'New features or changes to the agreed scope get their own estimate before any work on them begins.',
+  },
+  {
+    title: '30 days after launch',
+    body: 'If you find a defect in the work I delivered, measured against the agreed scope, report it within 30 days of launch and I’ll fix it without using any paid care time. New requests, your own changes, and changes made by outside services are handled separately.',
+  },
+]
+
+/* ------------------------------------------------------------------ */
+/* The three separate costs (approved)                                  */
+/* ------------------------------------------------------------------ */
+
+export const costs = [
+  { name: 'Project fee', body: 'Design, development, testing, and launch of your site.' },
+  { name: 'Provider costs', body: 'Your domain, hosting, booking tools, email delivery, and any other services the project needs.' },
+  { name: 'Optional care fee', body: 'Agreed checks, content updates, and support after launch, if you choose a care plan.' },
+]
+
+export const costsNote =
+  'Wherever practical, provider accounts are set up in your name and billed to you directly, so you stay in control. Which services your project needs, and what they charge, is reviewed together for each project.'
+
+/* ------------------------------------------------------------------ */
+/* Care plans (approved)                                                */
 /* ------------------------------------------------------------------ */
 
 /** Flip to true only once uptime monitoring is actually set up. */
 export const UPTIME_MONITORING_CONFIGURED = false
 
 export type CarePlan = {
-  id: 'steady' | 'active'
-  interest: 'care-steady' | 'care-active'
+  id: 'essential' | 'business' | 'premium'
+  interest: 'care-essential' | 'care-business' | 'care-premium'
   name: string
   forWho: string
-  monthlyPrice: Offer<number | null>
-  /** Monthly time allowance for content updates and troubleshooting. */
-  timeAllowance: Offer<string | null>
-  responseTime: Offer<string | null>
-  priority: Offer<string> | null
+  monthly: number
+  /** Monthly time for content updates or troubleshooting. null = none included. */
+  minutes: number | null
+  items: string[]
+  cta: string
 }
 
 export const carePlans: CarePlan[] = [
   {
-    id: 'steady',
-    interest: 'care-steady',
-    name: 'Steady Care',
-    forWho: 'For sites that mostly need to keep working well.',
-    monthlyPrice: proposed(null),
-    timeAllowance: proposed('1 hour'),
-    responseTime: proposed(null),
-    priority: null,
+    id: 'essential',
+    interest: 'care-essential',
+    name: 'Essential Care',
+    forWho: 'Regular checks so you know your site is working.',
+    monthly: 59,
+    minutes: null,
+    items: [
+      'Scheduled monthly checks of agreed pages, contact forms, and booking links, where applicable',
+      'A brief monthly status update',
+      'Content changes and fixes you request are quoted separately',
+    ],
+    cta: 'Ask About Essential Care',
   },
   {
-    id: 'active',
-    interest: 'care-active',
-    name: 'Active Care',
-    forWho: 'For businesses that update their site often.',
-    monthlyPrice: proposed(null),
-    timeAllowance: proposed('3 hours'),
-    responseTime: proposed(null),
-    priority: proposed('Your requests are handled before Steady Care requests'),
+    id: 'business',
+    interest: 'care-business',
+    name: 'Business Care',
+    forWho: 'Checks plus time each month for small updates.',
+    monthly: 129,
+    minutes: 30,
+    items: ['Everything in Essential Care', 'Up to 30 minutes a month for content updates or troubleshooting'],
+    cta: 'Ask About Business Care',
+  },
+  {
+    id: 'premium',
+    interest: 'care-premium',
+    name: 'Premium Care',
+    forWho: 'Checks plus more time for sites that change often.',
+    monthly: 249,
+    minutes: 90,
+    items: ['Everything in Essential Care', 'Up to 90 minutes a month for content updates or troubleshooting'],
+    cta: 'Ask About Premium Care',
   },
 ]
 
-/** Included in every plan. Descriptive, not quantity commitments. */
-export const careIncludes = [
-  'Checks of your contact forms and booking links',
-  'Troubleshooting when something breaks, using your monthly care time',
-  'Software updates and backups, where your platform needs them',
+export const updateExamples = [
+  'Changing business hours or contact details',
+  'Replacing an existing photo',
+  'Updating posted prices',
+  'Editing existing text or links',
 ]
 
-export const careExcludes = [
-  'New features or new pages',
-  'Redesigns',
-  'Content that doesn’t exist yet, like menus or photos that still need to be created',
+export const careBoundaries = [
+  'For 30 days after launch, defects in the work I delivered are fixed without using any care time.',
+  'Included time renews each month and doesn’t roll over.',
+  'Troubleshooting and diagnosis count toward your included time.',
+  'Larger fixes are estimated, and you approve them before any extra work begins.',
+  'New pages, new features, redesigns, large content changes, and emergency recovery are quoted separately.',
+  'Hosting, domains, provider subscriptions, and transaction fees are separate.',
+  'There’s no round the clock emergency service or guaranteed fix deadline.',
+  'Care plans are optional.',
 ]
+
+export const careUpdatesNote =
+  'If your platform needs software updates or backup checks, they’re only part of your plan when they’re written into your agreed care scope.'
 
 export const careBenefits = [
-  { title: 'Your content stays current', body: 'Hours, prices, photos, and announcements get updated without you learning the tools.' },
-  { title: 'Small issues get caught', body: 'Forms and booking links get checked, so problems are easier to catch early.' },
-  { title: 'You know who to call', body: 'When something looks off, you reach the person who knows your site.' },
+  { title: 'Regular checks', body: 'Agreed pages, forms, and booking links get checked every month.' },
+  { title: 'A monthly status update', body: 'A short note each month so you know where things stand.' },
+  { title: 'Time for updates', body: 'Business and Premium Care include monthly time for small changes and troubleshooting.' },
+]
+
+/* ------------------------------------------------------------------ */
+/* Occasional support (approved)                                        */
+/* ------------------------------------------------------------------ */
+
+export const HOURLY_RATE = 100
+
+export const occasionalSupport = [
+  'You can ask for help without a monthly care plan.',
+  `Occasional work is ${formatUSD(HOURLY_RATE)} an hour with a one hour minimum, or a fixed quote for a defined project.`,
+  'We agree on an estimate before any work begins.',
+  'If you’re on a care plan, anything beyond your included time needs your approval before extra charges apply.',
+  'For websites I didn’t build, I start with an initial review before agreeing to ongoing support. The review is scoped and quoted like any other work.',
 ]
 
 /* ------------------------------------------------------------------ */
@@ -167,19 +270,23 @@ export type Faq = { q: string; a: Offer<string> }
 export const projectFaqs: Faq[] = [
   {
     q: 'Can you redesign the website I already have?',
-    a: approved('Yes. I start by looking at what’s working, what isn’t, and what your visitors need. Sometimes that means a fresh look on your current setup, and sometimes it means rebuilding on something easier to manage. Either way, we decide together before anything changes.'),
+    a: approved('Yes. A redesign can fit any of the three project types, depending on what your site needs. I start by looking at what’s working and what isn’t, then we agree on the scope before anything changes.'),
+  },
+  {
+    q: 'What does the starting price cover?',
+    a: approved('Each starting price covers the baseline scope listed on its card. Your final price depends on your requirements and is confirmed in a written proposal before any work begins.'),
   },
   {
     q: 'Do I need a domain before we start?',
-    a: approved('No. If you already have one, I’ll connect your new site to it. If not, I’ll help you choose and register one. I recommend keeping it in your name so you always stay in control of it.'),
+    a: approved('No. If you already have one, I’ll connect your new site to it. If not, I’ll help you choose and register one, ideally in your own name so you stay in control of it.'),
   },
   {
-    q: 'Where will my website be hosted?',
-    a: approved('It depends on what we build. I’ll recommend hosting that fits your site and explain it in plain language. Hosting, domains, and tools like booking or email services usually have their own fees, paid to those providers.'),
+    q: 'Is hosting included?',
+    a: approved('Hosting is a provider cost, separate from the project fee. Which hosting and services your site needs, and what they charge, is reviewed for your project, with accounts in your name where practical.'),
   },
   {
     q: 'Do I have to write all the words myself?',
-    a: approved('You know your business best, so your input matters. Whether writing help is included depends on your project, and your proposal spells it out. I’ll tell you exactly what I need from you and when.'),
+    a: approved('A Business Website includes entering the text and images you provide, with light editing. Full copywriting is quoted separately if you’d like help writing from scratch.'),
   },
   {
     q: 'How long does a website take?',
@@ -191,41 +298,6 @@ export const projectFaqs: Faq[] = [
   },
   {
     q: 'Who owns the website when it’s finished?',
-    a: proposed('APPROVAL NEEDED: ownership of the design, code, and accounts after final payment. Add your policy here.'),
-  },
-  {
-    q: 'Is anything fixed for free after launch?',
-    a: proposed('APPROVAL NEEDED: whether there’s a window after launch for fixing issues in the original scope, and how long it lasts.'),
+    a: proposed('APPROVAL NEEDED: ownership and licensing of the design, code, and accounts after final payment.'),
   },
 ]
-
-export const careFaqs: Faq[] = [
-  {
-    q: 'What happens after launch?',
-    a: approved('I’ll show you around your new site so you’re comfortable with it. If you’d like ongoing help, a care plan covers small updates and regular checks. Bigger changes, like new features or a redesign, are quoted separately.'),
-  },
-  {
-    q: 'Is a care plan required?',
-    a: proposed('No. Care plans are there if you want them. Plenty of people prefer to reach out only when they need something, and that works too.'),
-  },
-  {
-    q: 'What counts as a content update?',
-    a: proposed('Small changes to things that already exist: text, photos, hours, prices, menu items, or a new announcement. Each plan includes a set amount of time for these each month.'),
-  },
-  {
-    q: 'What if I need more time than my plan includes?',
-    a: proposed('APPROVAL NEEDED: how extra time beyond the monthly allowance is quoted or billed, and whether unused time carries over.'),
-  },
-  {
-    q: 'Can you work on a site you didn’t build?',
-    a: proposed('APPROVAL NEEDED: whether care plans cover sites built by someone else, and on which platforms.'),
-  },
-]
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                              */
-/* ------------------------------------------------------------------ */
-
-export function formatUSD(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-}

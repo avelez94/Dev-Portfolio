@@ -959,7 +959,7 @@
 .pricing {
   max-width: calc(var(--max) + 2 * var(--gutter));
   margin: 0 auto;
-  padding: clamp(40px, 6vw, 72px) var(--gutter) clamp(72px, 10vw, 120px);
+  padding: clamp(40px, 6vw, 72px) var(--gutter) 0;
 }
 
 .draftBanner {
@@ -1164,10 +1164,9 @@
 
 .carePlans {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
   align-items: stretch;
-  max-width: 980px;
 }
 
 .carePlan {
@@ -1183,6 +1182,10 @@
 .carePlan:nth-child(2) {
   background: var(--rose-soft);
   box-shadow: 8px 8px 0 var(--coral);
+}
+
+.carePlan:nth-child(3) {
+  background: var(--teal-soft);
 }
 
 .carePlan .btn {
@@ -2063,7 +2066,6 @@ details[open] > summary .summaryIcon {
 
 .compareWrap {
   margin-top: 40px;
-  max-width: 980px;
   overflow-x: auto;
   border-radius: var(--radius);
   border: 1.5px solid var(--line);
@@ -2092,7 +2094,7 @@ details[open] > summary .summaryIcon {
 
 .compare tbody th {
   font-weight: 700;
-  width: 34%;
+  width: 31%;
 }
 
 .compare td {
@@ -2128,6 +2130,7 @@ details[open] > summary .summaryIcon {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   max-width: 980px;
+  align-items: start;
 }
 
 .scopeCol {
@@ -2164,6 +2167,194 @@ details[open] > summary .summaryIcon {
   width: 1px;
   height: 1px;
   overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------
+   Offers
+   --------------------------------------------------------------------- */
+
+.startingPoints {
+  margin: 22px 0 6px;
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.startingPoints li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  font-weight: 600;
+}
+
+.startingPoints strong {
+  color: var(--coral-deep);
+  white-space: nowrap;
+}
+
+.listLabel {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+}
+
+.packageNotes {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding-top: 14px;
+  border-top: 1.5px dashed var(--line);
+  font-size: 0.93rem;
+  color: var(--ink-soft);
+}
+
+.dotList {
+  display: grid;
+  gap: 10px;
+}
+
+.dotList li {
+  position: relative;
+  padding-left: 22px;
+  color: var(--ink-soft);
+}
+
+.dotList li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--coral);
+}
+
+.costsPanel,
+.supportPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: start;
+  padding: clamp(28px, 4vw, 48px);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+
+.supportPanel {
+  background: var(--rose-soft);
+  box-shadow: 8px 8px 0 var(--coral);
+}
+
+.supportPanel .btn {
+  margin-top: 24px;
+}
+
+.costs {
+  display: grid;
+  gap: 14px;
+}
+
+.costs li {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.costNum {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--coral-soft);
+  font: italic 700 1.2rem/1 var(--display);
+}
+
+.costs li:nth-child(2) .costNum {
+  background: var(--teal-soft);
+}
+
+.costs li:nth-child(3) .costNum {
+  background: var(--rose);
+}
+
+.costName {
+  display: block;
+  font: 600 1.25rem/1.2 var(--display);
+  font-variation-settings: 'SOFT' 100;
+  margin-top: 8px;
+}
+
+.costBody {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-soft);
+}
+
+.costsCompact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 20px 0;
+}
+
+.costsCompact li {
+  align-items: center;
+}
+
+.costsCompact .costName {
+  margin-top: 0;
+}
+
+.costsNote {
+  margin-top: 14px;
+  color: var(--ink-soft);
+  max-width: 60ch;
+}
+
+.costsNote a {
+  font-weight: 700;
+  color: var(--coral-deep);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.costsRef {
+  max-width: 980px;
+}
+
+.termsGrid {
+  margin-top: clamp(40px, 6vw, 64px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.termCard {
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.termCard:nth-child(4) {
+  background: var(--teal-soft);
+  border: 2px solid var(--ink);
+}
+
+.termTitle {
+  font: 600 1.3rem/1.15 var(--display);
+  font-variation-settings: 'SOFT' 100;
+  color: var(--ink);
+  margin-bottom: 8px;
 }
 
 /* ---------------------------------------------------------------------
@@ -2208,7 +2399,27 @@ details[open] > summary .summaryIcon {
   }
 }
 
+@media (max-width: 1000px) {
+  .carePlans {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .carePlan:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 900px) {
+  .costsPanel,
+  .supportPanel,
+  .termsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .costsCompact {
+    grid-template-columns: 1fr;
+  }
+
   .hero {
     grid-template-columns: 1fr;
     padding-top: 24px;
@@ -2346,8 +2557,13 @@ details[open] > summary .summaryIcon {
     height: 48px;
   }
 
-  .packageCard[data-tone='2'] {
+  .packageCard[data-tone='2'],
+  .carePlan:nth-child(3) {
     grid-column: auto;
+  }
+
+  .supportPanel {
+    box-shadow: 5px 5px 0 var(--coral);
   }
 
   .packageSpecs > div {
