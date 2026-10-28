@@ -51,8 +51,10 @@ export async function POST(request: NextRequest) {
     );
     const resend = new Resend(process.env.RESEND_API_KEY);
 
-    // Saturday through Friday. The cron runs Friday evening, so "today" is the last day.
+    // Covers Saturday through Thursday. The cron runs early Friday, so the
+    // week ends yesterday. Friday is pay day and she does not walk on Fridays.
     const weekEnd = new Date();
+    weekEnd.setDate(weekEnd.getDate() - 1);
     const weekStart = new Date(weekEnd);
     weekStart.setDate(weekEnd.getDate() - 6);
     const startDate = formatDate(weekStart);
