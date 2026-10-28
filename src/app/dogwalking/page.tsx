@@ -333,7 +333,7 @@ export default function Home() {
               textAlign: "center",
             }}
           >
-            📸 Take a photo of you and the pup
+            📸 Take a photo of Chloe on your walk
           </p>
           <video
             ref={videoRef}
@@ -468,7 +468,7 @@ export default function Home() {
         >
           <li>Tap Log Walk.</li>
           <li>Allow location and camera.</li>
-          <li>Take a photo right then.</li>
+          <li>Take a photo of Chloe on your walk, right then.</li>
         </ol>
       </div>
 
