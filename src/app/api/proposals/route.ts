@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
+import { insertWithOptionalColumns } from '@/lib/insert-compat'
+import { STANDARD_HOURLY_RATE, TERMS_VERSION } from '@/lib/terms'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -17,9 +18,10 @@ export async function POST(req: NextRequest) {
     const deposit = total * (parseFloat(depositPct) / 100)
     const balance = total - deposit
 
-    const { data: proposal, error } = await supabaseAdmin
-      .from('proposals')
-      .insert({
+    const rate = Number(hourlyRate) > 0 ? Number(hourlyRate) : STANDARD_HOURLY_RATE
+    const { data: proposal, error } = await insertWithOptionalColumns<{ id: string }>(
+      'proposals',
+      {
         client_id: clientId || null,
         client_name: clientName,
         client_email: clientEmail,
@@ -35,15 +37,17 @@ export async function POST(req: NextRequest) {
         next_steps: nextSteps || null,
         message: message || null,
         status: 'pending',
-      })
-      .select()
-      .single()
+        terms_version: TERMS_VERSION,
+        hourly_rate: rate,
+      },
+      ['terms_version', 'hourly_rate']
+    )
 
-    if (error) throw error
+    if (error || !proposal) throw error
 
     // Also store SOW data in the proposal for when client accepts
     if (milestones && milestones.length > 0) {
-      await supabaseAdmin.from('sows').insert({
+      await insertWithOptionalColumns('sows', {
         proposal_id: proposal.id,
         client_name: clientName,
         client_email: clientEmail,
@@ -61,10 +65,11 @@ export async function POST(req: NextRequest) {
         start_date: startDate || null,
         delivery_date: deliveryDate || null,
         revisions: revisions || '2',
-        hourly_rate: hourlyRate || 65,
+        hourly_rate: rate,
         payment_method: 'Stripe, PayPal, Zelle, or Wise',
         status: 'pending',
-      })
+        terms_version: TERMS_VERSION,
+      }, ['terms_version'])
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'

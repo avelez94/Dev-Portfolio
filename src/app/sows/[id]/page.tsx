@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import { sowRevisionsText } from '@/lib/terms'
 
 type Milestone = { name: string; deliverables: string; dueDate: string; fee: string }
 type SOW = {
@@ -25,6 +26,7 @@ type SOW = {
   hourly_rate: number
   payment_method: string
   status: string
+  terms_version?: string | null
 }
 
 const STYLES = `
@@ -217,7 +219,7 @@ export default function SOWPage() {
 
       <div className="card">
         <div className="eyebrow">Revision policy</div>
-        <p className="body-text" style={{whiteSpace:'normal'}}>{sow.revisions} rounds of revisions included. Additional revisions billed at ${sow.hourly_rate}/hr. One revision round equals one consolidated list of feedback submitted at one time.</p>
+        <p className="body-text" style={{whiteSpace:'normal'}}>{sowRevisionsText(sow)}</p>
       </div>
 
       <div className="card">

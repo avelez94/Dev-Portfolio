@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
+import { insertWithOptionalColumns } from '@/lib/insert-compat'
+import { STANDARD_HOURLY_RATE, TERMS_VERSION } from '@/lib/terms'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -14,7 +16,7 @@ export async function POST(req: NextRequest) {
       invoiceNumber, invoiceServiceDesc, invoiceDueDate,
     } = body
 
-    const { data: contract, error } = await supabaseAdmin.from('contracts').insert({
+    const { data: contract, error } = await insertWithOptionalColumns<{ id: string }>('contracts', {
       client_name: clientName,
       client_email: clientEmail,
       client_business: clientBusiness || null,
@@ -32,9 +34,11 @@ export async function POST(req: NextRequest) {
       // Store invoice details for auto-send on signing
       signer_name: null,
       signature_image: null,
-    }).select().single()
+      terms_version: TERMS_VERSION,
+      hourly_rate: STANDARD_HOURLY_RATE,
+    }, ['terms_version', 'hourly_rate'])
 
-    if (error) throw error
+    if (error || !contract) throw error
 
     // Store invoice data in a separate record so it's ready when they sign
     await supabaseAdmin.from('invoices').insert({
@@ -47,7 +51,7 @@ export async function POST(req: NextRequest) {
       due_date: invoiceDueDate || null,
       service_desc: invoiceServiceDesc || projectTitle,
       hours: 0,
-      hourly_rate: 65,
+      hourly_rate: STANDARD_HOURLY_RATE,
       status: 'awaiting_signature',
       notes: `contract_id:${contract.id}`,
     })

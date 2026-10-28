@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import { proposalChangeOrderLine } from '@/lib/terms'
 
 type LineItem = { description: string; price: number }
 type Proposal = {
@@ -21,6 +22,8 @@ type Proposal = {
   next_steps: string | null
   message: string | null
   status: string
+  terms_version?: string | null
+  hourly_rate?: number | null
 }
 
 const STYLES = `
@@ -185,7 +188,7 @@ export default function ProposalPage() {
             Deposit ({proposal.deposit_pct}% due to begin): <strong>${deposit.toLocaleString()}</strong><br/>
             Remaining balance paid across project milestones.<br/>
             Exact milestone schedule outlined in the Statement of Work.<br/>
-            Change orders billed at $65/hr.
+            {proposalChangeOrderLine(proposal)}
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { contractRevisionsClausePdf, contractServicesClause } from '@/lib/terms'
 import { Resend } from 'resend'
 import jsPDF from 'jspdf'
 
@@ -70,11 +71,11 @@ export async function POST(req: NextRequest) {
     addSpace(); addDivider()
 
     const clauses = [
-      ['1. SERVICES', 'Alante Velez agrees to design and develop the project described above. Work outside the agreed scope requires written approval and will be billed at $65/hr.'],
+      ['1. SERVICES', contractServicesClause(contract)],
       ['2. PAYMENT', 'Total fee: $' + Number(contract.total_fee).toLocaleString() + '. Deposit of $' + Number(contract.deposit).toLocaleString() + ' is due before work begins. Remaining balance of $' + Number(contract.balance).toLocaleString() + ' is paid across project milestones. Late payments accrue 1.5% interest per month after 14 days.'],
       ['3. KILL FEE', 'If Client cancels after work has begun, a kill fee of ' + contract.kill_fee_pct + '% of the total project fee ($' + Math.round(contract.total_fee * contract.kill_fee_pct / 100).toLocaleString() + ') is due immediately, in addition to payment for all work completed to date.'],
       ['4. INTELLECTUAL PROPERTY', 'Full ownership of all deliverables transfers to Client upon receipt of final payment. Until then, all work remains the property of Alante Velez. Alante Velez retains the right to display completed work in portfolio.'],
-      ['5. REVISIONS', 'Project includes 2 rounds of revisions. One revision round equals one consolidated list of feedback. Additional revisions are billed at $65/hr.'],
+      ['5. REVISIONS', contractRevisionsClausePdf(contract)],
       ['6. CLIENT RESPONSIBILITIES', 'Client agrees to provide all required content, assets, and feedback in a timely manner. Delays caused by Client may result in timeline adjustments.'],
       ['7. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
       ['8. WARRANTIES', 'Work will be original, free of known defects for 30 days following final delivery.'],

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
+import { contractRevisionsClausePage, contractServicesClause } from '@/lib/terms'
 
 type Contract = {
   id: string
@@ -19,6 +20,8 @@ type Contract = {
   payment_method: string
   line_items: any[]
   status: string
+  terms_version?: string | null
+  hourly_rate?: number | null
 }
 
 const STYLES = `
@@ -196,11 +199,11 @@ export default function ContractPage() {
   )
 
   const clauses = [
-    { title: '1. Services', body: `Alante Velez agrees to design and develop the project described above. Work outside the agreed scope requires written approval and will be billed at $65/hr.` },
+    { title: '1. Services', body: contractServicesClause(contract) },
     { title: '2. Payment', body: `Total fee: $${contract.total_fee.toLocaleString()}. Deposit of $${contract.deposit.toLocaleString()} is due before work begins. Remaining balance of $${contract.balance.toLocaleString()} is paid across project milestones as outlined in the Statement of Work. Payment via ${contract.payment_method}. Invoices are due within 7 days. Late payments accrue 1.5% interest per month after 14 days.` },
     { title: '3. Kill fee', body: `If Client cancels after work has begun, a kill fee of ${contract.kill_fee_pct}% of the total project fee ($${Math.round(contract.total_fee * contract.kill_fee_pct / 100).toLocaleString()}) is due immediately, in addition to payment for all work completed to date.` },
     { title: '4. Intellectual property', body: `Full ownership of all deliverables transfers to Client upon receipt of final payment in full. Until final payment is received, all work remains the property of Alante Velez. Alante Velez retains the right to display completed work in portfolio and case studies.` },
-    { title: '5. Revisions', body: `Project includes 2 rounds of revisions. One revision round equals one consolidated list of feedback submitted at one time, not ongoing back-and-forth. Additional revisions are billed at $65/hr and require written approval before proceeding.` },
+    { title: '5. Revisions', body: contractRevisionsClausePage(contract) },
     { title: '6. Client responsibilities', body: `Client agrees to provide all required content, assets, credentials, and feedback in a timely manner. Delays caused by Client may result in timeline adjustments. Alante Velez is not responsible for delays caused by third-party services or Client inaction.` },
     { title: '7. Confidentiality', body: `Both parties agree to keep each other's proprietary information, business processes, and client data confidential during and after the project. This obligation survives termination of this agreement.` },
     { title: '8. Warranties', body: `Alante Velez warrants that all work will be original, will not infringe third-party rights, and will be free of known defects for 30 days following final delivery. Client is responsible for all content provided including text, images, and media.` },

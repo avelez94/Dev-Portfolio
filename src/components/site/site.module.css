@@ -2357,6 +2357,16 @@ details[open] > summary .summaryIcon {
   margin-bottom: 8px;
 }
 
+.guideLink {
+  margin-top: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  color: var(--ink-soft);
+  font-size: 0.97rem;
+}
+
 /* ---------------------------------------------------------------------
    Responsive
    --------------------------------------------------------------------- */

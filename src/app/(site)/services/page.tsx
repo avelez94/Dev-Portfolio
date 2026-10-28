@@ -87,6 +87,12 @@ export default function ServicesPage() {
           </p>
         </div>
         <PackageCards />
+        <p className={s.guideLink} data-reveal>
+          <a href="/Website_Pricing_Guide.pdf" download className={`${s.btn} ${s.btnGhost}`}>
+            Download the Pricing Guide
+          </a>
+          <span>PDF, 5 pages. The same offers as this page, ready to save or share.</span>
+        </p>
       </section>
 
       {/* ---------------- Costs ---------------- */}

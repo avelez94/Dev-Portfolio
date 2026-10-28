@@ -2,6 +2,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import jsPDF from 'jspdf'
+import { STANDARD_HOURLY_RATE, TERMS_VERSION, additionalWorkSentence, contractRevisionsClausePdf, contractServicesClause, formatRate } from '@/lib/terms'
+
+const CURRENT_TERMS = { terms_version: TERMS_VERSION, hourly_rate: STANDARD_HOURLY_RATE }
 
 type Submission = {
   id: string; name: string; email: string; business: string | null
@@ -141,7 +144,7 @@ export default function AdminDashboard() {
   const [nc, setNc] = useState({ name:'', email:'', business:'', platform:'direct', pipeline_stage:'discovery_call' })
   const [clientInvoiceForm, setClientInvoiceForm] = useState({
     invoice_number:'', total_fee:'', deposit_amount:'', due_date:'', service_desc:'',
-    hours:'', hourly_rate:'65'
+    hours:'', hourly_rate:String(STANDARD_HOURLY_RATE)
   })
   const [contractForm, setContractForm] = useState<{
     client_name:string; client_email:string; client_business:string
@@ -160,13 +163,18 @@ export default function AdminDashboard() {
   const [sowForm, setSowForm] = useState({
     client_name:'', client_email:'', project_title:'', project_type:'Landing Page',
     start_date:'', delivery_date:'', total_fee:'', deposit:'', balance:'',
-    description:'', deliverables:'', out_of_scope:'', revisions:'2', hourly_rate:'65',
+    description:'', deliverables:'', out_of_scope:'', revisions:'2', hourly_rate:String(STANDARD_HOURLY_RATE),
     payment_method:'Stripe, PayPal, Zelle, or Wise',
   })
   const getSavedProposalForm = (): ProposalFormType => {
     try {
       const saved = localStorage.getItem('proposalForm')
-      if (saved) return JSON.parse(saved)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // Drafts saved under the old $65 default pick up the standard rate.
+        if (parsed && parsed.hourly_rate === '65') parsed.hourly_rate = String(STANDARD_HOURLY_RATE)
+        return parsed
+      }
     } catch {}
     return {
       client_name: '', client_email: '', client_business: '',
@@ -175,7 +183,7 @@ export default function AdminDashboard() {
       deposit_pct: '50', timeline: '',
       next_steps: 'Once you accept this proposal, I will send the contract for your signature. Once signed, your deposit invoice will follow to officially kick things off.',
       message: '', start_date: '', delivery_date: '',
-      revisions: '2', hourly_rate: '65',
+      revisions: '2', hourly_rate: String(STANDARD_HOURLY_RATE),
       payment_method: 'Stripe, PayPal, Zelle, or Wise',
     }
   }
@@ -428,7 +436,7 @@ export default function AdminDashboard() {
       due_date: clientInvoiceForm.due_date || null,
       service_desc: clientInvoiceForm.service_desc || null,
       hours: isRevision ? parseFloat(clientInvoiceForm.hours) : 0,
-      hourly_rate: isRevision ? parseFloat(clientInvoiceForm.hourly_rate) : 65,
+      hourly_rate: isRevision ? parseFloat(clientInvoiceForm.hourly_rate) : STANDARD_HOURLY_RATE,
       status: isProject ? 'awaiting_deposit' : 'pending',
     }).select().single()
     if (action === 'download') {
@@ -436,7 +444,7 @@ export default function AdminDashboard() {
     } else if (action === 'send' && insertedInv) {
       await sendInvoiceEmail(clientName, clientEmail, insertedInv)
     }
-    setClientInvoiceForm({ invoice_number:'', total_fee:'', deposit_amount:'', due_date:'', service_desc:'', hours:'', hourly_rate:'65' })
+    setClientInvoiceForm({ invoice_number:'', total_fee:'', deposit_amount:'', due_date:'', service_desc:'', hours:'', hourly_rate:String(STANDARD_HOURLY_RATE) })
     setShowClientInvoice(false); setInvoiceType(null)
     await fetchInvoices()
   }
@@ -712,7 +720,7 @@ export default function AdminDashboard() {
         { label: 'Total fee', value: f.total_fee ? '$' + f.total_fee : 'TBD' },
         { label: 'Deposit', value: f.deposit ? '$' + f.deposit : 'TBD' },
         { label: 'Balance', value: f.balance ? '$' + f.balance : 'TBD' },
-        { label: 'Revisions', value: f.revisions + ' rounds included. Additional at $' + f.hourly_rate + '/hr.' },
+        { label: 'Revisions', value: f.revisions + ' rounds included. ' + additionalWorkSentence(parseFloat(f.hourly_rate) || STANDARD_HOURLY_RATE) },
       ]
     }
   }
@@ -730,7 +738,7 @@ export default function AdminDashboard() {
         { label: 'Balance', value: f.balance ? '$' + f.balance : 'TBD' },
         { label: 'Kill fee', value: f.kill_fee_pct + '% of total fee if cancelled after work begins' },
         { label: 'Payment method', value: f.payment_method },
-        { label: 'Revisions', value: '2 rounds included. Additional at $65/hr.' },
+        { label: 'Revisions', value: '2 rounds included. ' + additionalWorkSentence() },
         { label: 'Governing law', value: 'State of Maryland' },
       ]
     }
@@ -790,7 +798,7 @@ export default function AdminDashboard() {
     addSpace(0.5)
     addLine('Deposit (' + f.deposit_pct + '% due to begin): $' + deposit.toLocaleString())
     addLine('Remaining balance paid across project milestones.')
-    addLine('Change orders and additional revisions billed at $65/hr.')
+    addLine('Change orders and additional revisions: ' + additionalWorkSentence(parseFloat(f.hourly_rate) || STANDARD_HOURLY_RATE))
     addSpace(); addDivider()
     if (f.out_of_scope) {
       addLine('WHAT IS NOT INCLUDED', 10, true, true); addSpace(0.5)
@@ -942,7 +950,7 @@ export default function AdminDashboard() {
     addSpace(); addDivider()
     addLine('REVISIONS', 10, true, true); addSpace(0.5)
     addLine('This project includes ' + f.revisions + ' rounds of revisions.')
-    addLine('Additional revisions billed at $' + f.hourly_rate + '/hr.')
+    addLine(additionalWorkSentence(parseFloat(f.hourly_rate) || STANDARD_HOURLY_RATE))
     addSpace(); addDivider()
     addLine('SIGNATURES', 10, true, true); addSpace()
     addLine('Freelancer: Alante Velez'); addSpace()
@@ -1057,11 +1065,11 @@ export default function AdminDashboard() {
     addLine('Estimated Delivery: ' + f.delivery_date)
     addSpace(); addDivider()
     const clauses: [string,string][] = [
-      ['1. SERVICES', 'Freelancer agrees to design and develop the project described above. Work outside the agreed scope will be billed at $65/hr with written approval required before proceeding.'],
+      ['1. SERVICES', contractServicesClause(CURRENT_TERMS)],
       ['2. PAYMENT', 'Total Fee: $' + f.total_fee + '  Deposit: $' + f.deposit + '  Balance: $' + f.balance + '  Payment Method: ' + f.payment_method + '  Late payments accrue 1.5% interest per month after 14 days.'],
       ['3. KILL FEE', 'If Client cancels after work has begun, a kill fee of ' + f.kill_fee_pct + '% of the total fee is due immediately, plus payment for all work completed to date.'],
       ['4. INTELLECTUAL PROPERTY', 'Full ownership of all deliverables transfers to Client upon receipt of final payment. Freelancer retains the right to display work in portfolio.'],
-      ['5. REVISIONS', 'Project includes 2 rounds of revisions. Additional revisions billed at $65/hr.'],
+      ['5. REVISIONS', contractRevisionsClausePdf(CURRENT_TERMS)],
       ['6. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
       ['7. WARRANTIES', 'Freelancer warrants work will be original and free of known defects for 30 days post-delivery.'],
       ['8. LIMITATION OF LIABILITY', 'Freelancer liability is limited to the total amount paid under this agreement.'],
@@ -1926,11 +1934,11 @@ export default function AdminDashboard() {
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>
                     <div style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,fontSize:11,color:d.text2,lineHeight:1.8}}>
-                      <div style={{marginBottom:6}}>1. Services — Scope and change order rate ($65/hr)</div>
+                      <div style={{marginBottom:6}}>1. Services — Scope and change order rate ({formatRate(STANDARD_HOURLY_RATE)}, one hour minimum, estimate approved first)</div>
                       <div style={{marginBottom:6}}>2. Payment — Total, deposit, balance, late payment interest (1.5%/month)</div>
                       <div style={{marginBottom:6}}>3. Kill fee — {contractForm.kill_fee_pct}% of total if cancelled after work begins</div>
                       <div style={{marginBottom:6}}>4. Intellectual property — Full ownership transfers on final payment</div>
-                      <div style={{marginBottom:6}}>5. Revisions — 2 rounds included, additional at $65/hr</div>
+                      <div style={{marginBottom:6}}>5. Revisions — 2 rounds included, additional at {formatRate(STANDARD_HOURLY_RATE)} with an approved estimate</div>
                       <div style={{marginBottom:6}}>6. Confidentiality — Both parties keep proprietary info confidential</div>
                       <div style={{marginBottom:6}}>7. Warranties — Work is original, defect-free for 30 days post-delivery</div>
                       <div style={{marginBottom:6}}>8. Limitation of liability — Capped at total amount paid</div>

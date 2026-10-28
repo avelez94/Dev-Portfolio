@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
+import { insertWithOptionalColumns } from '@/lib/insert-compat'
+import { STANDARD_HOURLY_RATE, TERMS_VERSION } from '@/lib/terms'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
       startDate, deliveryDate, revisions, hourlyRate, paymentMethod,
     } = body
 
-    const { data: sow, error } = await supabaseAdmin.from('sows').insert({
+    const { data: sow, error } = await insertWithOptionalColumns<{ id: string }>('sows', {
       client_name: clientName,
       client_email: clientEmail,
       project_title: projectTitle,
@@ -30,12 +31,13 @@ export async function POST(req: NextRequest) {
       start_date: startDate || null,
       delivery_date: deliveryDate || null,
       revisions: revisions || '2',
-      hourly_rate: hourlyRate || 65,
+      hourly_rate: Number(hourlyRate) > 0 ? Number(hourlyRate) : STANDARD_HOURLY_RATE,
       payment_method: paymentMethod || 'Stripe, PayPal, Zelle, or Wise',
       status: 'pending',
-    }).select().single()
+      terms_version: TERMS_VERSION,
+    }, ['terms_version'])
 
-    if (error) throw error
+    if (error || !sow) throw error
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
     const sowUrl = `${siteUrl}/sows/${sow.id}`
