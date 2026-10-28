@@ -158,7 +158,7 @@ ${
 `;
 
     const emailResponse = await resend.emails.send({
-      from: "Walk Tracker <onboarding@resend.dev>",
+      from: "Walk Tracker <alante@alantevelez.com>",
       to: process.env.ALERT_EMAIL || "alante@alantevelez.com",
       subject: `Walk Summary: ${rangeLabel} (${totalWalks} walks, $${totalPay})`,
       html,
