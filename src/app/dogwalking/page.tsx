@@ -452,7 +452,7 @@ export default function Home() {
             fontSize: "22px",
             fontWeight: "800",
             color: "#d4669f",
-            marginBottom: "16px",
+            marginBottom: "12px",
           }}
         >
           How to log your walk 🐾
@@ -461,25 +461,24 @@ export default function Home() {
           style={{
             fontSize: "18px",
             color: "#8a6a9a",
-            lineHeight: "1.6",
+            lineHeight: "1.5",
             paddingLeft: "24px",
             margin: 0,
           }}
         >
-          <li>Tap Log Walk while you're out with the dog.</li>
-          <li>Allow location and camera when your phone asks. The app needs both.</li>
-          <li>Take a photo right then. Photos can't be uploaded from your camera roll.</li>
-          <li>You can log one walk per day.</li>
+          <li>Tap Log Walk.</li>
+          <li>Allow location and camera.</li>
+          <li>Take a photo right then.</li>
         </ol>
         <p
           style={{
             fontSize: "15px",
             color: "#b896c3",
-            marginTop: "20px",
+            marginTop: "16px",
             marginBottom: 0,
           }}
         >
-          Your location and photo are saved with each walk so the records stay accurate. Nothing is tracked between walks.
+          Location is only saved when you log a walk.
         </p>
       </div>
 
