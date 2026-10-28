@@ -4,16 +4,45 @@ import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
+function str(v: unknown, max = 5000): string {
+  return typeof v === 'string' ? v.trim().slice(0, max) : ''
+}
+
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export async function POST(req: NextRequest) {
+  let body: Record<string, unknown>
   try {
-    const body = await req.json()
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  }
 
-    const {
-      name, email, business, type, description,
-      existing, assets, integrations, references,
-      timeline, budget, heard, priority, anything,
-    } = body
+  const name = str(body.name, 200)
+  const email = str(body.email, 320)
+  const business = str(body.business, 200)
+  const type = str(body.type, 200)
+  const description = str(body.description)
+  const budget = str(body.budget, 100)
+  const timeline = str(body.timeline, 100)
+  const heard = str(body.heard, 100)
+  const priority = str(body.priority, 100)
+  const anything = str(body.anything)
 
+  if (!name || !email || !EMAIL_RE.test(email) || !type || !description || !heard) {
+    return NextResponse.json({ error: 'Please fill in the required fields.' }, { status: 400 })
+  }
+
+  try {
     const { data: submission, error } = await supabaseAdmin
       .from('intake_submissions')
       .insert({
@@ -34,23 +63,42 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
+    // The submission is saved at this point. Email problems are logged and
+    // reported back (emailed: false) instead of telling the visitor it failed.
     const bookingUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/book?ref=${submission.id}`
+    let emailed = false
 
-    await resend.emails.send({
-      from: 'Alante Velez <alante@alantevelez.com>',
-      to: email,
-      subject: 'Got your project details — here is your next step',
-      html: getClientEmailHtml({ name, bookingUrl }),
-    })
+    try {
+      const { error: clientErr } = await resend.emails.send({
+        from: 'Alante Velez <alante@alantevelez.com>',
+        to: email,
+        subject: 'Got your project details. Here is your next step.',
+        html: getClientEmailHtml({ name: esc(name), bookingUrl }),
+      })
+      if (clientErr) throw clientErr
+      emailed = true
+    } catch (mailErr) {
+      console.error('Intake client email failed:', mailErr)
+    }
 
-    await resend.emails.send({
-      from: 'Alante Velez <alante@alantevelez.com>',
-      to: 'alante@alantevelez.com',
-      subject: `New intake submission from ${name}`,
-      html: getAdminEmailHtml({ name, email, business, type, description, budget, timeline, heard, priority, anything, submissionId: submission.id }),
-    })
+    try {
+      const { error: adminErr } = await resend.emails.send({
+        from: 'Alante Velez <alante@alantevelez.com>',
+        to: 'alante@alantevelez.com',
+        replyTo: email,
+        subject: `New intake submission from ${name.replace(/[\r\n]+/g, ' ')}`,
+        html: getAdminEmailHtml({
+          name: esc(name), email: esc(email), business: esc(business), type: esc(type),
+          description: esc(description), budget: esc(budget), timeline: esc(timeline),
+          heard: esc(heard), priority: esc(priority), anything: esc(anything), submissionId: submission.id,
+        }),
+      })
+      if (adminErr) throw adminErr
+    } catch (mailErr) {
+      console.error('Intake admin email failed:', mailErr)
+    }
 
-    return NextResponse.json({ success: true, id: submission.id })
+    return NextResponse.json({ success: true, id: submission.id, emailed })
   } catch (err) {
     console.error('Intake error:', err)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
@@ -83,7 +131,7 @@ function getClientEmailHtml({ name, bookingUrl }: { name: string; bookingUrl: st
 <body>
 <div class="wrap">
   <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Full Stack Web Developer</div>
+  <div class="logo-sub">Website Design and Care</div>
   <div class="divider"></div>
   <h1 class="heading">Got your<br><em>details.</em></h1>
   <p>Hi ${name}, your project submission came through and I have everything I need to prepare for our conversation.</p>
@@ -101,7 +149,7 @@ function getClientEmailHtml({ name, bookingUrl }: { name: string; bookingUrl: st
 </html>`
 }
 
-function getAdminEmailHtml({ name, email, business, type, description, budget, timeline, heard, priority, anything, submissionId }: any) {
+function getAdminEmailHtml({ name, email, business, type, description, budget, timeline, heard, priority, anything }: Record<string, string>) {
   const adminUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/admin`
   return `<!DOCTYPE html>
 <html>

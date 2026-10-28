@@ -1,389 +1,597 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
+import s from './home.module.css'
+import SiteHeader from '@/components/home/SiteHeader'
+import InquiryForm from '@/components/home/InquiryForm'
+import RevealObserver from '@/components/home/RevealObserver'
+import Year from '@/components/home/Year'
+import { Blob, Sparkle, Squiggle, Ring, ServiceIcon, ArrowUpRight, Check, NotIncluded, Wave } from '@/components/home/Shapes'
+import {
+  CONTACT_EMAIL,
+  SHOW_DRAFTS,
+  SITE_URL,
+  UPTIME_MONITORING_CONFIGURED,
+  careExcludes,
+  careIncludes,
+  carePlans,
+  faqs,
+  formatUSD,
+  packages,
+  processSteps,
+  projects,
+  services,
+  techGroups,
+  youllNeed,
+} from '@/content/site'
 
 export const metadata: Metadata = {
-  title: 'Alante Velez — Full Stack Web Developer',
-  description: 'I turn ideas into products that work. Custom web applications, SaaS platforms, and business automation.',
-  keywords: ['full stack developer', 'Next.js developer', 'SaaS development', 'web applications', 'custom software'],
-  authors: [{ name: 'Alante Velez' }],
-  robots: { index: true, follow: true },
+  alternates: { canonical: '/' },
+}
+
+function Draft({ children = 'Draft' }: { children?: React.ReactNode }) {
+  if (!SHOW_DRAFTS) return null
+  return <span className={s.draft}>{children}</span>
+}
+
+function Price({ value, suffix }: { value: number | null; suffix?: string }) {
+  if (value !== null) {
+    return (
+      <p className={s.price}>
+        <span className={s.priceLabel}>Starting at</span>
+        <span className={s.priceValue}>
+          {formatUSD(value)}
+          {suffix && <span className={s.priceSuffix}>{suffix}</span>}
+        </span>
+      </p>
+    )
+  }
+  return (
+    <p className={s.price}>
+      <span className={s.priceLabel}>Starting at</span>
+      {SHOW_DRAFTS ? (
+        <span className={`${s.priceValue} ${s.pricePending}`}>
+          $ TBD{suffix && <span className={s.priceSuffix}>{suffix}</span>}
+          <Draft>Price pending approval</Draft>
+        </span>
+      ) : (
+        <span className={`${s.priceValue} ${s.priceQuote}`}>Quote on request</span>
+      )}
+    </p>
+  )
 }
 
 export default function Home() {
+  const visibleFaqs = faqs.filter((f) => SHOW_DRAFTS || !f.draft)
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'ProfessionalService',
+    name: 'Alante Velez',
+    url: SITE_URL,
+    email: CONTACT_EMAIL,
+    image: `${SITE_URL}/Alante.PNG`,
+    description:
+      'Website design, website redesigns, custom web development, and ongoing website care for small businesses, service providers, consultants, and creators.',
+    founder: { '@type': 'Person', name: 'Alante Velez', url: SITE_URL },
+    knowsAbout: services.map((sv) => sv.name),
+  }
+
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
-        
-        :root {
-          --pink: #A96860;
-          --pink-light: #C18078;
-          --gold: #D4A574;
-          --beige: #F5E6D3;
-          --cream: #FAF3E8;
-          --dark: #2A2420;
-          --dark-light: #3D3630;
-          --muted: #8B7D73;
-          --border: rgba(169,104,96,0.2);
-        }
+    <div className={s.page} id="top">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <RevealObserver />
+      <SiteHeader />
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
-        body { background: var(--cream); color: var(--dark); font-family: 'DM Sans', sans-serif; font-weight: 300; overflow-x: hidden; }
-
-        nav { position: fixed; top: 0; left: 0; right: 0; padding: 24px 48px; display: flex; justify-content: space-between; align-items: center; z-index: 100; background: rgba(250,243,232,0.98); backdrop-filter: blur(8px); transition: all 0.3s; border-bottom: 1px solid var(--border); }
-        
-        .nav-logo { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--dark); letter-spacing: 0.02em; text-decoration: none; font-weight: 700; }
-        .nav-logo-sub { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
-        
-        .nav-links { display: flex; gap: 36px; }
-        .nav-links a { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; }
-        .nav-links a:hover { color: var(--pink); }
-
-        .nav-cta { background: var(--dark); color: var(--cream); padding: 12px 24px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.2s; }
-        .nav-cta:hover { background: var(--pink); }
-
-        .hero { min-height: 100vh; display: grid; grid-template-columns: 0.7fr 1.3fr; align-items: center; padding: 140px 48px; position: relative; overflow: hidden; z-index: 2; gap: 40px; }
-        
-        .hero::before { content: ''; position: absolute; right: -5%; top: 50%; transform: translateY(-50%); width: 60%; height: 150%; background: url('/plante_shadow.jpg') center/cover no-repeat; pointer-events: none; opacity: 0.8; z-index: 1; }
-
-        .hero-left { position: relative; z-index: 2; }
-        .hero-photo { width: 100%; max-width: 420px; border-radius: 8px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.08); }
-        .hero-photo img { width: 100%; display: block; }
-
-        .hero-right { position: relative; z-index: 3; max-width: 550px; }
-        
-        .hero-tag { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--pink); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 20px; font-weight: 500; }
-
-        .hero-name { font-family: 'Playfair Display', serif; font-size: clamp(44px, 6vw, 72px); font-weight: 900; line-height: 1.15; margin-bottom: 24px; letter-spacing: -0.015em; color: var(--dark); }
-        .hero-name em { font-style: italic; color: var(--pink); }
-
-        .hero-desc { font-size: 1rem; line-height: 1.7; color: rgba(42,36,32,0.75); max-width: 480px; margin-bottom: 36px; }
-
-        .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 40px; }
-        
-        .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 28px; font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.25s; border: none; cursor: pointer; font-weight: 500; }
-        
-        .btn-primary { background: var(--pink); color: var(--cream); }
-        .btn-primary:hover { background: var(--pink-light); transform: translateY(-2px); }
-
-        .btn-secondary { background: transparent; color: var(--dark); border: 1.5px solid var(--muted); }
-        .btn-secondary:hover { border-color: var(--pink); color: var(--pink); }
-
-        .tech-ticker { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 0; margin-top: 32px; }
-        .ticker-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 10px; font-weight: 500; }
-        .ticker-items { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted); letter-spacing: 0.06em; display: flex; flex-wrap: wrap; gap: 20px; }
-
-        section { padding: 100px 48px; position: relative; z-index: 2; }
-        section.light { background: var(--cream); }
-        section.featured { background: linear-gradient(135deg, rgba(245,230,211,0.5), rgba(250,243,232,0.5)); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-        
-        .section-label { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--pink); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 16px; font-weight: 500; }
-        .section-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 60px; }
-        .section-title { font-family: 'Playfair Display', serif; font-size: clamp(36px, 5vw, 56px); font-weight: 900; line-height: 1.1; letter-spacing: -0.015em; color: var(--dark); }
-        .section-link { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; }
-
-        .project-row { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-bottom: 80px; }
-        .project-row.reverse { direction: rtl; }
-        .project-row.reverse > * { direction: ltr; }
-        
-        .project-image-large { width: 100%; aspect-ratio: 16/9; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-        .project-image-large img { width: 100%; height: 100%; object-fit: contain; display: block; transition: transform 0.4s ease; }
-        .project-image-large:hover img { transform: scale(1.03); }
-
-        .project-content { display: flex; flex-direction: column; gap: 16px; }
-        .project-name { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; color: var(--dark); }
-        .project-subtitle { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); letter-spacing: 0.1em; margin-bottom: 14px; text-transform: uppercase; font-weight: 500; }
-        .project-desc { font-size: 0.9rem; line-height: 1.6; color: rgba(42,36,32,0.7); margin-bottom: 18px; }
-
-        .tech-stack { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-        .tech-badge { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--pink); background: rgba(169,104,96,0.08); padding: 6px 12px; border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
-
-        .project-link { display: inline-flex; align-items: center; gap: 8px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pink); text-decoration: none; transition: gap 0.2s; font-weight: 500; }
-        .project-link:hover { gap: 14px; }
-
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-bottom: 60px; }
-        .stat-box { background: white; border: 1px solid var(--border); padding: 32px 28px; text-align: center; border-radius: 4px; }
-        .stat-num { font-family: 'Playfair Display', serif; font-size: 2.8rem; font-weight: 900; color: var(--pink); line-height: 1; margin-bottom: 8px; }
-        .stat-label { font-size: 0.85rem; line-height: 1.4; color: var(--muted); }
-
-        .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2px; }
-        .service-card { background: white; border: 1px solid var(--border); padding: 32px 28px; transition: all 0.3s; }
-        .service-card:hover { background: rgba(169,104,96,0.03); border-color: var(--pink); }
-        .service-icon { font-size: 2rem; margin-bottom: 14px; }
-        .service-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; color: var(--dark); }
-        .service-desc { font-size: 0.85rem; line-height: 1.6; color: rgba(42,36,32,0.65); }
-
-        .process-section { background: rgba(250,243,232,0.8); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-        .process-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start; margin-bottom: 60px; }
-        .process-left { max-width: 400px; }
-        .process-left h3 { font-family: 'Playfair Display', serif; font-size: clamp(32px, 4vw, 44px); font-weight: 900; line-height: 1.2; margin-bottom: 20px; color: var(--dark); }
-        .process-left p { font-size: 0.95rem; line-height: 1.7; color: rgba(42,36,32,0.7); margin-bottom: 32px; }
-        .process-steps { display: flex; flex-direction: column; gap: 2px; }
-        .process-step { background: white; border: 1px solid var(--border); padding: 24px 28px; display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
-        .process-circle { width: 40px; height: 40px; border-radius: 50%; background: var(--pink); color: white; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
-        .process-content h4 { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 700; margin-bottom: 4px; color: var(--dark); }
-        .process-content p { font-size: 0.85rem; line-height: 1.6; color: rgba(42,36,32,0.65); }
-
-        .cta-block { text-align: center; padding: 80px 48px; }
-        .cta-title { font-family: 'Playfair Display', serif; font-size: clamp(40px, 6vw, 56px); font-weight: 900; line-height: 1.15; margin-bottom: 20px; color: var(--dark); }
-        .cta-subtitle { font-size: 1rem; color: rgba(42,36,32,0.7); margin-bottom: 40px; max-width: 520px; margin-left: auto; margin-right: auto; line-height: 1.7; }
-
-        footer { border-top: 1px solid var(--border); padding: 32px 48px; display: flex; justify-content: space-between; align-items: center; background: var(--cream); }
-        .footer-name { font-family: 'Playfair Display', serif; font-size: 0.95rem; color: var(--muted); font-weight: 500; }
-        .footer-links { display: flex; gap: 28px; }
-        .footer-links a { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; }
-        .footer-links a:hover { color: var(--pink); }
-
-        @media (max-width: 768px) {
-          nav { padding: 20px 24px; }
-          .nav-links { display: none; }
-          .nav-cta { padding: 10px 18px; font-size: 0.65rem; }
-          .hero { grid-template-columns: 1fr; padding: 100px 24px 60px; gap: 40px; }
-          .hero::before { display: none; }
-          .hero-left { max-width: 100%; }
-          .stats-row { grid-template-columns: repeat(2, 1fr); }
-          .services-grid { grid-template-columns: 1fr; }
-          .process-grid { grid-template-columns: 1fr; gap: 40px; }
-          .project-row { grid-template-columns: 1fr; gap: 32px; }
-          .project-row.reverse { direction: ltr; }
-          section { padding: 70px 24px; }
-          footer { flex-direction: column; gap: 20px; text-align: center; }
-        }
-      `}</style>
-
-      <nav id="mainNav">
-        <div>
-          <div className="nav-logo">Alante Velez</div>
-          <div className="nav-logo-sub">Full Stack Product Developer</div>
-        </div>
-        <div className="nav-links">
-          <a href="#work">Work</a>
-          <a href="#services">Services</a>
-          <a href="#process">Process</a>
-        </div>
-        <a href="#hire" className="nav-cta">Start a Project</a>
-      </nav>
-
-      <section className="hero light">
-        <div className="hero-left">
-          <div className="hero-photo">
-            <img src="/Alante.PNG" alt="Alante Velez" />
-          </div>
-        </div>
-        <div className="hero-right">
-          <div className="hero-tag">Full Stack Product Development</div>
-          <h1 className="hero-name">I turn ideas into <em>products that work.</em><br />Then I stay.</h1>
-          <p className="hero-desc">I design, build, launch, and maintain custom web applications for businesses — from SaaS platforms and client portals to AI workflows, payments, and automation.</p>
-          <div className="hero-btns">
-            <a href="#hire" className="btn btn-primary">Start a Project →</a>
-            <a href="#work" className="btn btn-secondary">View My Work →</a>
-          </div>
-          <div className="tech-ticker">
-            <div className="ticker-label">Built with</div>
-            <div className="ticker-items">
-              Next.js · Supabase · Stripe · AI · Vercel · Resend · React · TypeScript
+      <main id="main">
+        {/* ---------------- Hero ---------------- */}
+        <section className={s.hero} aria-labelledby="hero-title">
+          <div className={s.heroCopy}>
+            <p className={s.hello}>
+              <Wave className={s.helloWave} />
+              Hi, I’m Alante. I design and build websites.
+            </p>
+            <h1 id="hero-title" className={s.heroTitle}>
+              Your business deserves a website you’re{' '}
+              <span className={s.heroAccent}>
+                excited to share.
+                <Squiggle className={s.heroSquiggle} />
+              </span>
+            </h1>
+            <p className={s.heroLede}>
+              I design, rebuild, and look after websites that help people understand what you do and take the next step,
+              whether that’s booking, buying, or simply getting in touch.
+            </p>
+            <div className={s.heroActions}>
+              <a href="#contact" className={`${s.btn} ${s.btnPrimary} ${s.btnLarge}`}>
+                Tell Me About Your Website
+              </a>
+              <a href="#work" className={`${s.btn} ${s.btnGhost} ${s.btnLarge}`}>
+                Explore My Work
+              </a>
             </div>
+            <p className={s.heroNote}>
+              New sites, redesigns, and care plans for small businesses, service providers, and creators.
+              And I don’t disappear after launch.
+            </p>
           </div>
-        </div>
-      </section>
 
-      <section id="work" className="featured">
-        <div className="section-header">
+          <div className={s.heroArt}>
+            <Blob className={s.heroBlob} />
+            <Sparkle className={s.heroSparkleA} />
+            <Sparkle className={s.heroSparkleB} />
+            <div className={s.portraitArch}>
+              <Image
+                src="/Alante.PNG"
+                alt="Portrait of Alante Velez smiling softly, wearing a black blazer"
+                width={1086}
+                height={1448}
+                preload
+                sizes="(max-width: 900px) 78vw, 420px"
+                className={s.portraitImg}
+              />
+            </div>
+            <div className={s.stamp} aria-hidden="true">
+              <svg viewBox="0 0 120 120" className={s.stampSvg}>
+                <defs>
+                  <path id="stamp-circle" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0" />
+                </defs>
+                <text>
+                  <textPath href="#stamp-circle">DESIGN • BUILD • CARE • DESIGN • BUILD • CARE •</textPath>
+                </text>
+              </svg>
+              <Sparkle className={s.stampCenter} />
+            </div>
+            <p className={s.sticker} aria-hidden="true">
+              Here after launch, too
+            </p>
+          </div>
+        </section>
+
+        {/* ---------------- Work ---------------- */}
+        <section id="work" className={s.work} aria-labelledby="work-title">
+          <div className={s.sectionHead} data-reveal>
+            <p className={s.eyebrow}>Selected work</p>
+            <h2 id="work-title" className={s.sectionTitle}>
+              Three very different brands. <em>Each one feels like itself.</em>
+            </h2>
+            <p className={s.sectionLede}>
+              A travel planner, an online academy, and a coaching practice. Here’s who each site serves and what visitors can do there.
+            </p>
+          </div>
+
+          <div className={s.projects}>
+            {projects.map((p, i) => (
+              <article
+                key={p.slug}
+                className={`${s.project} ${i === 0 ? s.projectFeature : ''}`}
+                style={{ '--brand-bg': p.brand.bg, '--brand-ink': p.brand.ink, '--brand-accent': p.brand.accent } as React.CSSProperties}
+                aria-labelledby={`proj-${p.slug}`}
+                data-reveal
+              >
+                <div className={s.projectShot}>
+                  <span className={s.browserBar}>
+                    <span />
+                    <span />
+                    <span />
+                    <span className={s.browserUrl}>{p.urlLabel}</span>
+                  </span>
+                  <Image
+                    src={p.image.src}
+                    alt={p.image.alt}
+                    width={p.image.width}
+                    height={p.image.height}
+                    sizes={i === 0 ? '(max-width: 900px) 92vw, 760px' : '(max-width: 900px) 92vw, 560px'}
+                    className={s.projectImg}
+                  />
+                </div>
+                <div className={s.projectBody}>
+                  <div className={s.projectMeta}>
+                    <span className={s.kicker}>{p.kicker}</span>
+                    {p.concept && <span className={s.conceptTag}>Concept project</span>}
+                    <span className={s.swatches} aria-label={`Brand colors: ${p.brand.swatches.join(', ')}`} role="img">
+                      {p.brand.swatches.map((c) => (
+                        <span key={c} style={{ background: c }} />
+                      ))}
+                    </span>
+                  </div>
+                  <h3 id={`proj-${p.slug}`} className={s.projectName}>
+                    {p.name}
+                  </h3>
+                  {p.role && <p className={s.projectRole}>My role: {p.role}</p>}
+                  <dl className={s.projectFacts}>
+                    <div>
+                      <dt>Who it’s for</dt>
+                      <dd>{p.whoFor}</dd>
+                    </div>
+                    <div>
+                      <dt>What I built</dt>
+                      <dd>{p.whatIBuilt}</dd>
+                    </div>
+                  </dl>
+                  <p className={s.actionsLabel}>Visitors can</p>
+                  <ul className={s.chips}>
+                    {p.visitorActions.map((a) => (
+                      <li key={a}>{a}</li>
+                    ))}
+                  </ul>
+                  <a href={p.url} target="_blank" rel="noopener noreferrer" className={s.projectLink}>
+                    Visit {p.name}
+                    <ArrowUpRight />
+                    <span className={s.srOnly}> (opens in a new tab)</span>
+                  </a>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------------- Services ---------------- */}
+        <section id="services" className={s.services} aria-labelledby="services-title">
+          <div className={s.servicesIntro} data-reveal>
+            <p className={s.eyebrow}>Services</p>
+            <h2 id="services-title" className={s.sectionTitle}>
+              Whatever stage you’re at, <em>we can start there.</em>
+            </h2>
+            <p className={s.sectionLede}>
+              Brand new, long overdue for a refresh, or needing something custom. I keep the scope clear and the language plain.
+            </p>
+            <a href="#contact" className={`${s.btn} ${s.btnGhost}`}>
+              Not sure which? Ask me
+            </a>
+          </div>
+          <ul className={s.serviceList}>
+            {services.map((sv, i) => (
+              <li key={sv.id} className={s.serviceItem} data-reveal style={{ '--i': i } as React.CSSProperties}>
+                <span className={s.serviceIcon} data-tone={i % 3}>
+                  <ServiceIcon id={sv.id} />
+                </span>
+                <div>
+                  <h3 className={s.serviceName}>{sv.name}</h3>
+                  <p className={s.serviceBody}>{sv.body}</p>
+                  {sv.href && (
+                    <a href={sv.href} className={s.inlineLink}>
+                      {sv.hrefLabel}
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ---------------- Pricing ---------------- */}
+        <section id="pricing" className={s.pricing} aria-labelledby="pricing-title">
+          <div className={s.sectionHead} data-reveal>
+            <p className={s.eyebrow}>Pricing</p>
+            <h2 id="pricing-title" className={s.sectionTitle}>
+              Clear starting points, <em>no guesswork.</em>
+            </h2>
+            <p className={s.sectionLede}>
+              Every project gets a written proposal with the exact scope and price before any work begins. These packages give you a sense of where things start.
+            </p>
+            {SHOW_DRAFTS && (
+              <p className={s.draftBanner}>
+                <strong>Preview only.</strong> Prices, page limits, and revision rounds below are proposals awaiting approval. They are not live offers.
+              </p>
+            )}
+          </div>
+
+          <div className={s.packages}>
+            {packages.map((pk, i) => (
+              <article key={pk.id} className={s.packageCard} data-tone={i} data-reveal aria-labelledby={`pkg-${pk.id}`}>
+                <h3 id={`pkg-${pk.id}`} className={s.packageName}>
+                  {pk.name}
+                </h3>
+                <p className={s.packageFor}>{pk.forWho}</p>
+                <Price value={pk.startingAt} />
+                <dl className={s.packageSpecs}>
+                  <div>
+                    <dt>Pages</dt>
+                    <dd>{pk.pages}</dd>
+                  </div>
+                  <div>
+                    <dt>Revisions</dt>
+                    <dd>{pk.revisions}</dd>
+                  </div>
+                  <div>
+                    <dt>Writing your copy</dt>
+                    <dd>{pk.copywriting}</dd>
+                  </div>
+                  <div>
+                    <dt>Adding your content</dt>
+                    <dd>{pk.contentEntry}</dd>
+                  </div>
+                </dl>
+                <ul className={s.checkList}>
+                  {pk.includes.map((x) => (
+                    <li key={x}>
+                      <Check />
+                      <span>{x}</span>
+                    </li>
+                  ))}
+                </ul>
+                <a href="#contact" className={`${s.btn} ${i === 1 ? s.btnPrimary : s.btnGhost} ${s.btnBlock}`}>
+                  Ask About {pk.name}
+                </a>
+              </article>
+            ))}
+          </div>
+
+          <div className={s.pricingNotes} data-reveal>
+            <p>
+              <strong>Good to know:</strong> extra pages, online stores, and integrations beyond a package are quoted separately. Third party
+              subscriptions like domains, hosting, booking tools, or email services are paid to those providers and may add monthly costs.
+            </p>
+          </div>
+        </section>
+
+        {/* ---------------- Care ---------------- */}
+        <section id="care" className={s.care} aria-labelledby="care-title">
+          <Ring className={s.careRing} />
+          <div className={s.careIntro} data-reveal>
+            <p className={s.eyebrowLight}>Website care</p>
+            <h2 id="care-title" className={s.sectionTitleLight}>
+              Launch day isn’t goodbye.
+            </h2>
+            <p className={s.careLede}>
+              If you’d like me to keep looking after your site, a care plan covers the small stuff each month so things keep running smoothly and you always know who to call.
+            </p>
+          </div>
+
+          <div className={s.carePlans}>
+            {carePlans.map((cp) => (
+              <article key={cp.id} className={s.carePlan} data-reveal aria-labelledby={`care-${cp.id}`}>
+                <h3 id={`care-${cp.id}`} className={s.carePlanName}>
+                  {cp.name}
+                </h3>
+                <p className={s.packageFor}>{cp.forWho}</p>
+                <Price value={cp.monthly} suffix=" / month" />
+                <ul className={s.checkList}>
+                  <li>
+                    <Check />
+                    <span>
+                    {cp.updatesPerMonth !== null ? (
+                      <>Up to {cp.updatesPerMonth} small content updates a month</>
+                    ) : SHOW_DRAFTS ? (
+                      <>
+                        Up to <span className={s.blank}>__</span> small content updates a month <Draft />
+                      </>
+                    ) : (
+                      <>A set number of small content updates each month</>
+                    )}
+                    </span>
+                  </li>
+                  {careIncludes.map((x) => (
+                    <li key={x}>
+                      <Check />
+                      <span>{x}</span>
+                    </li>
+                  ))}
+                  {UPTIME_MONITORING_CONFIGURED && (
+                    <li>
+                      <Check />
+                      <span>Uptime monitoring, so I hear about outages quickly</span>
+                    </li>
+                  )}
+                  {cp.extras.map((x) => (
+                    <li key={x}>
+                      <Check />
+                      <span>
+                        {x} <Draft />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {cp.responseTime ? (
+                  <p className={s.careResponse}>Response time: {cp.responseTime}</p>
+                ) : (
+                  SHOW_DRAFTS && (
+                    <p className={s.careResponse}>
+                      Response time: <span className={s.blank}>pending</span> <Draft />
+                    </p>
+                  )
+                )}
+              </article>
+            ))}
+
+            <aside className={s.careNot} data-reveal aria-labelledby="care-not-title">
+              <h3 id="care-not-title" className={s.careNotTitle}>
+                What care plans don’t cover
+              </h3>
+              <ul className={s.minusList}>
+                {careExcludes.map((x) => (
+                  <li key={x}>
+                    <NotIncluded />
+                    <span>{x}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className={s.careNotNote}>
+                Those are quoted as their own projects. Care plans also don’t include unlimited edits or around the clock support, and no one can promise a site will never have a problem. What I can promise is that you won’t be figuring it out alone.
+              </p>
+            </aside>
+          </div>
+        </section>
+
+        {/* ---------------- Process ---------------- */}
+        <section id="process" className={s.process} aria-labelledby="process-title">
+          <div className={s.sectionHead} data-reveal>
+            <p className={s.eyebrow}>How it works</p>
+            <h2 id="process-title" className={s.sectionTitle}>
+              Four steps, <em>zero mystery.</em>
+            </h2>
+          </div>
+          <ol className={s.steps}>
+            {processSteps.map((st, i) => (
+              <li key={st.name} className={s.step} data-reveal style={{ '--i': i } as React.CSSProperties}>
+                <span className={s.stepNum} aria-hidden="true">
+                  {i + 1}
+                </span>
+                <h3 className={s.stepName}>{st.name}</h3>
+                <p className={s.stepBody}>{st.body}</p>
+              </li>
+            ))}
+          </ol>
+          <div className={s.needCard} data-reveal>
+            <h3 className={s.needTitle}>What I’ll need from you</h3>
+            <ul>
+              {youllNeed.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* ---------------- About ---------------- */}
+        <section id="about" className={s.about} aria-labelledby="about-title">
+          <div className={s.aboutPhotoWrap} data-reveal>
+            <div className={s.aboutPhoto}>
+              <Image
+                src="/Alante.PNG"
+                alt="Alante Velez"
+                width={1086}
+                height={1448}
+                sizes="(max-width: 900px) 60vw, 320px"
+                className={s.aboutImg}
+              />
+            </div>
+            <Sparkle className={s.aboutSparkle} />
+          </div>
+          <div className={s.aboutCopy} data-reveal>
+            <p className={s.eyebrow}>About</p>
+            <h2 id="about-title" className={s.sectionTitle}>
+              Hi, I’m Alante. <em>You’ll be working with me.</em>
+            </h2>
+            <p>
+              I’m a designer and developer who loves the moment a business owner clicks through their new site and says, “That’s us.”
+              I keep my client list small on purpose, so you talk to me directly from the first call through launch and beyond.
+            </p>
+            <p>
+              I’ll explain things in plain language, tell you honestly what you need and what you can skip, and build something you’re
+              proud to send people to. The technical side is the part I nerd out on, so you don’t have to.
+            </p>
+            <ul className={s.aboutPoints}>
+              <li>
+                <strong>Plain language.</strong> No jargon unless you ask for it.
+              </li>
+              <li>
+                <strong>Clear scope.</strong> You know what’s included before anything starts.
+              </li>
+              <li>
+                <strong>Still here later.</strong> Care plans keep the help going after launch.
+              </li>
+            </ul>
+          </div>
+
+          <details className={s.techDetails} data-reveal>
+            <summary>
+              <span>For the technically curious</span>
+              <span className={s.summaryIcon} aria-hidden="true" />
+            </summary>
+            <div className={s.techBody}>
+              <p>
+                Most of my builds use Next.js and React with TypeScript, hosted on Vercel, with Supabase for databases and logins. Payments run
+                through Stripe or PayPal and email through Resend. I also connect tools like Zoom, Calendly, AI APIs, and webhooks when a project calls for it.
+              </p>
+              <dl className={s.techGrid}>
+                {techGroups.map((g) => (
+                  <div key={g.label}>
+                    <dt>{g.label}</dt>
+                    <dd>{g.items.join(', ')}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </details>
+        </section>
+
+        {/* ---------------- FAQ ---------------- */}
+        <section id="faq" className={s.faq} aria-labelledby="faq-title">
+          <div className={s.faqIntro} data-reveal>
+            <p className={s.eyebrow}>Questions</p>
+            <h2 id="faq-title" className={s.sectionTitle}>
+              Good questions <em>to ask.</em>
+            </h2>
+            <p className={s.sectionLede}>Don’t see yours? Ask it in the form below. There are no silly ones.</p>
+          </div>
+          <div className={s.faqList}>
+            {visibleFaqs.map((f) => (
+              <details key={f.q} className={s.faqItem}>
+                <summary>
+                  <span>
+                    {f.q} {f.draft && <Draft>Needs your review</Draft>}
+                  </span>
+                  <span className={s.summaryIcon} aria-hidden="true" />
+                </summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------------- Contact ---------------- */}
+        <section id="contact" className={s.contact} aria-labelledby="contact-title">
+          <div className={s.contactIntro} data-reveal>
+            <p className={s.eyebrow}>Let’s talk</p>
+            <h2 id="contact-title" className={s.contactTitle}>
+              Tell me about <em>your website.</em>
+            </h2>
+            <p className={s.sectionLede}>
+              A few quick details is all I need to start. You’ll get the chance to book a short intro call right after.
+            </p>
+            <ul className={s.contactAlt}>
+              <li>
+                Prefer email? <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              </li>
+              <li>
+                Planning something bigger? Use the <a href="/intake">detailed project questionnaire</a>.
+              </li>
+            </ul>
+          </div>
+          <div data-reveal>
+            <InquiryForm />
+          </div>
+        </section>
+      </main>
+
+      <footer className={s.footer}>
+        <div className={s.footerTop}>
           <div>
-            <div className="section-label">Featured Projects</div>
-            <h2 className="section-title">Real products.<br />Real impact.</h2>
+            <p className={s.footerName}>Alante Velez</p>
+            <p className={s.footerTag}>Websites people are excited to share.</p>
           </div>
-          <a href="#" className="section-link">View All Work →</a>
-        </div>
-
-        <div className="project-row">
-          <div className="project-image-large">
-            <img src="/planary.png" alt="Planary travel platform" />
-          </div>
-          <div className="project-content">
-            <div className="project-name">Planary</div>
-            <div className="project-subtitle">AI-Powered Travel Platform</div>
-            <p className="project-desc">Custom travel planning platform with AI recommendations, interactive itineraries, Stripe payments, customer dashboard, and admin panel.</p>
-            <div className="tech-stack">
-              <span className="tech-badge">Next.js</span>
-              <span className="tech-badge">Supabase</span>
-              <span className="tech-badge">Stripe</span>
-              <span className="tech-badge">AI</span>
-            </div>
-            <a href="https://planarytravel.com" target="_blank" className="project-link">View Live Site →</a>
-          </div>
-        </div>
-
-        <div className="project-row reverse">
-          <div className="project-image-large">
-            <img src="/rising-sons.png" alt="Rising Sons Leadership Academy" />
-          </div>
-          <div className="project-content">
-            <div className="project-name">Rising Sons Leadership Academy</div>
-            <div className="project-subtitle">Custom Learning Management System</div>
-            <p className="project-desc">Full-stack LMS with custom video player, per-student access control, progress tracking, PayPal payments, and Zoom integration.</p>
-            <div className="tech-stack">
-              <span className="tech-badge">Next.js</span>
-              <span className="tech-badge">Supabase</span>
-              <span className="tech-badge">PayPal</span>
-              <span className="tech-badge">Zoom API</span>
-            </div>
-            <a href="https://risingsonsacademy.org" target="_blank" className="project-link">View Live Site →</a>
+          <nav aria-label="Footer" className={s.footerNav}>
+            <ul>
+              <li><a href="#work">Work</a></li>
+              <li><a href="#services">Services</a></li>
+              <li><a href="#pricing">Pricing</a></li>
+              <li><a href="#care">Care Plans</a></li>
+              <li><a href="#about">About</a></li>
+              <li><a href="#faq">FAQ</a></li>
+              <li><a href="#contact">Let’s Talk</a></li>
+            </ul>
+          </nav>
+          <div className={s.footerWork}>
+            <p className={s.footerLabel}>Recent sites</p>
+            <ul>
+              {projects.map((p) => (
+                <li key={p.slug}>
+                  <a href={p.url} target="_blank" rel="noopener noreferrer">
+                    {p.name}
+                    <span className={s.srOnly}> (opens in a new tab)</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-
-        <div className="project-row">
-          <div className="project-image-large">
-            <img src="/tramaine.png" alt="Tramaine Crawford coaching platform" />
-          </div>
-          <div className="project-content">
-            <div className="project-name">Tramaine Crawford</div>
-            <div className="project-subtitle">Professional Development Platform</div>
-            <p className="project-desc">Coaching and consulting booking platform. Allows clients to schedule sessions, manage availability, and track coaching relationships.</p>
-            <div className="tech-stack">
-              <span className="tech-badge">Next.js</span>
-              <span className="tech-badge">Supabase</span>
-              <span className="tech-badge">Calendly</span>
-            </div>
-            <a href="https://tramainecrawford.com" target="_blank" className="project-link">View Live Site →</a>
-          </div>
-        </div>
-
-        <div className="stats-row">
-          <div className="stat-box">
-            <div className="stat-num">2+</div>
-            <div className="stat-label">Live platforms in production</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-num">5+</div>
-            <div className="stat-label">Years building independently</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-num">End to End</div>
-            <div className="stat-label">From idea to launch and beyond</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-num">Ongoing</div>
-            <div className="stat-label">Support, updates and partnership</div>
-          </div>
-        </div>
-      </section>
-
-      <section id="services" className="light">
-        <div className="section-header">
-          <div>
-            <div className="section-label">What I Build</div>
-            <h2 className="section-title">Solutions built<br />for your business.</h2>
-          </div>
-          <a href="#" className="section-link">All Services →</a>
-        </div>
-        <div className="services-grid">
-          <div className="service-card">
-            <div className="service-icon">⚡</div>
-            <div className="service-name">AI Integration</div>
-            <p className="service-desc">Custom Claude API integrations, prompt engineering, and AI powered workflows built for real products.</p>
-          </div>
-          <div className="service-card">
-            <div className="service-icon">🔨</div>
-            <div className="service-name">Next.js Development</div>
-            <p className="service-desc">Full stack apps and websites using Next.js with server side rendering, authentication, and Vercel deployment.</p>
-          </div>
-          <div className="service-card">
-            <div className="service-icon">💳</div>
-            <div className="service-name">Stripe Payments</div>
-            <p className="service-desc">One time checkout, subscriptions, webhooks, and billing systems that work reliably in production.</p>
-          </div>
-          <div className="service-card">
-            <div className="service-icon">🗄️</div>
-            <div className="service-name">Supabase Backend</div>
-            <p className="service-desc">Database design, Row Level Security policies, authentication, and storage for modern web apps.</p>
-          </div>
-          <div className="service-card">
-            <div className="service-icon">📧</div>
-            <div className="service-name">Email Automation</div>
-            <p className="service-desc">Transactional email systems with Resend including dynamic templates and event triggered delivery.</p>
-          </div>
-          <div className="service-card">
-            <div className="service-icon">🚀</div>
-            <div className="service-name">SaaS Starter Builds</div>
-            <p className="service-desc">Production ready SaaS foundations with auth, payments, and database wired up and deployed from day one.</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="process" className="process-section">
-        <div className="section-label">My Process</div>
-        <h2 className="section-title">A clear process.<br />A better experience.</h2>
-        
-        <div className="process-grid">
-          <div className="process-left">
-            <h3>I keep your project on track from day one to long after launch.</h3>
-            <p>Working with me means having a developer who understands your business, ships on time, and stays involved after launch to support growth.</p>
-            <a href="#hire" className="btn btn-primary" style={{marginTop: '20px'}}>Start Your Project →</a>
-          </div>
-          <div>
-            <div className="process-steps">
-              <div className="process-step">
-                <div className="process-circle">01</div>
-                <div className="process-content">
-                  <h4>Discovery</h4>
-                  <p>We talk through your ideas, goals, and requirements. I review before we speak.</p>
-                </div>
-              </div>
-              <div className="process-step">
-                <div className="process-circle">02</div>
-                <div className="process-content">
-                  <h4>Proposal</h4>
-                  <p>You get a clear timeline, fixed deliverables list, and terms to get started.</p>
-                </div>
-              </div>
-              <div className="process-step">
-                <div className="process-circle">03</div>
-                <div className="process-content">
-                  <h4>Build</h4>
-                  <p>I design, develop, and test your product with you. Regular updates throughout.</p>
-                </div>
-              </div>
-              <div className="process-step">
-                <div className="process-circle">04</div>
-                <div className="process-content">
-                  <h4>Launch and Support</h4>
-                  <p>We launch and I stay involved for updates and growth.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="hire" className="light">
-        <div className="cta-block">
-          <h2 className="cta-title">Let's build something<br /><em style={{color: 'var(--pink)', fontStyle: 'italic'}}>that lasts.</em></h2>
-          <p className="cta-subtitle">Have an idea but unsure what you need? That's okay. Tell me what you're trying to accomplish and I'll help determine the technical approach.</p>
-          <a href="/intake" className="btn btn-primary" style={{marginRight: '12px'}}>Start the Intake Form →</a>
-        </div>
-      </section>
-
-      <footer>
-        <div className="footer-name">© 2025 Alante Velez. All rights reserved.</div>
-        <div className="footer-links">
-          <a href="https://planarytravel.com" target="_blank">Planary</a>
-          <a href="https://risingsonsacademy.org" target="_blank">Rising Sons</a>
-          <a href="https://tramainecrawford.com" target="_blank">Tramaine Crawford</a>
-          <a href="/intake">Start a Project</a>
+        <div className={s.footerBottom}>
+          <p>
+            © <Year initial={new Date().getFullYear()} /> Alante Velez. All rights reserved.
+          </p>
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </div>
       </footer>
-
-      <script dangerouslySetInnerHTML={{__html: `
-        window.addEventListener('scroll', () => {
-          const nav = document.getElementById('mainNav');
-          if (window.scrollY > 60) {
-            nav.style.background = 'rgba(250,243,232,0.95)';
-          } else {
-            nav.style.background = 'rgba(250,243,232,0.98)';
-          }
-        });
-      `}} />
-    </>
+    </div>
   )
 }
