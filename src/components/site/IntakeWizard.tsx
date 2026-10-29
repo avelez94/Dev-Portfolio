@@ -308,6 +308,10 @@ export default function IntakeWizard() {
           About five minutes. When you’re done, you’ll pick a time for a 20 minute discovery call. Only name, email, what you need, a short
           description, and how you found me are required.
         </p>
+        <p className={s.flowFine} id="intake-save-note">
+          Your answers stay as you move between steps and if sending fails, but nothing is saved until you submit. Refreshing or closing this
+          page clears anything you haven’t submitted.
+        </p>
       </header>
 
       {linkState === 'loading' && (
@@ -612,8 +616,7 @@ export default function IntakeWizard() {
       </form>
 
       <p className={s.flowAside}>
-        Just want to send a quick note instead? <Link href="/#contact">Use the short form</Link>. Your answers stay on this page only and aren’t saved
-        until you submit.
+        Just want to send a quick note instead? <Link href="/#contact">Use the short form</Link>.
       </p>
     </section>
   )

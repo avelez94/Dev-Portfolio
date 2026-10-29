@@ -4,20 +4,24 @@ import { Resend } from 'resend'
 import { BRAND } from '@/lib/brand'
 import * as mail from '@/lib/email/templates'
 import { SITE_URL } from '@/content/site'
+import { NO_STORE, UUID_RE, publicSow } from '@/lib/public-docs'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: NO_STORE })
   const { data, error } = await supabaseAdmin.from('sows').select('*').eq('id', id).single()
-  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(data)
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: NO_STORE })
+  return NextResponse.json(publicSow(data), { headers: NO_STORE })
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const { action, declineReason } = await req.json()
+    if (action !== 'accepted' && action !== 'declined') return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     const ip = req.headers.get('x-forwarded-for') || 'unknown'
 
     const { data: sow } = await supabaseAdmin.from('sows').select('*').eq('id', id).single()

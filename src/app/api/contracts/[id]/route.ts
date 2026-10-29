@@ -4,21 +4,29 @@ import { balanceLabel, depositLabel, invoiceDepositLabel } from '@/lib/terms'
 import { BRAND } from '@/lib/brand'
 import * as mail from '@/lib/email/templates'
 import { SITE_URL } from '@/content/site'
+import { NO_STORE, UUID_RE, publicContract } from '@/lib/public-docs'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: NO_STORE })
   const { data, error } = await supabaseAdmin.from('contracts').select('*').eq('id', id).single()
-  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(data)
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: NO_STORE })
+  return NextResponse.json(publicContract(data), { headers: NO_STORE })
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const { signatureImage, signerName } = await req.json()
+    // The signing page always sends both; reject anything else rather than store it.
+    if (typeof signerName !== 'string' || !signerName.trim() || signerName.length > 200 ||
+        typeof signatureImage !== 'string' || !signatureImage.startsWith('data:image/png;base64,') || signatureImage.length > 600_000) {
+      return NextResponse.json({ error: 'Please draw your signature and type your full name.' }, { status: 400 })
+    }
     const ip = req.headers.get('x-forwarded-for') || 'unknown'
 
     const { data: contract } = await supabaseAdmin.from('contracts').select('*').eq('id', id).single()

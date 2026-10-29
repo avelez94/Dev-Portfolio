@@ -2439,6 +2439,13 @@ details[open] > summary .summaryIcon {
   font-size: 1.08rem;
 }
 
+.flowFine {
+  margin-top: 10px;
+  max-width: 60ch;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
 .flowLede a,
 .flowAside a,
 .flowNotice a,

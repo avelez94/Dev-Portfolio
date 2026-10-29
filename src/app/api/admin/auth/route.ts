@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
+import { clientIp, hit } from '@/lib/rate-limit'
+
+function same(a: string, b: string) {
+  const x = Buffer.from(a)
+  const y = Buffer.from(b)
+  return x.length === y.length && timingSafeEqual(x, y)
+}
 
 export async function POST(request: NextRequest) {
-  const { password } = await request.json()
+  // Slow down password guessing: 8 attempts per 15 minutes per address (per server instance).
+  const limit = hit(`admin-login:${clientIp(request.headers)}`, 8, 15 * 60 * 1000)
+  if (!limit.ok) {
+    return NextResponse.json({ error: 'Too many attempts' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSec) } })
+  }
+  const { password } = await request.json().catch(() => ({ password: '' }))
 
   const adminPassword = process.env.ADMIN_PASSWORD
   const adminToken = process.env.ADMIN_SECRET_TOKEN
@@ -10,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  if (password !== adminPassword) {
+  if (typeof password !== 'string' || !same(password, adminPassword)) {
     return NextResponse.json({ error: 'Incorrect password' }, { status: 401 })
   }
 

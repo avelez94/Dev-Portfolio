@@ -192,21 +192,26 @@ export default function DebtTracker({
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f3ee] px-4 py-10 text-[#211d1a] sm:px-6 lg:px-8">
+    <main style={{ fontFamily: "var(--font-body), Helvetica, Arial, sans-serif" }} className="min-h-screen bg-[#1C1614] px-4 py-10 text-[#FBF3E8] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
+        <nav aria-label="Admin" className="mb-8 flex items-center gap-3">
+          <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-[13px] border-2 border-[#FBF3E8] bg-[#FF6B4F] font-[family-name:var(--font-display)] text-sm font-bold text-[#1A1412]">AV</span>
+          <span className="rounded-full bg-[rgba(255,107,79,0.18)] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[#FF8A70]">Admin</span>
+          <a href="/admin" className="ml-auto rounded-full border border-[rgba(251,243,232,0.3)] px-4 py-2 text-sm font-semibold text-[#FBF3E8] hover:border-[#FBF3E8] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-[#FF8A70]">Back to Dashboard</a>
+        </nav>
 
         <div className="mb-10">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-[#9a7455]">
+          <p className="mb-3 text-sm font-bold uppercase tracking-[0.18em] text-[#FF8A70]">
             Debt Freedom Plan
           </p>
 
-          <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+          <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight sm:text-5xl">
             Debt Tracker
           </h1>
 
-          <p className="mt-4 max-w-2xl text-base leading-7 text-[#6c625a]">
+          <p className="mt-4 max-w-2xl text-base leading-7 text-[#E4D7C6]">
             Every balance you eliminate gets you one step closer
-            to being completely debt-free.
+            to being completely debt free.
           </p>
         </div>
 
@@ -230,10 +235,10 @@ export default function DebtTracker({
           />
         </div>
 
-        <section className="mt-6 rounded-3xl border border-black/5 bg-white p-6 shadow-sm">
+        <section className="mt-6 rounded-3xl border border-[rgba(251,243,232,0.16)] bg-[#10302D] p-6">
           <div className="mb-3 flex items-end justify-between">
             <div>
-              <p className="text-sm font-medium text-[#766b63]">
+              <p className="text-sm font-medium text-[#E4D7C6]">
                 Overall progress
               </p>
 
@@ -242,14 +247,14 @@ export default function DebtTracker({
               </p>
             </div>
 
-            <p className="text-sm font-semibold text-[#9a7455]">
+            <p className="text-sm font-semibold text-[#FF8A70]">
               {formatMoney(amountPaid)} paid
             </p>
           </div>
 
-          <div className="h-3 overflow-hidden rounded-full bg-[#ece6df]">
+          <div className="h-3 overflow-hidden rounded-full bg-[#244F49]">
             <div
-              className="h-full rounded-full bg-[#211d1a] transition-all duration-500"
+              className="h-full rounded-full bg-[#FF6B4F] transition-all duration-500 motion-reduce:transition-none"
               style={{
                 width: `${percentComplete}%`,
               }}
@@ -259,11 +264,11 @@ export default function DebtTracker({
 
         <section className="mt-10">
           <div className="mb-5">
-            <p className="text-sm font-medium text-[#9a7455]">
+            <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#FF8A70]">
               Payoff order
             </p>
 
-            <h2 className="mt-1 text-2xl font-semibold">
+            <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl font-semibold">
               Promotional balances
             </h2>
           </div>
@@ -291,8 +296,8 @@ export default function DebtTracker({
                     className={[
                       "rounded-3xl border p-5 transition-all duration-200 sm:p-6",
                       debt.completed
-                        ? "border-[#a6bba5] bg-[#edf3ec]"
-                        : "border-black/5 bg-white shadow-sm",
+                        ? "border-[#2F6B66] bg-[#173D2C]"
+                        : "border-[rgba(251,243,232,0.16)] bg-[#10302D]",
                     ].join(" ")}
                   >
                     <div className="flex items-start gap-4 sm:gap-5">
@@ -302,8 +307,8 @@ export default function DebtTracker({
                         className={[
                           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition",
                           debt.completed
-                            ? "border-[#637d62] bg-[#637d62] text-white"
-                            : "border-[#d5ccc4] bg-white hover:border-[#9a7455]",
+                            ? "border-[#9BE3B6] bg-[#9BE3B6] text-[#1A1412]"
+                            : "border-[rgba(251,243,232,0.4)] bg-transparent hover:border-[#FF8A70]",
                         ].join(" ")}
                         aria-label={
                           debt.completed
@@ -325,7 +330,7 @@ export default function DebtTracker({
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold uppercase tracking-widest text-[#a38771]">
+                              <span className="text-xs font-bold uppercase tracking-widest text-[#FF8A70]">
                                 #{debt.priority}
                               </span>
 
@@ -333,8 +338,8 @@ export default function DebtTracker({
                                 className={[
                                   "font-semibold",
                                   debt.completed
-                                    ? "text-[#6d756a] line-through"
-                                    : "text-[#211d1a]",
+                                    ? "text-[#C3B5A3] line-through"
+                                    : "text-[#FBF3E8]",
                                 ].join(" ")}
                               >
                                 {debt.creditor}
@@ -342,12 +347,12 @@ export default function DebtTracker({
                             </div>
 
                             {debt.promo_name && (
-                              <p className="mt-1 text-sm text-[#81766e]">
+                              <p className="mt-1 text-sm text-[#E4D7C6]">
                                 {debt.promo_name}
                               </p>
                             )}
 
-                            <div className="mt-2 flex items-center gap-2 text-sm text-[#7a7068]">
+                            <div className="mt-2 flex items-center gap-2 text-sm text-[#E4D7C6]">
                               <CalendarDays size={15} />
 
                               <span>
@@ -367,7 +372,7 @@ export default function DebtTracker({
                               )}
                             </p>
 
-                            <p className="mt-1 text-xs uppercase tracking-wider text-[#9b9088]">
+                            <p className="mt-1 text-xs uppercase tracking-wider text-[#C3B5A3]">
                               {debt.completed
                                 ? "Paid off ✓"
                                 : "Remaining"}
@@ -377,18 +382,18 @@ export default function DebtTracker({
 
                         <div className="mt-5">
                           <div className="mb-2 flex justify-between text-sm">
-                            <span className="text-[#766b63]">
+                            <span className="text-[#E4D7C6]">
                               Paid: {formatMoney(paid)}
                             </span>
 
-                            <span className="font-medium text-[#766b63]">
+                            <span className="font-medium text-[#E4D7C6]">
                               {debtProgress}%
                             </span>
                           </div>
 
-                          <div className="h-2 overflow-hidden rounded-full bg-[#eee7e0]">
+                          <div className="h-2 overflow-hidden rounded-full bg-[#244F49]">
                             <div
-                              className="h-full rounded-full bg-[#637d62] transition-all duration-500"
+                              className="h-full rounded-full bg-[#9BE3B6] transition-all duration-500 motion-reduce:transition-none"
                               style={{
                                 width: `${debtProgress}%`,
                               }}
@@ -399,7 +404,7 @@ export default function DebtTracker({
                         {!debt.completed && (
                           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                             <div className="relative flex-1">
-                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#82766e]">
+                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#C3B5A3]">
                                 $
                               </span>
 
@@ -425,14 +430,14 @@ export default function DebtTracker({
                                     addPayment(debt);
                                   }
                                 }}
-                                className="w-full rounded-2xl border border-[#ddd3ca] bg-white py-3 pl-8 pr-4 outline-none transition focus:border-[#9a7455]"
+                                className="w-full rounded-2xl border-[1.5px] border-[rgba(251,243,232,0.3)] bg-[#173B37] py-3 pl-8 pr-4 text-[#FBF3E8] placeholder:text-[#C3B5A3] outline-none transition focus:border-[#FF8A70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF8A70]"
                               />
                             </div>
 
                             <button
                               onClick={() => addPayment(debt)}
                               disabled={updating === debt.id}
-                              className="flex items-center justify-center gap-2 rounded-2xl bg-[#211d1a] px-5 py-3 font-medium text-white transition hover:bg-[#403932] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex items-center justify-center gap-2 rounded-full bg-[#FF6B4F] px-5 py-3 font-bold text-[#1A1412] transition hover:bg-[#FF8467] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-[#FBF3E8] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Plus size={18} />
 
@@ -443,7 +448,7 @@ export default function DebtTracker({
                           </div>
                         )}
 
-                        <div className="mt-3 text-xs text-[#9b9088]">
+                        <div className="mt-3 text-xs text-[#C3B5A3]">
                           Original balance:{" "}
                           {formatMoney(
                             Number(debt.original_balance)
@@ -458,16 +463,16 @@ export default function DebtTracker({
         </section>
 
         {remaining === 0 && (
-          <section className="mt-8 rounded-3xl bg-[#211d1a] p-8 text-center text-white">
+          <section className="mt-8 rounded-3xl border border-[#2F6B66] bg-[#173D2C] p-8 text-center text-[#FBF3E8]">
             <Trophy className="mx-auto mb-4" size={36} />
 
-            <h2 className="text-3xl font-semibold">
+            <h2 className="font-[family-name:var(--font-display)] text-3xl font-semibold">
               You did it.
             </h2>
 
-            <p className="mx-auto mt-3 max-w-lg text-white/70">
+            <p className="mx-auto mt-3 max-w-lg text-[#E4D7C6]">
               {formatMoney(totalDebt)} eliminated.
-              You are officially debt-free.
+              You are officially debt free.
             </p>
           </section>
         )}
@@ -486,16 +491,16 @@ function SummaryCard({
   amount: string;
 }) {
   return (
-    <div className="rounded-3xl border border-black/5 bg-white p-6 shadow-sm">
-      <div className="mb-7 flex h-10 w-10 items-center justify-center rounded-full bg-[#f2ebe4] text-[#8d6c51]">
+    <div className="rounded-3xl border border-[rgba(251,243,232,0.16)] bg-[#10302D] p-6">
+      <div className="mb-7 flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(255,107,79,0.18)] text-[#FF8A70]">
         {icon}
       </div>
 
-      <p className="text-sm text-[#80756d]">
+      <p className="text-sm text-[#E4D7C6]">
         {title}
       </p>
 
-      <p className="mt-1 text-3xl font-semibold tracking-tight">
+      <p className="mt-1 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight">
         {amount}
       </p>
     </div>

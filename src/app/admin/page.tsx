@@ -3,7 +3,9 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase-admin-browser'
 import jsPDF from 'jspdf'
 import { createBrandedPdf } from '@/lib/pdf/writer'
+import { ADMIN_CORAL, ADMIN_FONTS, ADMIN_INK, ADMIN_THEMES } from '@/lib/admin-theme'
 import { contractPdf } from '@/lib/pdf/contract'
+import { nyOffset } from '@/lib/time'
 import { DOC_BRAND_VERSION, missingBrandColumn, usesStudioBrand } from '@/lib/brand-version'
 import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, additionalWorkSentence, contractPaymentClausePdf, contractWarrantyClausePdf, formatRate, proposalPaymentLines, type PaymentPlan } from '@/lib/terms'
 
@@ -14,6 +16,13 @@ const contractTermsDoc = (f: { total_fee: string; deposit: string; balance: stri
   const standard = f.payment_plan !== 'milestones'
   const deposit = standard ? total * (STANDARD_DEPOSIT_PCT / 100) : parseFloat(f.deposit) || 0
   return { ...currentTerms(standard ? 'standard' : 'milestones'), total_fee: total, deposit, balance: standard ? total - deposit : parseFloat(f.balance) || 0, payment_method: f.payment_method }
+}
+
+/** Same as fetch, but tells the page when the admin session has ended (401). */
+async function adminFetch(input: string, init?: RequestInit) {
+  const res = await fetch(input, init)
+  if (res.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new Event('admin-session-expired'))
+  return res
 }
 
 /** Reads a JSON error from the document APIs, including the migration block. */
@@ -64,7 +73,7 @@ function LeadProgress({ s, booked, d }: { s: Submission | null | undefined; book
   return (
     <ol aria-label="Lead progress" style={{display:'flex',gap:6,flexWrap:'wrap',listStyle:'none',padding:0,margin:'12px 0 0'}}>
       {leadSteps(s, booked).map(step => (
-        <li key={step.label} style={{fontSize:10,letterSpacing:'0.04em',padding:'3px 8px',borderRadius:999,background:step.done?d.accent:d.white,color:step.done?'#fff':d.text3,border:'1px solid '+(step.done?d.accent:d.border)}}>
+        <li key={step.label} style={{fontSize:12,letterSpacing:'0.04em',padding:'3px 8px',borderRadius:999,background:step.done?d.accent:d.white,color:step.done?ADMIN_INK:d.text3,border:'1px solid '+(step.done?d.accent:d.border)}}>
           {step.done ? '\u2713 ' : ''}{step.label}{!step.done && step.optional ? ' (skipped)' : ''}
         </li>
       ))}
@@ -129,8 +138,8 @@ const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa']
 const DAYS_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 const PIPELINE_STAGES = ['discovery_call','proposal_sent','active_project','closed','lost']
 const STAGE_LABELS: Record<string,string> = { discovery_call:'Discovery', proposal_sent:'Proposal Sent', active_project:'Active Project', closed:'Closed', lost:'Lost' }
-const CARD_COLORS_LIGHT = ['#F5EDE4','#EDE8E0','#E8E4DC','#F0E8DC','#EAE0D8']
-const CARD_COLORS_DARK = ['#2C2018','#241E16','#201A14','#281E14','#2A2018']
+const CARD_COLORS_LIGHT = ['#2A2220','#2E2522','#262020','#33251F','#2C2421']
+const CARD_COLORS_DARK = ['#123734','#14332F','#173B37','#103230','#1A3936']
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const PROJECT_TYPES = ['Landing Page','Booking + Payments','Web Application','AI Workflow','Other']
 const MY_EMAIL = 'alante@alantevelez.com'
@@ -293,6 +302,68 @@ export default function AdminDashboard() {
   const [docError, setDocError] = useState<{ kind: 'proposal' | 'sow' | 'contract'; message: string } | null>(null)
 
   const clockRef = useRef<ReturnType<typeof setInterval>|null>(null)
+  const pickedOnce = useRef(false)
+
+  // Dialogs: Escape closes, focus moves into the dialog when it opens.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      if (previewDoc) setPreviewDoc(null)
+      else if (viewingInvoice) setViewingInvoice(null)
+      else if (viewingProject) setViewingProject(null)
+      else if (showEmailModal) setShowEmailModal(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewDoc, viewingInvoice, viewingProject, showEmailModal])
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>('[role=dialog]')
+    if (el) { el.tabIndex = -1; el.focus() }
+  }, [previewDoc, viewingInvoice, viewingProject, showEmailModal, showActiveProjectPopup])
+
+  // On phones the details panel sits below the list; show it when something is picked.
+  useEffect(() => {
+    if (!focused) return
+    if (!pickedOnce.current) { pickedOnce.current = true; return } // the dashboard preselects the next call on load
+    if (window.matchMedia('(max-width: 900px)').matches) {
+      document.querySelector('.panel')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    }
+  }, [focused])
+
+  // Screen readers: give each form control the name of the visible label above it.
+  // (The forms use styled text labels; this connects them without changing the layout.)
+  useEffect(() => {
+    const root = document.querySelector('.shell')
+    if (!root) return
+    const name = () => {
+      root.querySelectorAll<HTMLElement>('.form-group').forEach((g) => {
+        const label = g.querySelector('.form-label')?.textContent?.trim()
+        const ctl = g.querySelector<HTMLElement>('input:not([type=hidden]),select,textarea')
+        if (label && ctl && !ctl.getAttribute('aria-label') && !ctl.id) ctl.setAttribute('aria-label', label)
+      })
+      root.querySelectorAll<HTMLElement>('.hour-item').forEach((row) => {
+        const day = row.querySelector('.hi-day')?.textContent?.trim() || ''
+        const times = row.querySelectorAll<HTMLInputElement>('input[type=time]')
+        if (times[0] && !times[0].getAttribute('aria-label')) times[0].setAttribute('aria-label', `${day} start time`)
+        if (times[1] && !times[1].getAttribute('aria-label')) times[1].setAttribute('aria-label', `${day} end time`)
+      })
+      root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[placeholder]:not([aria-label]),textarea[placeholder]:not([aria-label])').forEach((el) => {
+        if (!el.id && !el.closest('label')) el.setAttribute('aria-label', el.placeholder)
+      })
+    }
+    name()
+    const mo = new MutationObserver(name)
+    mo.observe(root, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  }, [])
+
+  // The admin cookie can expire while the page is open; any 401 shows a sign in prompt.
+  const [sessionExpired, setSessionExpired] = useState(false)
+  useEffect(() => {
+    const onExpired = () => setSessionExpired(true)
+    window.addEventListener('admin-session-expired', onExpired)
+    return () => window.removeEventListener('admin-session-expired', onExpired)
+  }, [])
 
   useEffect(() => {
     fetchAll()
@@ -371,9 +442,9 @@ export default function AdminDashboard() {
   async function scheduleMeeting(clientId: string, clientName: string, clientEmail: string) {
     if (!meetingForm.date || !meetingForm.time) return
     setSchedulingMeeting(true)
-    const scheduledAt = new Date(meetingForm.date + 'T' + meetingForm.time + ':00-04:00').toISOString()
+    const scheduledAt = new Date(meetingForm.date + 'T' + meetingForm.time + ':00' + nyOffset(meetingForm.date)).toISOString() // Eastern Time, correct offset in winter too
     try {
-      await fetch('/api/meetings/schedule', {
+      await adminFetch('/api/meetings/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId, clientName, clientEmail, scheduledAt, title: meetingForm.title, cc: MY_EMAIL })
@@ -393,8 +464,8 @@ export default function AdminDashboard() {
     await fetchPricing()
   }
   async function handleLogout() {
-    await fetch('/api/admin/auth', { method: 'DELETE' })
-    window.location.href = '/admin/login'
+    await adminFetch('/api/admin/auth', { method: 'DELETE' })
+    window.location.href = '/admin/login?signedout=1'
   }
   async function toggleDay(a: Availability) {
     await supabase.from('availability').update({is_active:!a.is_active}).eq('id',a.id); await fetchAvailability()
@@ -640,7 +711,7 @@ export default function AdminDashboard() {
 
   async function sendMilestoneEmail(clientName: string, clientEmail: string, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
     try {
-      await fetch('/api/invoices/send', {
+      await adminFetch('/api/invoices/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -661,7 +732,7 @@ export default function AdminDashboard() {
     try {
       const totalFee = inv.total_fee || inv.amount
       const depositAmount = inv.deposit_amount || totalFee * 0.5
-      await fetch('/api/invoices/send', {
+      await adminFetch('/api/invoices/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -682,7 +753,7 @@ export default function AdminDashboard() {
     if (!emailForm.subject || !emailForm.message) return
     setSendingEmail(true)
     try {
-      await fetch('/api/email/send', {
+      await adminFetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientEmail, clientName, cc: MY_EMAIL, subject: emailForm.subject, message: emailForm.message })
@@ -970,7 +1041,7 @@ export default function AdminDashboard() {
     }
     setSendingProposal(true)
     try {
-      const res = await fetch('/api/proposals', {
+      const res = await adminFetch('/api/proposals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1025,7 +1096,7 @@ export default function AdminDashboard() {
     }
     setSendingSOW(true)
     try {
-      const res = await fetch('/api/sows', {
+      const res = await adminFetch('/api/sows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1148,7 +1219,7 @@ export default function AdminDashboard() {
 
   async function resendSignedContract(contractId: string) {
     try {
-      const res = await fetch('/api/contracts/send-signed', {
+      const res = await adminFetch('/api/contracts/send-signed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contractId }),
@@ -1173,7 +1244,7 @@ export default function AdminDashboard() {
     const balance = plan === 'standard' ? totalFee - deposit : parseFloat(f.balance) || 0
     setSendingContract(true)
     try {
-      const res = await fetch('/api/contracts', {
+      const res = await adminFetch('/api/contracts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1290,25 +1361,10 @@ export default function AdminDashboard() {
   const greeting = greetingHour<12?'Good morning':greetingHour<17?'Good afternoon':'Good evening'
   const CARD_COLORS = dark ? CARD_COLORS_DARK : CARD_COLORS_LIGHT
 
-  const d = dark ? {
-    bg:'#18130F', white:'#1E1812', surface:'#251E16', surface2:'#2C2419',
-    surface3:'#342B1E', text:'#F0E8DC', text2:'#A08878', text3:'#6A5848',
-    border:'rgba(240,220,200,0.1)', border2:'rgba(240,220,200,0.16)',
-    accent:'#C4704A', accentBg:'rgba(196,112,74,0.15)',
-    sand:'#2C2018', linen:'#261E14', pebble:'#221A12', blush:'#2E1E16',
-    green:'#1A2C1A', greenText:'#6AAA6A', amber:'#2C2010', amberText:'#C4944A',
-    red:'#2C1010', redText:'#C44A4A',
-  } : {
-    bg:'#F7F3EE', white:'#FFFFFF', surface:'#F0EAE2', surface2:'#EAE2D8',
-    surface3:'#E4DDD4', text:'#2C2420', text2:'#7A6E66', text3:'#A89E96',
-    border:'#E4DDD6', border2:'#D4CCC4',
-    accent:'#C4704A', accentBg:'#F5EDE6',
-    sand:'#F5EDE4', linen:'#EDE8E0', pebble:'#E8E4DC', blush:'#F0E4DC',
-    green:'#E8F4E8', greenText:'#4a6a4a', amber:'#FBF0E0', amberText:'#8a6a2a',
-    red:'#FAEAEA', redText:'#8a2a2a',
-  }
+  // Admin colors (src/lib/admin-theme.ts). The switch in the sidebar picks the surface variant.
+  const d = dark ? ADMIN_THEMES.teal : ADMIN_THEMES.charcoal
 
-  const inputStyle = { background:d.surface, borderColor:d.border, color:d.text, fontFamily:'DM Sans,sans-serif', fontSize:12, padding:'7px 10px', borderRadius:8, outline:'none', width:'100%', borderWidth:1, borderStyle:'solid' as const }
+  const inputStyle = { background:d.surface, borderColor:d.border2, color:d.text, fontFamily:ADMIN_FONTS.body, fontSize:14, padding:'9px 12px', borderRadius:10, width:'100%', borderWidth:1.5, borderStyle:'solid' as const, minHeight:40 }
 
   const NAV_ITEMS = [
     { v:'home', label:'Home', icon:<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 7.5L9 2l7 5.5V16a1 1 0 01-1 1H3a1 1 0 01-1-1V7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" fill="none"/></svg> },
@@ -1321,10 +1377,9 @@ export default function AdminDashboard() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html,body{height:100%;overflow:hidden}
-        body{font-family:'DM Sans',sans-serif;font-weight:300;font-size:13px}
+        body{font-family:${ADMIN_FONTS.body};font-weight:400;font-size:14px;background:${d.bg};color:${d.text}}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{border-radius:2px}
         .shell{display:grid;grid-template-columns:80px 1fr;height:100vh;overflow:hidden}
         .main{display:grid;grid-template-columns:1fr 320px;height:100vh;overflow:hidden;min-width:0}
@@ -1332,50 +1387,50 @@ export default function AdminDashboard() {
         .panel{border-left-width:1px;border-left-style:solid;overflow-y:auto}
         .panel-inner{padding:24px 20px}
         .sidebar{border-right-width:1px;border-right-style:solid;display:flex;flex-direction:column;align-items:center;padding:24px 0 20px}
-        .sb-logo{width:42px;height:42px;background:#C4704A;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-style:italic;font-size:17px;color:white;flex-shrink:0}
+        .sb-logo{width:42px;height:42px;background:${ADMIN_CORAL};border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:${ADMIN_FONTS.display};font-style:italic;font-size:17px;color:${ADMIN_INK};flex-shrink:0}
         .sb-nav{display:flex;flex-direction:column;align-items:center;gap:0;flex:1;justify-content:space-evenly;width:100%;padding:16px 10px}
         .sb-btn{width:52px;height:52px;border-radius:14px;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;transition:all 0.15s;padding:0}
-        .sb-btn-label{font-size:9px;letter-spacing:0.04em;text-transform:uppercase;line-height:1}
+        .sb-btn-label{font-size:12px;letter-spacing:0.04em;text-transform:uppercase;line-height:1}
         .sb-divider{width:32px;height:1px;margin:8px 0;flex-shrink:0}
         .sb-toggle{width:42px;height:42px;border-radius:50%;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-top:8px}
         .page-header{margin-bottom:24px}
-        .page-greeting{font-family:'Playfair Display',serif;font-size:26px;font-weight:600;line-height:1.2;margin-bottom:4px}
-        .page-greeting em{font-style:italic;color:#C4704A}
+        .page-greeting{font-family:${ADMIN_FONTS.display};font-size:26px;font-weight:600;line-height:1.2;margin-bottom:4px}
+        .page-greeting em{font-style:italic;color:${d.accent}}
         .page-sub{font-size:12px}
         .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
         .stat-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
         .stat-card{border-radius:16px;border-width:1px;border-style:solid;padding:16px 18px}
-        .sc-label{font-size:11px;margin-bottom:6px}
-        .sc-num{font-family:'Playfair Display',serif;font-size:26px;font-weight:600;line-height:1}
-        .sc-sub{font-size:11px;margin-top:3px}
+        .sc-label{font-size:12px;margin-bottom:6px}
+        .sc-num{font-family:${ADMIN_FONTS.display};font-size:26px;font-weight:600;line-height:1}
+        .sc-sub{font-size:12px;margin-top:3px}
         .section{margin-bottom:24px}
         .section-label{font-size:12px;font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-        .section-label-count{font-size:11px;padding:2px 8px;border-radius:10px}
+        .section-label-count{font-size:12px;padding:2px 8px;border-radius:10px}
         .booking-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
         .booking-card{border-radius:16px;padding:16px;cursor:pointer;transition:all 0.15s;border:2px solid transparent}
-        .booking-card:hover{transform:translateY(-2px)}.booking-card.selected{border-color:#C4704A}
-        .bc-type{font-size:10px;margin-bottom:8px}.bc-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;margin-bottom:4px}
-        .bc-date{font-size:11px;margin-bottom:10px}.bc-footer{display:flex;justify-content:space-between;align-items:center}
-        .bc-countdown{font-family:'Playfair Display',serif;font-style:italic;font-size:14px;color:#C4704A}
+        .booking-card:hover{transform:translateY(-2px)}.booking-card.selected{border-color:${d.accent}}
+        .bc-type{font-size:12px;margin-bottom:8px}.bc-name{font-family:${ADMIN_FONTS.display};font-size:15px;font-weight:600;margin-bottom:4px}
+        .bc-date{font-size:12px;margin-bottom:10px}.bc-footer{display:flex;justify-content:space-between;align-items:center}
+        .bc-countdown{font-family:${ADMIN_FONTS.display};font-style:italic;font-size:14px;color:${d.accent}}
         .bc-arrow{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px}
         .sub-list{display:flex;flex-direction:column;gap:6px}
         .sub-item{border-radius:12px;border-width:1px;border-style:solid;padding:12px 14px;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:12px}
         .si-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-        .si-name{font-family:'Playfair Display',serif;font-size:13px;font-weight:600;flex:1}
-        .si-type{font-size:11px}.si-meta{font-size:11px;white-space:nowrap}
+        .si-name{font-family:${ADMIN_FONTS.display};font-size:13px;font-weight:600;flex:1}
+        .si-type{font-size:12px}.si-meta{font-size:12px;white-space:nowrap}
         .alert-row{border-radius:12px;border-width:1px;border-style:solid;padding:12px 14px;margin-bottom:6px;display:flex;align-items:center;gap:12px}
         .proj-row{border-radius:12px;border-width:1px;border-style:solid;padding:11px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
-        .proj-name{font-family:'Playfair Display',serif;font-size:13px;font-weight:600;flex:1}
-        .proj-due{font-size:11px;white-space:nowrap}
+        .proj-name{font-family:${ADMIN_FONTS.display};font-size:13px;font-weight:600;flex:1}
+        .proj-due{font-size:12px;white-space:nowrap}
         .cal-wrap{border-radius:16px;border-width:1px;border-style:solid;padding:16px;margin-bottom:12px}
         .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-        .cal-month-label{font-family:'Playfair Display',serif;font-size:16px;font-weight:600}
+        .cal-month-label{font-family:${ADMIN_FONTS.display};font-size:16px;font-weight:600}
         .cal-days-row{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
-        .cal-day-label{font-size:10px;text-align:center;padding:4px 0}
+        .cal-day-label{font-size:12px;text-align:center;padding:4px 0}
         .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
         .cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:12px;cursor:pointer;transition:all 0.12s;position:relative}
         .cal-cell:hover{opacity:0.8}.cal-cell.empty{opacity:0;pointer-events:none}
-        .slot-indicator{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#C4704A}
+        .slot-indicator{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:${ADMIN_CORAL}}
         .day-block-panel{border-radius:12px;border-width:1px;border-style:solid;padding:14px;margin-bottom:16px}
         .dbp-title{font-size:12px;font-weight:500;margin-bottom:12px}
         .dbp-slots{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
@@ -1383,12 +1438,12 @@ export default function AdminDashboard() {
         .dbp-slot-time{font-size:12px;flex:1}
         .dbp-slot-rm{background:none;border:none;font-size:14px;cursor:pointer;line-height:1;padding:0 2px}
         .dbp-add{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
-        .dbp-input{font-family:'DM Sans',sans-serif;font-size:11px;padding:7px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid}
-        .dbp-save{background:#C4704A;border:none;color:white;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 12px;border-radius:8px;cursor:pointer}
+        .dbp-input{font-family:${ADMIN_FONTS.body};font-size:12px;padding:7px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid}
+        .dbp-save{background:${ADMIN_CORAL};border:none;color:${ADMIN_INK};font-family:${ADMIN_FONTS.body};font-size:12px;font-weight:500;padding:7px 12px;border-radius:8px;cursor:pointer}
         .dbp-save:disabled{opacity:0.35;cursor:not-allowed}
         .day-cards{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px}
         .day-card{border-radius:10px;padding:8px 4px;border-width:1px;border-style:solid;cursor:pointer;text-align:center;transition:all 0.15s}
-        .dc-name{font-size:9px;font-weight:500;margin-bottom:4px}.dc-dot{width:4px;height:4px;border-radius:50%;margin:0 auto 3px}.dc-time{font-size:8px}
+        .dc-name{font-size:12px;font-weight:500;margin-bottom:4px}.dc-dot{width:4px;height:4px;border-radius:50%;margin:0 auto 3px}.dc-time{font-size:8px}
         .hours-card{border-radius:14px;border-width:1px;border-style:solid;overflow:hidden;margin-bottom:16px}
         .hour-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom-width:1px;border-bottom-style:solid}
         .hour-item:last-child{border-bottom:none}.hi-day{font-size:12px;width:34px}
@@ -1398,116 +1453,225 @@ export default function AdminDashboard() {
         .hi-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:white;border-radius:50%;transition:transform 0.2s;pointer-events:none}
         .hi-toggle input:checked~.hi-thumb{transform:translateX(14px)}
         .hi-times{display:flex;align-items:center;gap:6px;margin-left:auto}
-        .hi-input{font-family:'DM Sans',sans-serif;font-size:11px;padding:4px 8px;border-radius:8px;width:70px;outline:none;border-width:1px;border-style:solid}
-        .hi-sep{font-size:10px}
+        .hi-input{font-family:${ADMIN_FONTS.body};font-size:12px;padding:4px 8px;border-radius:8px;width:70px;outline:none;border-width:1px;border-style:solid}
+        .hi-sep{font-size:12px}
         .blocked-card{border-radius:14px;border-width:1px;border-style:solid;padding:14px;margin-bottom:16px}
         .blocked-card-title{font-size:12px;font-weight:500;margin-bottom:10px}
         .bl-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;margin-bottom:4px}
-        .bl-d{font-size:12px;flex:1}.bl-r{font-size:11px;flex:2}
+        .bl-d{font-size:12px;flex:1}.bl-r{font-size:12px;flex:2}
         .bl-x{background:none;border:none;font-size:16px;cursor:pointer;line-height:1;padding:0 2px}
         .add-block-row{display:grid;grid-template-columns:120px 1fr auto;gap:6px;margin-top:10px}
-        .ab-input{font-family:'DM Sans',sans-serif;font-size:11px;padding:7px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid}
-        .ab-btn{background:#C4704A;border:none;color:white;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:pointer}
+        .ab-input{font-family:${ADMIN_FONTS.body};font-size:12px;padding:7px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid}
+        .ab-btn{background:${ADMIN_CORAL};border:none;color:${ADMIN_INK};font-family:${ADMIN_FONTS.body};font-size:12px;font-weight:500;padding:7px 14px;border-radius:8px;cursor:pointer}
         .ab-btn:disabled{opacity:0.35;cursor:not-allowed}
         .stage-section{margin-bottom:20px}
         .stage-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-        .stage-pill{font-size:10px;font-weight:500;padding:3px 10px;border-radius:20px}
-        .stage-count{font-size:11px;margin-left:auto}
+        .stage-pill{font-size:12px;font-weight:500;padding:3px 10px;border-radius:20px}
+        .stage-count{font-size:12px;margin-left:auto}
         .client-row{border-radius:12px;border-width:1px;border-style:solid;padding:11px 14px;margin-bottom:4px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all 0.15s}
-        .cr-name{font-family:'Playfair Display',serif;font-size:13px;font-weight:600;flex:1}.cr-meta{font-size:11px}
-        .cr-btn{font-size:10px;font-weight:500;border:none;padding:4px 10px;border-radius:20px;cursor:pointer;white-space:nowrap}
+        .cr-name{font-family:${ADMIN_FONTS.display};font-size:13px;font-weight:600;flex:1}.cr-meta{font-size:12px}
+        .cr-btn{font-size:12px;font-weight:500;border:none;padding:4px 10px;border-radius:20px;cursor:pointer;white-space:nowrap}
         .rp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;text-align:center;padding:40px}
         .rp-empty-icon{font-size:40px;margin-bottom:8px}.rp-empty-text{font-size:12px;line-height:1.7}
         .rp-card{border-radius:16px;padding:18px;margin-bottom:16px}
-        .rp-eyebrow{font-size:10px;font-weight:500;color:#C4704A;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px}
-        .rp-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:600;margin-bottom:3px}
+        .rp-eyebrow{font-size:12px;font-weight:500;color:${d.accent};letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px}
+        .rp-name{font-family:${ADMIN_FONTS.display};font-size:20px;font-weight:600;margin-bottom:3px}
         .rp-meta{font-size:12px;margin-bottom:2px}
         .rp-time-badge{display:flex;align-items:center;gap:8px;border-radius:10px;padding:10px 12px;margin-top:10px}
-        .rtb-cd{font-family:'Playfair Display',serif;font-style:italic;font-size:14px;color:#C4704A;margin-left:auto}
+        .rtb-cd{font-family:${ADMIN_FONTS.display};font-style:italic;font-size:14px;color:${d.accent};margin-left:auto}
         .rp-fields{margin-bottom:16px;display:flex;flex-direction:column;gap:12px}
-        .rf-label{font-size:10px;font-weight:500;color:#C4704A;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;opacity:0.8}
+        .rf-label{font-size:12px;font-weight:500;color:${d.accent};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;opacity:0.8}
         .rf-val{font-size:13px;line-height:1.55}
         .rp-actions{display:flex;flex-direction:column;gap:8px}
         .ra-btn{display:flex;align-items:center;justify-content:center;padding:11px 16px;border-radius:12px;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;text-decoration:none;border:none;width:100%}
-        .ra-btn.fill{background:#C4704A;color:white}.ra-btn.fill:hover{background:#d4855f}
-        .empty-note{font-size:11px;text-align:center;padding:16px}
+        .ra-btn.fill{background:${ADMIN_CORAL};color:${ADMIN_INK}}.ra-btn.fill:hover{background:#FF8467}
+        .empty-note{font-size:12px;text-align:center;padding:16px}
         .legend{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
-        .legend-item{display:flex;align-items:center;gap:5px;font-size:10px}
+        .legend-item{display:flex;align-items:center;gap:5px;font-size:12px}
         .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
         .chart-wrap{border-radius:16px;border-width:1px;border-style:solid;padding:20px;margin-bottom:20px}
-        .chart-title{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;margin-bottom:16px}
+        .chart-title{font-family:${ADMIN_FONTS.display};font-size:15px;font-weight:600;margin-bottom:16px}
         .bar-chart{display:flex;align-items:flex-end;gap:8px;height:120px}
         .bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
         .bar{width:100%;border-radius:6px 6px 0 0;min-height:4px;cursor:pointer}.bar:hover{opacity:0.8}
-        .bar-label{font-size:10px;white-space:nowrap}.bar-val{font-size:9px;white-space:nowrap}
+        .bar-label{font-size:12px;white-space:nowrap}.bar-val{font-size:12px;white-space:nowrap}
         .data-table{border-radius:14px;border-width:1px;border-style:solid;overflow:hidden;margin-bottom:20px}
         .dt-header{display:grid;padding:10px 14px;border-bottom-width:1px;border-bottom-style:solid}
         .dt-row{display:grid;padding:11px 14px;border-bottom-width:1px;border-bottom-style:solid;align-items:center;transition:background 0.12s}
-        .dt-row:last-child{border-bottom:none}.dt-row:hover{background:rgba(196,112,74,0.05)}
+        .dt-row:last-child{border-bottom:none}.dt-row:hover{background:rgba(255,138,112,0.07)}
         .dt-cell{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .dt-cell.hd{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em}
-        .status-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500}
-        .add-row-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font-size:11px;font-weight:500;cursor:pointer;border:none;background:none}
+        .dt-cell.hd{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em}
+        .status-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:500}
+        .add-row-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:none}
         .form-card{border-radius:14px;border-width:1px;border-style:solid;padding:16px;margin-bottom:16px}
         .form-title{font-size:13px;font-weight:500;margin-bottom:14px}
         .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
         .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
         .form-group{display:flex;flex-direction:column;gap:4px}
-        .form-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em}
+        .form-label{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em}
         .form-actions{display:flex;gap:8px;justify-content:flex-end}
-        .btn-save{background:#C4704A;border:none;color:white;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 16px;border-radius:8px;cursor:pointer}
-        .btn-cancel{background:none;border-width:1px;border-style:solid;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:7px 16px;border-radius:8px;cursor:pointer}
+        .btn-save{background:${ADMIN_CORAL};border:none;color:${ADMIN_INK};font-family:${ADMIN_FONTS.body};font-size:12px;font-weight:500;padding:7px 16px;border-radius:8px;cursor:pointer}
+        .btn-cancel{background:none;border-width:1px;border-style:solid;font-family:${ADMIN_FONTS.body};font-size:12px;font-weight:500;padding:7px 16px;border-radius:8px;cursor:pointer}
         .platform-bars{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
         .plat-card{border-radius:14px;border-width:1px;border-style:solid;padding:14px}
-        .plat-label{font-size:11px;margin-bottom:6px}
-        .plat-num{font-family:'Playfair Display',serif;font-size:22px;font-weight:600;margin-bottom:8px}
+        .plat-label{font-size:12px;margin-bottom:6px}
+        .plat-num{font-family:${ADMIN_FONTS.display};font-size:22px;font-weight:600;margin-bottom:8px}
         .plat-bar-bg{height:6px;border-radius:3px;overflow:hidden}
         .plat-bar-fill{height:100%;border-radius:3px;transition:width 0.4s}
         .icon-btn{background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;line-height:1}
         .doc-card{border-radius:14px;border-width:1px;border-style:solid;padding:16px;margin-bottom:10px}
         .doc-card-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
         .doc-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-        .doc-name{font-family:'Playfair Display',serif;font-size:14px;font-weight:600;flex:1}
+        .doc-name{font-family:${ADMIN_FONTS.display};font-size:14px;font-weight:600;flex:1}
         .doc-actions{display:flex;gap:8px}
-        .doc-btn{flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;border:none;text-align:center;transition:all 0.15s}
-        .doc-btn.fill{background:#C4704A;color:white}.doc-btn.fill:hover{opacity:0.85}
+        .doc-btn{flex:1;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:none;text-align:center;transition:all 0.15s}
+        .doc-btn.fill{background:${ADMIN_CORAL};color:${ADMIN_INK}}.doc-btn.fill:hover{opacity:0.85}
         .upload-zone{border-radius:12px;border-width:2px;border-style:dashed;padding:20px;text-align:center;cursor:pointer;transition:all 0.15s;margin-bottom:16px;display:block}
-        textarea.form-input{resize:vertical;min-height:70px;font-family:'DM Sans',sans-serif;font-size:12px;padding:8px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid;line-height:1.5}
+        textarea.form-input{resize:vertical;min-height:70px;font-family:${ADMIN_FONTS.body};font-size:12px;padding:8px 10px;border-radius:8px;outline:none;width:100%;border-width:1px;border-style:solid;line-height:1.5}
         .fill-form-wrap{border-radius:14px;border-width:1px;border-style:solid;padding:20px;margin-bottom:20px}
-        .fill-form-title{font-family:'Playfair Display',serif;font-size:16px;font-weight:600;margin-bottom:4px}
-        .fill-form-sub{font-size:11px;margin-bottom:20px}
+        .fill-form-title{font-family:${ADMIN_FONTS.display};font-size:16px;font-weight:600;margin-bottom:4px}
+        .fill-form-sub{font-size:12px;margin-bottom:20px}
         .section-divider{height:1px;margin:16px 0}
-        .section-mini-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
+        .section-mini-label{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
         .notes-box{border-radius:10px;border-width:1px;border-style:solid;padding:12px;font-size:12px;line-height:1.6;min-height:60px;cursor:pointer}
         .inv-row{display:flex;align-items:flex-start;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;margin-bottom:6px}
         .preview-section{padding:12px 0;border-bottom-width:1px;border-bottom-style:solid}
         .preview-section:last-child{border-bottom:none}
-        .preview-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+        .preview-label{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
         .preview-value{font-size:13px;line-height:1.6;white-space:pre-wrap}
+
+        /* ---------- Admin identity: shared with the public site, dark ---------- */
+        .shell{font-family:${ADMIN_FONTS.body};-webkit-font-smoothing:antialiased}
+        .shell h1,.shell h2,.page-greeting,.sc-num,.bc-name,.si-name,.proj-name,.cal-month-label,.cr-name,.rp-name,.chart-title,.plat-num,.doc-name,.fill-form-title{font-variation-settings:'SOFT' 100;letter-spacing:-0.01em}
+        .page-greeting{font-size:30px;font-weight:600}
+        .page-greeting em{color:${d.accent}}
+        .page-sub{font-size:13px}
+        .admin-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${d.accent};margin-bottom:8px}
+        .admin-eyebrow::before{content:'';width:18px;height:3px;border-radius:2px;background:${ADMIN_CORAL}}
+        .sidebar{padding:18px 0 16px;width:100%}
+        .sb-logo{width:46px;height:46px;border-radius:15px;background:${ADMIN_CORAL};color:${ADMIN_INK};border:2px solid ${d.text};box-shadow:3px 3px 0 ${d.text};font-style:normal;font-weight:700;font-size:17px}
+        .tb-logo{width:38px;height:38px;border-radius:12px;background:${ADMIN_CORAL};color:${ADMIN_INK};border:2px solid ${d.text};display:flex;align-items:center;justify-content:center;font-family:${ADMIN_FONTS.display};font-weight:700;font-size:14px}
+        .sb-admin{margin-top:10px;font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:${d.accentBg};color:${d.accent}}
+        .sb-btn{width:64px;height:58px;border-radius:16px;position:relative}
+        .sb-btn:hover{background:${d.accentBg}!important}
+        .sb-btn[aria-current=page]::before{content:'';position:absolute;left:-8px;top:14px;bottom:14px;width:3px;border-radius:2px;background:${ADMIN_CORAL}}
+        .sb-btn-label{font-size:11px;font-weight:600;letter-spacing:0.06em}
+        .sb-toggle{width:auto;min-width:64px;height:auto;border-radius:999px;padding:6px 8px;font-size:11px;font-weight:600;letter-spacing:0.04em;border:1px solid ${d.border2}!important;color:${d.text2}!important}
+        .sb-toggle:hover{border-color:${d.accent}!important;color:${d.text}!important}
+        .sb-toggle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;white-space:nowrap;line-height:1.1}
+        .sb-toggle-label{margin:0!important}
+        .stat-card,.form-card,.fill-form-wrap,.doc-card,.chart-wrap,.data-table,.cal-wrap,.hours-card,.blocked-card,.day-block-panel,.plat-card{border-radius:18px}
+        .booking-card{border-radius:18px;border:1.5px solid ${d.border}}
+        .booking-card.selected,.booking-card:focus-visible{border-color:${d.accent}}
+        .sub-item,.client-row,.proj-row,.alert-row{border-radius:14px}
+        .sc-label,.sc-sub,.si-type,.si-meta,.cr-meta,.proj-due,.bc-type,.bc-date{font-size:12px}
+        .sc-num{font-size:28px}
+        .section-label{font-size:13px;font-weight:700;letter-spacing:0.02em}
+        .section-label-count{font-size:12px;font-weight:600}
+        .form-label,.section-mini-label,.preview-label,.dt-cell.hd,.rf-label{font-size:11px;font-weight:700;letter-spacing:0.08em}
+        .rf-label{opacity:1}
+        .rf-val,.preview-value{font-size:14px}
+        .dt-cell{font-size:13px}
+        .status-pill,.stage-pill{font-size:11px;font-weight:700;padding:3px 10px}
+        .rp-eyebrow{font-size:11px;font-weight:700;letter-spacing:0.12em}
+        .rp-card{border-radius:18px;border:1px solid ${d.border}}
+        /* Buttons: coral for the main action, outlined for everything else */
+        .btn-save,.ra-btn.fill,.doc-btn.fill,.dbp-save,.ab-btn{background:${ADMIN_CORAL};color:${ADMIN_INK};font-family:${ADMIN_FONTS.body};font-weight:700;font-size:13px;border-radius:999px;min-height:38px;padding:8px 18px;border:2px solid ${ADMIN_CORAL};transition:transform .15s,background .15s}
+        .btn-save:hover:not(:disabled),.ra-btn.fill:hover,.doc-btn.fill:hover,.dbp-save:hover:not(:disabled),.ab-btn:hover:not(:disabled){background:#FF8467;border-color:#FF8467;opacity:1}
+        .btn-save:disabled,.dbp-save:disabled,.ab-btn:disabled,.doc-btn:disabled,.ra-btn:disabled{opacity:.45;cursor:not-allowed}
+        .btn-cancel{font-family:${ADMIN_FONTS.body};font-weight:600;font-size:13px;border-radius:999px;min-height:38px;padding:8px 18px;border-color:${d.border2}!important;color:${d.text}!important;background:transparent}
+        .btn-cancel:hover{border-color:${d.text}!important}
+        .ra-btn{border-radius:999px;font-size:13px;font-weight:600;min-height:42px}
+        .doc-btn{border-radius:999px;font-size:13px;font-weight:600;min-height:38px}
+        .cr-btn{font-size:12px;font-weight:600;padding:6px 12px;min-height:30px}
+        .add-row-btn{font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px!important}
+        .icon-btn{min-width:30px;min-height:30px;border-radius:8px;color:${d.text2}}
+        .icon-btn:hover{background:${d.accentBg}}
+        /* Fields */
+        .shell input,.shell select,.shell textarea{font-family:${ADMIN_FONTS.body};color:${d.text}}
+        .shell input::placeholder,.shell textarea::placeholder{color:${d.text3};opacity:1}
+        .shell select option{background:${d.white};color:${d.text}}
+        .dbp-input,.ab-input,.hi-input,textarea.form-input{font-size:13px;padding:8px 11px;border-radius:10px;border-width:1.5px!important;border-color:${d.border2}!important;background:${d.surface}!important;color:${d.text}!important;min-height:38px}
+        .shell input:focus,.shell select:focus,.shell textarea:focus{border-color:${d.accent}!important}
+        .shell input[type=date],.shell input[type=time]{color-scheme:dark}
+        .hi-track{border-color:${d.border2}!important}
+        /* Keyboard focus, always visible */
+        .shell :focus-visible{outline:3px solid ${d.accent};outline-offset:2px}
+        .shell input:focus-visible,.shell select:focus-visible,.shell textarea:focus-visible{outline:2px solid ${d.accent};outline-offset:1px}
+        .admin-skip{position:absolute;left:-999px;top:8px;z-index:2000;background:${ADMIN_CORAL};color:${ADMIN_INK};padding:8px 14px;border-radius:999px;font-weight:700}
+        .admin-skip:focus{left:96px}
+        /* Tables scroll sideways instead of squeezing */
+        .data-table{overflow-x:auto;overflow-y:hidden}
+        .dt-row:hover{background:rgba(255,138,112,0.07)}
+        /* Modals */
+        .admin-backdrop{backdrop-filter:blur(3px)}
+        .admin-modal{border-radius:22px!important;box-shadow:0 24px 60px rgba(0,0,0,.5);max-height:calc(100vh - 32px);overflow-y:auto}
+        .admin-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:1200;background:${d.white};color:${d.text};border:1px solid ${d.border2};border-radius:14px;padding:12px 16px;font-size:13px;box-shadow:0 12px 32px rgba(0,0,0,.4);max-width:calc(100vw - 32px)}
+        @media (prefers-reduced-motion: reduce){.shell *{transition:none!important;animation:none!important}.booking-card:hover{transform:none}}
+        /* Narrower screens: panel below content */
+        @media (max-width:1180px){.main{grid-template-columns:1fr 300px!important}}
+        /* Phones and small tablets: bottom navigation, single column */
+        @media (max-width:900px){
+          html,body{height:auto;overflow:auto}
+          .shell{display:block!important;height:auto!important;overflow:visible!important;padding-bottom:84px}
+          .sidebar{position:fixed;left:0;right:0;bottom:0;z-index:900;flex-direction:row;height:74px;padding:6px 8px;border-right:none!important;border-top:1px solid ${d.border}}
+          .sb-logo,.sb-admin-wrap,.sb-divider{display:none!important}
+          .sb-nav{flex-direction:row;justify-content:space-around;padding:0;flex:1}
+          .sb-btn{width:58px;height:58px}
+          .sb-btn[aria-current=page]::before{left:14px;right:14px;top:-6px;bottom:auto;width:auto;height:3px}
+          .sb-toggle{min-width:0;margin:0 2px!important;padding:6px}
+          .sb-toggle-label{display:none}
+          .main{display:block!important;height:auto!important;overflow:visible!important}
+          .center{overflow:visible;padding:20px 16px 8px}
+          .panel{border-left:none!important;border-top:1px solid ${d.border};overflow:visible}
+          .panel-inner{padding:20px 16px}
+          .admin-topbar{display:flex!important}
+          .stat-row,.stat-row-3{grid-template-columns:1fr 1fr}
+          .form-grid,.form-grid-3,.platform-bars,.dbp-add,.add-block-row{grid-template-columns:1fr!important}
+          .booking-cards{grid-template-columns:1fr}
+          .page-greeting{font-size:26px}
+          .dt-header,.dt-row{min-width:620px}
+          .doc-actions,.form-actions{flex-wrap:wrap}
+          .admin-skip:focus{left:16px}
+          .rp-empty{height:auto;padding:24px}
+        }
+        @media (max-width:420px){.stat-row,.stat-row-3{grid-template-columns:1fr}}
       `}</style>
 
       <div className="shell" style={{background:d.bg,color:d.text,display:'grid',gridTemplateColumns:'80px 1fr',height:'100vh',overflow:'hidden'}}>
-        <div className="sidebar" style={{background:d.white,borderColor:d.border}}>
-          <div className="sb-logo">A</div>
+        <a href="#admin-main" className="admin-skip">Skip to content</a>
+        <nav className="sidebar" aria-label="Admin" style={{background:d.white,borderColor:d.border}}>
+          <div className="sb-admin-wrap" style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+            <div className="sb-logo" aria-hidden="true">AV</div>
+            <div className="sb-admin">Admin</div>
+          </div>
           <div className="sb-nav">
             {NAV_ITEMS.map(({v,label,icon})=>(
-              <button key={v} className="sb-btn" style={{color:view===v?d.accent:d.text3,background:view===v?d.accentBg:'none'}} onClick={()=>setView(v as any)}>
+              <button key={v} className="sb-btn" aria-current={view===v?'page':undefined} style={{color:view===v?d.accent:d.text2,background:view===v?d.accentBg:'none'}} onClick={()=>setView(v as any)}>
                 {icon}
-                <span className="sb-btn-label" style={{color:view===v?d.accent:d.text3}}>{label}</span>
+                <span className="sb-btn-label" style={{color:view===v?d.accent:d.text2}}>{label}</span>
               </button>
             ))}
           </div>
           <div className="sb-divider" style={{background:d.border}}/>
-          <button className="sb-toggle" style={{color:d.text3}} onClick={()=>setDark(!dark)}>{dark?'☀️':'🌙'}</button>
-          <button className="sb-toggle" style={{color:d.text3,fontSize:12,marginTop:4}} onClick={handleLogout} title="Log out">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <button className="sb-toggle" style={{background:'none'}} onClick={()=>setDark(!dark)} aria-label={`Surface color: ${dark?'teal':'charcoal'}. Switch to ${dark?'charcoal':'teal'}`} title="Switch surface color">
+            <span aria-hidden="true" style={{display:'inline-block',width:10,height:10,borderRadius:'50%',background:dark?'#10302D':'#221C1A',border:'1.5px solid '+d.text2,marginRight:4,verticalAlign:'-1px'}}/>
+            <span className="sb-toggle-label">{dark?'Teal':'Charcoal'}</span>
           </button>
-        </div>
+          <button className="sb-toggle" style={{background:'none',marginTop:6}} onClick={handleLogout} aria-label="Log out" title="Log out">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <span className="sb-toggle-label" style={{marginLeft:4}}>Log out</span>
+          </button>
+        </nav>
 
         <div className="main" style={{display:'grid',gridTemplateColumns:'1fr 320px',height:'100vh',overflow:'hidden',minWidth:0}}>
-          <div className="center" style={{background:d.bg,minWidth:0}}>
+          <main id="admin-main" tabIndex={-1} className="center" style={{background:d.bg,minWidth:0}}>
+            <div className="admin-topbar" style={{display:'none',alignItems:'center',gap:10,marginBottom:18}}>
+              <div className="tb-logo" aria-hidden="true">AV</div>
+              <div className="sb-admin" style={{marginTop:0}}>Admin</div>
+            </div>
             {loading ? (
-              <div className="empty-note" style={{paddingTop:60,color:d.text3}}>Loading...</div>
+              <div className="empty-note" role="status" style={{paddingTop:60,color:d.text2,fontSize:14}}>Loading your dashboard…</div>
             ) : view==='home' ? (
               <>
                 <div className="page-header">
@@ -1540,9 +1704,9 @@ export default function AdminDashboard() {
                         <div key={p.id} className="alert-row" style={{background:d.green,borderColor:d.greenText+'44'}}>
                           <div style={{flex:1}}>
                             <div style={{fontSize:13,fontWeight:500,color:d.text}}>{p.client_name}</div>
-                            <div style={{fontSize:11,color:d.greenText}}>{p.project_title} · Accepted {new Date(p.responded_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+                            <div style={{fontSize:12,color:d.greenText}}>{p.project_title} · Accepted {new Date(p.responded_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
                           </div>
-                          <button className="cr-btn" style={{background:d.greenText,color:'white'}} onClick={()=>setView('docs')}>Send Contract</button>
+                          <button className="cr-btn" style={{background:d.greenText,color:ADMIN_INK}} onClick={()=>setView('docs')}>Send Contract</button>
                         </div>
                       ))}
                     </div>
@@ -1558,9 +1722,9 @@ export default function AdminDashboard() {
                       <div key={inv.id} className="alert-row" style={{background:d.red,borderColor:d.redText+'44'}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,fontWeight:500,color:d.text}}>Invoice #{inv.invoice_number}</div>
-                          <div style={{fontSize:11,color:d.redText}}>Due {inv.due_date?fmtShort(inv.due_date):'unknown'} · {fmtMoney(inv.total_fee||inv.amount)}</div>
+                          <div style={{fontSize:12,color:d.redText}}>Due {inv.due_date?fmtShort(inv.due_date):'unknown'} · {fmtMoney(inv.total_fee||inv.amount)}</div>
                         </div>
-                        <button className="cr-btn" style={{background:d.redText,color:'white'}} onClick={()=>markInvoicePaid(inv)}>Mark Paid</button>
+                        <button className="cr-btn" style={{background:d.redText,color:ADMIN_INK}} onClick={()=>markInvoicePaid(inv)}>Mark Paid</button>
                       </div>
                     ))}
                   </div>
@@ -1578,7 +1742,7 @@ export default function AdminDashboard() {
                         <div key={p.id} className="proj-row" style={{background:d.white,borderColor:isUrgent?d.accent:d.border}}>
                           <div style={{flex:1}}>
                             <div className="proj-name" style={{color:d.text}}>{p.name}</div>
-                            <div style={{fontSize:11,color:d.text2}}>{p.type} · {fmtMoney(p.value)}</div>
+                            <div style={{fontSize:12,color:d.text2}}>{p.type} · {fmtMoney(p.value)}</div>
                           </div>
                           <div className="proj-due" style={{color:isUrgent?d.accent:d.text3}}>
                             {daysLeft===null?'No deadline':daysLeft<0?'Overdue':daysLeft===0?'Due today':daysLeft+'d left'}
@@ -1600,7 +1764,7 @@ export default function AdminDashboard() {
                           <div className="bc-date" style={{color:d.text2}}>{fmtShort(b.scheduled_at)} · {new Date(b.scheduled_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
                           <div className="bc-footer">
                             <div className="bc-countdown">{countdown(b.scheduled_at)}</div>
-                            <div className="bc-arrow" style={{background:dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)',color:d.text2}}>→</div>
+                            <div className="bc-arrow" style={{background:'rgba(251,243,232,0.1)',color:d.text2}}>→</div>
                           </div>
                         </div>
                       ))}
@@ -1660,8 +1824,8 @@ export default function AdminDashboard() {
                   <div key={stage} className="stage-section">
                     <div className="stage-header">
                       <div className="stage-pill" style={{
-                        background:stage==='discovery_call'?d.sand:stage==='proposal_sent'?d.linen:stage==='active_project'?(dark?'#1E2C1E':'#E8F0E8'):stage==='lost'?d.red:d.surface,
-                        color:stage==='discovery_call'?(dark?'#C4944A':'#8a6a4a'):stage==='proposal_sent'?(dark?'#A49A6A':'#6a6a4a'):stage==='active_project'?(dark?'#6AAA6A':'#4a6a4a'):stage==='lost'?d.redText:d.text3
+                        background:stage==='discovery_call'?d.sand:stage==='proposal_sent'?d.linen:stage==='active_project'?d.green:stage==='lost'?d.red:d.surface,
+                        color:stage==='discovery_call'?d.amberText:stage==='proposal_sent'?d.text:stage==='active_project'?d.greenText:stage==='lost'?d.redText:d.text3
                       }}>{STAGE_LABELS[stage]}</div>
                       <div className="stage-count" style={{color:d.text3}}>{clientsByStage[stage]?.length||0}</div>
                     </div>
@@ -1707,7 +1871,7 @@ export default function AdminDashboard() {
                     {monthlyData.map((m,i)=>(
                       <div key={i} className="bar-col">
                         <div className="bar-val" style={{color:d.text3}}>{m.value>0?fmtMoney(m.value):''}</div>
-                        <div className="bar" style={{height:Math.max((m.value/maxMonthly)*100,4)+'%',background:m.month===new Date().getMonth()&&m.year===new Date().getFullYear()?d.accent:(dark?'rgba(196,112,74,0.35)':'rgba(196,112,74,0.25)')}}/>
+                        <div className="bar" style={{height:Math.max((m.value/maxMonthly)*100,4)+'%',background:m.month===new Date().getMonth()&&m.year===new Date().getFullYear()?d.accent:'rgba(255,138,112,0.35)'}}/>
                         <div className="bar-label" style={{color:d.text3}}>{m.label}</div>
                       </div>
                     ))}
@@ -1760,8 +1924,8 @@ export default function AdminDashboard() {
                       <div className="dt-cell"><span className="status-pill" style={{background:p.platform==='direct'?d.accentBg:d.surface2,color:p.platform==='direct'?d.accent:d.text2}}>{p.platform}</span></div>
                       <div className="dt-cell" style={{color:d.text2}}>{p.end_date?fmtShort(p.end_date):'none'}</div>
                       <div className="dt-cell" style={{display:'flex',gap:4}}>
-                        <button className="icon-btn" style={{color:d.text2,fontSize:11}} onClick={()=>{setViewingProject(p);setProjectNotes(p.notes||'');setEditingProjectNotes(false)}} title="View">view</button>
-                        <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteProject(p.id)}>x</button>
+                        <button className="icon-btn" style={{color:d.text2,fontSize:12}} onClick={()=>{setViewingProject(p);setProjectNotes(p.notes||'');setEditingProjectNotes(false)}} title="View">view</button>
+                        <button aria-label="Remove" className="icon-btn" style={{color:d.text3}} onClick={()=>deleteProject(p.id)}>x</button>
                       </div>
                     </div>
                   ))}
@@ -1782,11 +1946,11 @@ export default function AdminDashboard() {
                         <div className="dt-cell" style={{color:d.text2}}>{inv.due_date?fmtShort(inv.due_date):'none'}</div>
                         <div className="dt-cell"><span className="status-pill" style={pillStyle}>{statusLabel}</span></div>
                         <div className="dt-cell" style={{display:'flex',gap:4}}>
-                          <button className="icon-btn" style={{color:d.text2,fontSize:11}} onClick={()=>setViewingInvoice(inv)} title="View">view</button>
-                          {inv.status==='awaiting_deposit'&&<button className="icon-btn" style={{color:d.amberText,fontSize:11}} onClick={()=>markInvoicePaid(inv)} title="Mark deposit paid">dep</button>}
-                          {inv.status==='deposit_paid'&&<button className="icon-btn" style={{color:d.greenText,fontSize:11}} onClick={()=>markInvoicePaid(inv)} title="Mark final paid">fin</button>}
+                          <button className="icon-btn" style={{color:d.text2,fontSize:12}} onClick={()=>setViewingInvoice(inv)} title="View">view</button>
+                          {inv.status==='awaiting_deposit'&&<button className="icon-btn" style={{color:d.amberText,fontSize:12}} onClick={()=>markInvoicePaid(inv)} title="Mark deposit paid">dep</button>}
+                          {inv.status==='deposit_paid'&&<button className="icon-btn" style={{color:d.greenText,fontSize:12}} onClick={()=>markInvoicePaid(inv)} title="Mark final paid">fin</button>}
                           {inv.status==='pending'&&<button className="icon-btn" style={{color:d.greenText,fontSize:12}} onClick={()=>markInvoicePaid(inv)} title="Mark paid">ok</button>}
-                          <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteInvoice(inv.id)}>x</button>
+                          <button aria-label="Remove" className="icon-btn" style={{color:d.text3}} onClick={()=>deleteInvoice(inv.id)}>x</button>
                         </div>
                       </div>
                     )
@@ -1807,8 +1971,8 @@ export default function AdminDashboard() {
                     return (
                       <div key={p.id} style={{background:d.surface,borderRadius:12,padding:'12px 14px',border:'1px solid '+(isEditing?d.accent:d.border),transition:'border-color 0.2s'}}>
                         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-                          <div style={{fontSize:11,fontWeight:500,color:d.text}}>{p.name}</div>
-                          <button className="icon-btn" style={{color:isEditing?d.accent:d.text3,fontSize:11}} onClick={()=>{
+                          <div style={{fontSize:12,fontWeight:500,color:d.text}}>{p.name}</div>
+                          <button className="icon-btn" style={{color:isEditing?d.accent:d.text3,fontSize:12}} onClick={()=>{
                             if(isEditing){setEditingPricing(null)}
                             else{setEditingPricing(p.id);setPricingEdits(prev=>({...prev,[p.id]:{price:p.price,description:p.description}}))}
                           }}>{isEditing?'cancel':'edit'}</button>
@@ -1816,13 +1980,13 @@ export default function AdminDashboard() {
                         {isEditing ? (
                           <>
                             <input style={{...inputStyle,marginBottom:6,fontSize:12,fontWeight:600}} value={edits.price} onChange={e=>setPricingEdits(prev=>({...prev,[p.id]:{...edits,price:e.target.value}}))} placeholder="Price"/>
-                            <input style={{...inputStyle,marginBottom:8,fontSize:11}} value={edits.description} onChange={e=>setPricingEdits(prev=>({...prev,[p.id]:{...edits,description:e.target.value}}))} placeholder="Description"/>
+                            <input style={{...inputStyle,marginBottom:8,fontSize:12}} value={edits.description} onChange={e=>setPricingEdits(prev=>({...prev,[p.id]:{...edits,description:e.target.value}}))} placeholder="Description"/>
                             <button className="btn-save" style={{width:'100%'}} onClick={()=>savePricing(p.id)}>Save</button>
                           </>
                         ) : (
                           <>
-                            <div style={{fontFamily:'Playfair Display,serif',fontSize:14,fontWeight:600,color:d.accent,marginBottom:4}}>{p.price}</div>
-                            <div style={{fontSize:10,color:d.text3,lineHeight:1.5}}>{p.description}</div>
+                            <div style={{fontFamily:ADMIN_FONTS.display,fontSize:14,fontWeight:600,color:d.accent,marginBottom:4}}>{p.price}</div>
+                            <div style={{fontSize:12,color:d.text3,lineHeight:1.5}}>{p.description}</div>
                           </>
                         )}
                       </div>
@@ -1843,7 +2007,7 @@ export default function AdminDashboard() {
                     </div>
                     <div>
                       <div className="doc-name" style={{color:d.text}}>Project Proposal</div>
-                      <div style={{fontSize:11,color:d.text3}}>Scope, pricing, and milestone schedule combined</div>
+                      <div style={{fontSize:12,color:d.text3}}>Scope, pricing, and milestone schedule combined</div>
                     </div>
                   </div>
                   <div className="doc-actions">
@@ -1889,15 +2053,15 @@ export default function AdminDashboard() {
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Investment breakdown</div>
-                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>Add each service as a line item with its price. The total and deposit are calculated automatically.</div>
+                    <div style={{fontSize:12,color:d.text3,marginBottom:10}}>Add each service as a line item with its price. The total and deposit are calculated automatically.</div>
                     {lineItems.map((item, idx) => (
                       <div key={idx} style={{display:'grid',gridTemplateColumns:'1fr 120px 32px',gap:8,marginBottom:8,alignItems:'center'}}>
                         <input style={inputStyle} value={item.description} onChange={e=>{const updated=[...lineItems];updated[idx]={...updated[idx],description:e.target.value};setLineItems(updated)}} placeholder={"Landing page, Scheduling integration..."}/>
                         <input style={{...inputStyle,textAlign:'right'}} type="number" value={item.price} onChange={e=>{const updated=[...lineItems];updated[idx]={...updated[idx],price:e.target.value};setLineItems(updated)}} placeholder="0"/>
-                        <button onClick={()=>setLineItems(lineItems.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px',lineHeight:1}}>x</button>
+                        <button aria-label="Remove" onClick={()=>setLineItems(lineItems.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px',lineHeight:1}}>x</button>
                       </div>
                     ))}
-                    <button onClick={()=>setLineItems([...lineItems,{description:'',price:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add line item</button>
+                    <button onClick={()=>setLineItems([...lineItems,{description:'',price:''}])} style={{background:d.accentBg,border:'1px solid '+d.border2,color:d.text,fontFamily:ADMIN_FONTS.body,fontSize:13,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add line item</button>
                     {lineItems.some(i=>i.price) && (
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid '+d.border,marginBottom:12}}>
                         <div style={{fontSize:12,fontWeight:500,color:d.text}}>Total</div>
@@ -1918,7 +2082,7 @@ export default function AdminDashboard() {
                     <div className="section-divider" style={{background:d.border}}/>
                     {proposalForm.payment_plan === 'milestones' ? (<>
                     <div className="section-mini-label" style={{color:d.text3}}>Milestone schedule</div>
-                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>
+                    <div style={{fontSize:12,color:d.text3,marginBottom:10}}>
                       Break the balance into milestones. Each has deliverables, a due date, and a fee.
                       {lineItems.some(i=>i.price) && (() => {
                         const total = lineItems.reduce((s,i)=>s+(parseFloat(i.price)||0),0)
@@ -1932,27 +2096,27 @@ export default function AdminDashboard() {
                       <div key={idx} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,marginBottom:10}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
                           <input style={{...inputStyle,width:'auto',flex:1,fontWeight:500,fontSize:12}} value={milestone.name} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],name:e.target.value};setProposalMilestones(u)}} placeholder="Milestone name"/>
-                          <button onClick={()=>setProposalMilestones(proposalMilestones.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px 0 12px',lineHeight:1}}>x</button>
+                          <button aria-label="Remove" onClick={()=>setProposalMilestones(proposalMilestones.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px 0 12px',lineHeight:1}}>x</button>
                         </div>
                         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                           <div>
-                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Due date</div>
+                            <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Due date</div>
                             <input style={inputStyle} type="date" value={milestone.dueDate} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],dueDate:e.target.value};setProposalMilestones(u)}}/>
                           </div>
                           <div>
-                            <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Fee ($)</div>
+                            <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Fee ($)</div>
                             <input style={{...inputStyle,textAlign:'right'}} type="number" value={milestone.fee} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],fee:e.target.value};setProposalMilestones(u)}} placeholder="0"/>
                           </div>
                         </div>
                         <div>
-                          <div style={{fontSize:10,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Deliverables</div>
+                          <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Deliverables</div>
                           <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:60}} value={milestone.deliverables} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],deliverables:e.target.value};setProposalMilestones(u)}} placeholder="What will be delivered at this milestone..."/>
                         </div>
                       </div>
                     ))}
-                    <button onClick={()=>setProposalMilestones([...proposalMilestones,{name:'Milestone '+(proposalMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'none',color:d.accent,fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:500,padding:'7px 14px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
+                    <button onClick={()=>setProposalMilestones([...proposalMilestones,{name:'Milestone '+(proposalMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'1px solid '+d.border2,color:d.text,fontFamily:ADMIN_FONTS.body,fontSize:13,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
                     </>) : (
-                    <div style={{fontSize:11,color:d.text3,marginBottom:10}}>Standard website project: 50% upfront to reserve the project and begin work, remaining 50% due at delivery, before public launch or final handoff. Switch to milestones for larger custom projects.</div>
+                    <div style={{fontSize:12,color:d.text3,marginBottom:10}}>Standard website project: 50% upfront to reserve the project and begin work, remaining 50% due at delivery, before public launch or final handoff. Switch to milestones for larger custom projects.</div>
                     )}
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Next steps</div>
@@ -1967,7 +2131,7 @@ export default function AdminDashboard() {
                       <textarea className="form-input" style={{background:d.white,borderColor:d.border,color:d.text,minHeight:100}} value={proposalForm.message} onChange={e=>setProposalForm({...proposalForm,message:e.target.value})} placeholder={'Hi ' + (proposalForm.client_name.split(' ')[0] || 'there') + ',\n\nGreat speaking with you today. Please find your proposal attached...'}/>
                     </div>
                     {docError?.kind === 'proposal' && (
-                      <div role="alert" style={{background:'#FDECEA',color:'#8A2A1B',border:'1px solid #E8B4AA',borderRadius:8,padding:'10px 14px',fontSize:12,marginBottom:12,lineHeight:1.5}}>
+                      <div role="alert" style={{background:d.red,color:d.redText,border:'1px solid '+d.redText,borderRadius:8,padding:'10px 14px',fontSize:12,marginBottom:12,lineHeight:1.5}}>
                         {docError.message}
                       </div>
                     )}
@@ -1995,9 +2159,9 @@ export default function AdminDashboard() {
                       <div key={c.id} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:'12px 16px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                         <div>
                           <div style={{fontSize:13,fontWeight:500,color:d.text}}>{c.client_name}</div>
-                          <div style={{fontSize:11,color:d.text3,fontFamily:'DM Mono,monospace'}}>{c.project_title} · Signed {new Date(c.signed_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+                          <div style={{fontSize:12,color:d.text3,fontFamily:'DM Mono,monospace'}}>{c.project_title} · Signed {new Date(c.signed_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
                         </div>
-                        <button className="btn-save" style={{fontSize:11,padding:'6px 14px'}} onClick={()=>resendSignedContract(c.id)}>
+                        <button className="btn-save" style={{fontSize:12,padding:'6px 14px'}} onClick={()=>resendSignedContract(c.id)}>
                           Resend PDF
                         </button>
                       </div>
@@ -2010,7 +2174,7 @@ export default function AdminDashboard() {
                     <div className="doc-icon" style={{background:d.pebble,color:d.accent}}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V6L9 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/><path d="M9 1v5h5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg></div>
                     <div>
                       <div className="doc-name" style={{color:d.text}}>Freelance Contract</div>
-                      <div style={{fontSize:11,color:d.text3}}>Fill out and download a client ready contract</div>
+                      <div style={{fontSize:12,color:d.text3}}>Fill out and download a client ready contract</div>
                     </div>
                   </div>
                   <div className="doc-actions">
@@ -2024,7 +2188,7 @@ export default function AdminDashboard() {
                     <div className="section-mini-label" style={{color:d.text3}}>Select from accepted proposals</div>
                     <div className="form-grid">
                       <div className="form-group" style={{gridColumn:'1/-1'}}>
-                        <select style={inputStyle} onChange={e=>{
+                        <select aria-label="Select from accepted proposals" style={inputStyle} onChange={e=>{
                           const p = proposals.find(pr=>pr.id===e.target.value)
                           if(p) {
                             const now = new Date()
@@ -2080,7 +2244,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Deposit invoice (sent automatically on signature)</div>
-                    <div style={{fontSize:10,color:d.text3,marginBottom:10}}>These details go on the deposit invoice that gets sent the moment the client signs the contract.</div>
+                    <div style={{fontSize:12,color:d.text3,marginBottom:10}}>These details go on the deposit invoice that gets sent the moment the client signs the contract.</div>
                     <div className="form-grid">
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice number</div><input style={inputStyle} value={contractForm.invoice_number} onChange={e=>setContractForm({...contractForm,invoice_number:e.target.value})} placeholder="INV-2026-001"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Due date</div><input style={inputStyle} type="date" value={contractForm.invoice_due_date} onChange={e=>setContractForm({...contractForm,invoice_due_date:e.target.value})}/></div>
@@ -2088,7 +2252,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>
-                    <div style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,fontSize:11,color:d.text2,lineHeight:1.8}}>
+                    <div style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,fontSize:12,color:d.text2,lineHeight:1.8}}>
                       <div style={{marginBottom:6}}>Same 12 clauses as the contract the client signs online (terms version {TERMS_VERSION}):</div>
                       <div style={{marginBottom:6}}>1. Services: scope and change order rate ({formatRate(STANDARD_HOURLY_RATE)}, one hour minimum, estimate approved first)</div>
                       <div style={{marginBottom:6}}>2. Payment: {contractForm.payment_plan === 'milestones' ? 'Deposit, then milestones defined in the proposal' : '50% upfront, 50% at delivery before launch or handoff'}, late payment interest (1.5%/month)</div>
@@ -2104,7 +2268,7 @@ export default function AdminDashboard() {
                       <div>12. Entire agreement: with the accepted proposal and SOW</div>
                     </div>
                     {docError?.kind === 'contract' && (
-                      <div role="alert" style={{background:'#FDECEA',color:'#8A2A1B',border:'1px solid #E8B4AA',borderRadius:8,padding:'10px 14px',fontSize:12,marginTop:12,lineHeight:1.5}}>
+                      <div role="alert" style={{background:d.red,color:d.redText,border:'1px solid '+d.redText,borderRadius:8,padding:'10px 14px',fontSize:12,marginTop:12,lineHeight:1.5}}>
                         {docError.message}
                       </div>
                     )}
@@ -2132,7 +2296,7 @@ export default function AdminDashboard() {
                         <div className="doc-card-header">
                           <div className="doc-icon" style={{background:d.surface,color:d.text3}}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/></svg></div>
                           <div className="doc-name" style={{color:d.text,flex:1}}>{t.name}</div>
-                          <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteDocument(t.id,t.storage_path)}>x</button>
+                          <button aria-label="Remove" className="icon-btn" style={{color:d.text3}} onClick={()=>deleteDocument(t.id,t.storage_path)}>x</button>
                         </div>
                         <div className="doc-actions">
                           <button className="doc-btn fill" onClick={()=>downloadDoc(t.storage_path,t.name)}>Download</button>
@@ -2144,7 +2308,7 @@ export default function AdminDashboard() {
                 <label className="upload-zone" style={{borderColor:d.border,color:d.text3,background:d.surface}}>
                   <div style={{fontSize:20,marginBottom:6}}>+</div>
                   <div style={{fontSize:12}}>Upload any document</div>
-                  <div style={{fontSize:10,marginTop:3}}>Supports .docx, .pdf, .txt</div>
+                  <div style={{fontSize:12,marginTop:3}}>Supports .docx, .pdf, .txt</div>
                   <input type="file" accept=".docx,.pdf,.txt" style={{display:'none'}} onChange={e=>e.target.files&&uploadTemplate(e.target.files[0])}/>
                 </label>
               </div>
@@ -2164,7 +2328,7 @@ export default function AdminDashboard() {
                 <div className="cal-wrap" style={{background:d.white,borderColor:d.border}}>
                   <div className="cal-header">
                     <div className="cal-month-label" style={{color:d.text}}>Next 14 days</div>
-                    <div style={{fontSize:11,color:d.text3}}>{new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})} to {new Date(Date.now()+13*86400000).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+                    <div style={{fontSize:12,color:d.text3}}>{new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})} to {new Date(Date.now()+13*86400000).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
                   </div>
                   <div className="cal-days-row">{DAYS_SHORT.map(day=><div key={day} className="cal-day-label" style={{color:d.text3}}>{day}</div>)}</div>
                   <div className="cal-grid">
@@ -2198,7 +2362,7 @@ export default function AdminDashboard() {
                         {slotsForSelectedDay.map(s=>(
                           <div key={s.id} className="dbp-slot" style={{background:d.surface2}}>
                             <div className="dbp-slot-time" style={{color:d.text}}>{fmt12(s.start_time)} to {fmt12(s.end_time)}</div>
-                            <button className="dbp-slot-rm" style={{color:d.text3}} onClick={()=>removeBlockedSlot(s.id)}>x</button>
+                            <button aria-label="Remove" className="dbp-slot-rm" style={{color:d.text3}} onClick={()=>removeBlockedSlot(s.id)}>x</button>
                           </div>
                         ))}
                       </div>
@@ -2208,7 +2372,7 @@ export default function AdminDashboard() {
                       <input type="time" className="dbp-input" value={blockEnd} style={{background:d.white,borderColor:d.border,color:d.text}} onChange={e=>setBlockEnd(e.target.value)}/>
                       <button className="dbp-save" onClick={saveBlockedSlot} disabled={!blockStart||!blockEnd}>Block</button>
                     </div>
-                    <div style={{fontSize:10,color:d.text3,marginTop:6}}>Selected hours will be hidden from client booking calendar</div>
+                    <div style={{fontSize:12,color:d.text3,marginTop:6}}>Selected hours will be hidden from client booking calendar</div>
                   </div>
                 )}
                 <div className="section-label" style={{color:d.text2,marginBottom:10,marginTop:8}}>Weekly availability</div>
@@ -2223,10 +2387,10 @@ export default function AdminDashboard() {
                 </div>
                 <div className="hours-card" style={{background:d.white,borderColor:d.border}}>
                   {availability.map(a=>(
-                    <div key={a.id} className="hour-item" style={{borderColor:d.border,opacity:a.is_active?1:0.5}}>
+                    <div key={a.id} className="hour-item" style={{borderColor:d.border,opacity:a.is_active?1:0.8}}>
                       <div className="hi-day" style={{color:d.text2}}>{DAYS_FULL[a.day_of_week].slice(0,3)}</div>
                       <label className="hi-toggle">
-                        <input type="checkbox" checked={a.is_active} onChange={()=>toggleDay(a)}/>
+                        <input type="checkbox" aria-label={`Open on ${DAYS_FULL[a.day_of_week]}`} checked={a.is_active} onChange={()=>toggleDay(a)}/>
                         <div className="hi-track" style={{background:a.is_active?d.accent:d.surface2,borderColor:a.is_active?d.accent:d.border}}/>
                         <div className="hi-thumb"/>
                       </label>
@@ -2247,20 +2411,20 @@ export default function AdminDashboard() {
                     <div key={b.id} className="bl-row" style={{background:d.surface}}>
                       <div className="bl-d" style={{color:d.text}}>{b.blocked_date}</div>
                       <div className="bl-r" style={{color:d.text2}}>{b.reason}</div>
-                      <button className="bl-x" style={{color:d.text3}} onClick={()=>removeBlockedDate(b.id)}>x</button>
+                      <button aria-label="Remove" className="bl-x" style={{color:d.text3}} onClick={()=>removeBlockedDate(b.id)}>x</button>
                     </div>
                   ))}
                   <div className="add-block-row">
-                    <input type="date" className="ab-input" value={newBlockedDate} style={{background:d.surface,borderColor:d.border,color:d.text}} onChange={e=>setNewBlockedDate(e.target.value)}/>
+                    <input type="date" aria-label="Date to block" className="ab-input" value={newBlockedDate} style={{background:d.surface,borderColor:d.border,color:d.text}} onChange={e=>setNewBlockedDate(e.target.value)}/>
                     <input type="text" className="ab-input" placeholder="Reason (optional)" value={newBlockedReason} style={{background:d.surface,borderColor:d.border,color:d.text}} onChange={e=>setNewBlockedReason(e.target.value)}/>
                     <button className="ab-btn" onClick={addBlockedDate} disabled={!newBlockedDate}>Block Day</button>
                   </div>
                 </div>
               </>
             )}
-          </div>
+          </main>
 
-          <div className="panel" style={{background:d.white,borderColor:d.border}}>
+          <aside className="panel" aria-label="Details" style={{background:d.white,borderColor:d.border}}>
             <div className="panel-inner">
               {!focused ? (
                 <div className="rp-empty">
@@ -2277,7 +2441,7 @@ export default function AdminDashboard() {
                     <div className="rp-time-badge" style={{background:d.white}}>
                       <div>
                         <div style={{fontSize:12,color:d.text}}>{fmtDate(focusedBooking.scheduled_at)}</div>
-                        <div style={{fontSize:11,color:d.text2,marginTop:1}}>{fmtTime(focusedBooking.scheduled_at)}</div>
+                        <div style={{fontSize:12,color:d.text2,marginTop:1}}>{fmtTime(focusedBooking.scheduled_at)}</div>
                       </div>
                       <div className="rtb-cd">{countdown(focusedBooking.scheduled_at)}</div>
                     </div>
@@ -2309,7 +2473,7 @@ export default function AdminDashboard() {
                     <div className="rp-name" style={{color:d.text}}>{focusedSub.name}</div>
                     <div className="rp-meta" style={{color:d.text2}}>{focusedSub.email}</div>
                     {focusedSub.business&&<div className="rp-meta" style={{color:d.text2}}>{focusedSub.business}</div>}
-                    <div style={{marginTop:10,fontSize:11,color:d.text3}}>Submitted {fmtRelative(focusedSub.submitted_at)}{focusedSub.details_completed_at?' · Details '+fmtRelative(focusedSub.details_completed_at):''}</div>
+                    <div style={{marginTop:10,fontSize:12,color:d.text3}}>Submitted {fmtRelative(focusedSub.submitted_at)}{focusedSub.details_completed_at?' · Details '+fmtRelative(focusedSub.details_completed_at):''}</div>
                     <LeadProgress s={focusedSub} booked={false} d={d}/>
                   </div>
                   <div className="rp-fields">
@@ -2368,13 +2532,13 @@ export default function AdminDashboard() {
                         <div style={{display:'flex',flexDirection:'column',gap:8}}>
                           <button className="ra-btn fill" onClick={()=>setInvoiceType('milestone')}>Milestone Invoice</button>
                           <button className="ra-btn" style={{background:d.surface2,color:d.text2,border:'1px solid '+d.border}} onClick={()=>setInvoiceType('fixed_fee')}>Fixed Fee Invoice</button>
-                          <button className="ra-btn" style={{background:d.surface,color:d.text3,border:'1px solid '+d.border,fontSize:11}} onClick={()=>setInvoiceType('project')}>Project Invoice (deposit / balance)</button>
-                          <button className="ra-btn" style={{background:d.surface,color:d.text3,border:'1px solid '+d.border,fontSize:11}} onClick={()=>setInvoiceType('revision')}>Revision Invoice (hourly)</button>
+                          <button className="ra-btn" style={{background:d.surface,color:d.text3,border:'1px solid '+d.border,fontSize:12}} onClick={()=>setInvoiceType('project')}>Project Invoice (deposit / balance)</button>
+                          <button className="ra-btn" style={{background:d.surface,color:d.text3,border:'1px solid '+d.border,fontSize:12}} onClick={()=>setInvoiceType('revision')}>Revision Invoice (hourly)</button>
                           <button className="btn-cancel" style={{borderColor:d.border,color:d.text2,marginTop:4}} onClick={()=>{setShowClientInvoice(false);setInvoiceType(null)}}>Cancel</button>
                         </div>
                       ) : invoiceType === 'milestone' ? (
                         <>
-                          <div style={{fontSize:10,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Milestone Invoice</div>
+                          <div style={{fontSize:12,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Milestone Invoice</div>
                           <div className="form-group" style={{marginBottom:10}}>
                             <div className="form-label" style={{color:d.text3}}>Invoice #</div>
                             <input style={inputStyle} value={milestoneInvoiceNumber} onChange={e=>setMilestoneInvoiceNumber(e.target.value)} placeholder="INV-165"/>
@@ -2393,12 +2557,12 @@ export default function AdminDashboard() {
                             if (!sow?.line_items?.length) return null
                             return (
                               <div style={{background:d.surface2,borderRadius:10,padding:'10px 12px',marginBottom:12}}>
-                                <div style={{fontSize:10,color:d.text3,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>Milestones</div>
+                                <div style={{fontSize:12,color:d.text3,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>Milestones</div>
                                 {sow.line_items.map((m:any,i:number)=>(
                                   <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:i<sow.line_items.length-1?'1px solid '+d.border:'none'}}>
                                     <div>
                                       <div style={{fontSize:12,color:d.text,fontWeight:500}}>{m.name}</div>
-                                      {m.deliverables&&<div style={{fontSize:10,color:d.text3,marginTop:2}}>{m.deliverables}</div>}
+                                      {m.deliverables&&<div style={{fontSize:12,color:d.text3,marginTop:2}}>{m.deliverables}</div>}
                                     </div>
                                     <div style={{fontSize:12,color:d.accent,fontWeight:500,flexShrink:0,paddingLeft:12}}>${parseFloat(m.fee||'0').toLocaleString()}</div>
                                   </div>
@@ -2413,7 +2577,7 @@ export default function AdminDashboard() {
                         </>
                       ) : invoiceType === 'fixed_fee' ? (
                         <>
-                          <div style={{fontSize:10,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Fixed Fee Invoice</div>
+                          <div style={{fontSize:12,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Fixed Fee Invoice</div>
                           <div className="form-grid">
                             <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice #</div><input style={inputStyle} value={fixedFeeForm.invoice_number} onChange={e=>setFixedFeeForm({...fixedFeeForm,invoice_number:e.target.value})} placeholder="INV-164"/></div>
                             <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total Fee ($)</div><input style={inputStyle} type="number" value={fixedFeeForm.total_fee} onChange={e=>setFixedFeeForm({...fixedFeeForm,total_fee:e.target.value})} placeholder="650"/></div>
@@ -2428,7 +2592,7 @@ export default function AdminDashboard() {
                         </>
                       ) : invoiceType === 'project' ? (
                         <>
-                          <div style={{fontSize:10,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Project Invoice</div>
+                          <div style={{fontSize:12,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Project Invoice</div>
                           <div className="form-grid">
                             <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice #</div><input style={inputStyle} value={clientInvoiceForm.invoice_number} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,invoice_number:e.target.value})} placeholder="INV-001"/></div>
                             <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total Fee ($)</div><input style={inputStyle} type="number" value={clientInvoiceForm.total_fee} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,total_fee:e.target.value})} placeholder="0"/></div>
@@ -2451,7 +2615,7 @@ export default function AdminDashboard() {
                         </>
                       ) : (
                         <>
-                          <div style={{fontSize:10,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Revision Invoice</div>
+                          <div style={{fontSize:12,color:d.accent,fontWeight:500,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:12}}>Revision Invoice</div>
                           <div className="form-grid">
                             <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice #</div><input style={inputStyle} value={clientInvoiceForm.invoice_number} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,invoice_number:e.target.value})} placeholder="INV-002-REV"/></div>
                             <div className="form-group"><div className="form-label" style={{color:d.text3}}>Hours</div><input style={inputStyle} type="number" value={clientInvoiceForm.hours} onChange={e=>setClientInvoiceForm({...clientInvoiceForm,hours:e.target.value})} placeholder="0"/></div>
@@ -2479,7 +2643,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="form-grid">
                         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Date</div><input style={inputStyle} type="date" value={meetingForm.date} onChange={e=>setMeetingForm({...meetingForm,date:e.target.value})}/></div>
-                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Time (EST)</div><input style={inputStyle} type="time" value={meetingForm.time} onChange={e=>setMeetingForm({...meetingForm,time:e.target.value})}/></div>
+                        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Time (Eastern)</div><input style={inputStyle} type="time" value={meetingForm.time} onChange={e=>setMeetingForm({...meetingForm,time:e.target.value})}/></div>
                       </div>
                       <div className="form-actions">
                         <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>setShowScheduleMeeting(false)}>Cancel</button>
@@ -2491,17 +2655,17 @@ export default function AdminDashboard() {
                   )}
                   {clientMeetings.length > 0 && (
                     <div style={{marginBottom:16}}>
-                      <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Meetings</div>
+                      <div style={{fontSize:12,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Meetings</div>
                       {clientMeetings.map(m=>{
                         const isPast = new Date(m.scheduled_at) < new Date()
                         return (
                           <div key={m.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:d.surface,borderRadius:10,marginBottom:4,opacity:isPast?0.6:1}}>
                             <div style={{flex:1}}>
                               <div style={{fontSize:12,color:d.text,fontWeight:500}}>{m.title}</div>
-                              <div style={{fontSize:11,color:d.text2}}>{fmtShort(m.scheduled_at)} · {new Date(m.scheduled_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York',timeZoneName:'short'})}</div>
+                              <div style={{fontSize:12,color:d.text2}}>{fmtShort(m.scheduled_at)} · {new Date(m.scheduled_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York',timeZoneName:'short'})}</div>
                             </div>
-                            {!isPast&&m.zoom_host_url&&<a href={m.zoom_host_url} target="_blank" style={{fontSize:10,color:d.accent,textDecoration:'none',fontWeight:500}}>Start</a>}
-                            {isPast&&<span style={{fontSize:10,color:d.text3}}>Done</span>}
+                            {!isPast&&m.zoom_host_url&&<a href={m.zoom_host_url} target="_blank" style={{fontSize:12,color:d.accent,textDecoration:'none',fontWeight:500}}>Start</a>}
+                            {isPast&&<span style={{fontSize:12,color:d.text3}}>Done</span>}
                           </div>
                         )
                       })}
@@ -2509,7 +2673,7 @@ export default function AdminDashboard() {
                   )}
                   {clientInvoices.length > 0 && (
                     <div style={{marginBottom:16}}>
-                      <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Invoices</div>
+                      <div style={{fontSize:12,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Invoices</div>
                       {clientInvoices.map(inv=>{
                         const statusColors: Record<string,{bg:string,text:string}> = {
                           paid: {bg:d.green,text:d.greenText},
@@ -2527,16 +2691,16 @@ export default function AdminDashboard() {
                           return (
                             <div key={inv.id} className="inv-row" style={{background:d.surface}}>
                               <div style={{fontSize:12,color:d.text,fontWeight:500,width:'100%'}}>#{inv.invoice_number} · Milestone Schedule</div>
-                              <div style={{fontSize:11,color:d.text2,width:'100%'}}>{inv.service_desc} · {total} milestones</div>
+                              <div style={{fontSize:12,color:d.text2,width:'100%'}}>{inv.service_desc} · {total} milestones</div>
                               {invMilestones.map((m,idx)=>{
                                 const ms = m.status==='paid'?{bg:d.green,text:d.greenText}:{bg:d.amber,text:d.amberText}
                                 return (
                                   <div key={m.id} style={{width:'100%',background:d.surface2,borderRadius:8,padding:'8px 10px'}}>
                                     <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
                                       <div style={{flex:1}}>
-                                        <div style={{fontSize:11,color:d.text,fontWeight:500}}>{m.name}</div>
-                                        {m.deliverables&&<div style={{fontSize:10,color:d.text3,marginTop:1}}>{m.deliverables}</div>}
-                                        {m.due_date&&<div style={{fontSize:10,color:d.text3}}>Due {fmtShort(m.due_date)}</div>}
+                                        <div style={{fontSize:12,color:d.text,fontWeight:500}}>{m.name}</div>
+                                        {m.deliverables&&<div style={{fontSize:12,color:d.text3,marginTop:1}}>{m.deliverables}</div>}
+                                        {m.due_date&&<div style={{fontSize:12,color:d.text3}}>Due {fmtShort(m.due_date)}</div>}
                                       </div>
                                       <div style={{flexShrink:0,textAlign:'right'}}>
                                         <div style={{fontSize:12,color:d.accent,fontWeight:500}}>{fmtMoney(m.fee)}</div>
@@ -2544,9 +2708,9 @@ export default function AdminDashboard() {
                                       </div>
                                     </div>
                                     <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
-                                      <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'3px 8px'}} onClick={()=>generateMilestonePDF(focusedClient.name,focusedClient.email,m,inv.invoice_number,total,idx)}>Download PDF</button>
-                                      <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'3px 8px'}} onClick={()=>sendMilestoneEmail(focusedClient.name,focusedClient.email,m,inv.invoice_number,total,idx)}>Send</button>
-                                      {m.status!=='paid'&&<button className="cr-btn" style={{background:d.accentBg,color:d.accent,fontSize:10,padding:'3px 8px'}} onClick={()=>markMilestonePaid(m)}>Mark Paid</button>}
+                                      <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:12,padding:'3px 8px'}} onClick={()=>generateMilestonePDF(focusedClient.name,focusedClient.email,m,inv.invoice_number,total,idx)}>Download PDF</button>
+                                      <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:12,padding:'3px 8px'}} onClick={()=>sendMilestoneEmail(focusedClient.name,focusedClient.email,m,inv.invoice_number,total,idx)}>Send</button>
+                                      {m.status!=='paid'&&<button className="cr-btn" style={{background:d.accentBg,color:d.accent,fontSize:12,padding:'3px 8px'}} onClick={()=>markMilestonePaid(m)}>Mark Paid</button>}
                                     </div>
                                   </div>
                                 )
@@ -2560,22 +2724,22 @@ export default function AdminDashboard() {
                             <div style={{display:'flex',alignItems:'center',gap:8,width:'100%'}}>
                               <div style={{flex:1}}>
                                 <div style={{fontSize:12,color:d.text,fontWeight:500}}>#{inv.invoice_number}{inv.invoice_type==='revision'?' · Revision':inv.invoice_type==='fixed_fee'?' · Fixed Fee':''}</div>
-                                <div style={{fontSize:11,color:d.text2}}>{fmtMoney(inv.total_fee||inv.amount)}{inv.due_date?' · Due '+fmtShort(inv.due_date):''}</div>
+                                <div style={{fontSize:12,color:d.text2}}>{fmtMoney(inv.total_fee||inv.amount)}{inv.due_date?' · Due '+fmtShort(inv.due_date):''}</div>
                               </div>
                               <span className="status-pill" style={{background:sc.bg,color:sc.text}}>{statusLabel}</span>
                             </div>
                             {inv.invoice_type==='project' && inv.status!=='paid' && (
-                              <div style={{fontSize:10,color:d.text3,paddingLeft:2}}>
+                              <div style={{fontSize:12,color:d.text3,paddingLeft:2}}>
                                 {inv.status==='awaiting_deposit'&&'Deposit: '+fmtMoney(inv.deposit_amount||inv.total_fee*0.5)+' · Balance: '+fmtMoney((inv.total_fee||0)-(inv.deposit_amount||inv.total_fee*0.5))}
                                 {inv.status==='deposit_paid'&&'Deposit received · Balance due: '+fmtMoney((inv.total_fee||0)-(inv.deposit_amount||0))}
                               </div>
                             )}
                             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                              <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'4px 10px'}} onClick={()=>setViewingInvoice(inv)}>View</button>
+                              <button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:12,padding:'4px 10px'}} onClick={()=>setViewingInvoice(inv)}>View</button>
                               {nextAction && (
-                                <button className="cr-btn" style={{background:d.accentBg,color:d.accent,fontSize:10,padding:'4px 10px'}} onClick={()=>markInvoicePaid(inv)}>{nextAction}</button>
+                                <button className="cr-btn" style={{background:d.accentBg,color:d.accent,fontSize:12,padding:'4px 10px'}} onClick={()=>markInvoicePaid(inv)}>{nextAction}</button>
                               )}
-                              {inv.status!=='paid'&&<button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:10,padding:'4px 10px'}} onClick={()=>sendInvoiceEmail(focusedClient.name,focusedClient.email,inv)}>{sendingInvoice?'Sending...':'Resend'}</button>}
+                              {inv.status!=='paid'&&<button className="cr-btn" style={{background:d.surface,color:d.text2,fontSize:12,padding:'4px 10px'}} onClick={()=>sendInvoiceEmail(focusedClient.name,focusedClient.email,inv)}>{sendingInvoice?'Sending...':'Resend'}</button>}
                             </div>
                           </div>
                         )
@@ -2583,9 +2747,9 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   <div style={{marginBottom:16}}>
-                    <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8,display:'flex',alignItems:'center',gap:8}}>
+                    <div style={{fontSize:12,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8,display:'flex',alignItems:'center',gap:8}}>
                       Notes
-                      <button className="icon-btn" style={{color:d.accent,fontSize:11}} onClick={()=>setEditingNotes(!editingNotes)}>{editingNotes?'cancel':'edit'}</button>
+                      <button className="icon-btn" style={{color:d.accent,fontSize:12}} onClick={()=>setEditingNotes(!editingNotes)}>{editingNotes?'cancel':'edit'}</button>
                     </div>
                     {editingNotes ? (
                       <div>
@@ -2600,13 +2764,13 @@ export default function AdminDashboard() {
                   </div>
                   {clientDocs.length > 0 && (
                     <div>
-                      <div style={{fontSize:10,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Documents</div>
+                      <div style={{fontSize:12,fontWeight:500,color:d.text3,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Documents</div>
                       {clientDocs.map(doc=>(
                         <div key={doc.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:d.surface,borderRadius:10,marginBottom:6}}>
-                          <span style={{fontSize:11,color:d.text3}}>doc</span>
+                          <span style={{fontSize:12,color:d.text3}}>doc</span>
                           <span style={{flex:1,fontSize:12,color:d.text}}>{doc.name}</span>
-                          <button className="icon-btn" style={{color:d.accent,fontSize:12}} onClick={()=>downloadDoc(doc.storage_path,doc.name)}>↓</button>
-                          <button className="icon-btn" style={{color:d.text3}} onClick={()=>deleteDocument(doc.id,doc.storage_path)}>x</button>
+                          <button aria-label="Download" className="icon-btn" style={{color:d.accent,fontSize:12}} onClick={()=>downloadDoc(doc.storage_path,doc.name)}>↓</button>
+                          <button aria-label="Remove" className="icon-btn" style={{color:d.text3}} onClick={()=>deleteDocument(doc.id,doc.storage_path)}>x</button>
                         </div>
                       ))}
                     </div>
@@ -2614,20 +2778,20 @@ export default function AdminDashboard() {
                 </>
               ) : null}
             </div>
-          </div>
+          </aside>
         </div>
       </div>
 
       {/* ─── DOCUMENT PREVIEW MODAL ──────────────────────────────────────────── */}
       {previewDoc && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1100,padding:24}} onClick={()=>setPreviewDoc(null)}>
-          <div style={{background:d.white,borderRadius:20,width:'100%',maxWidth:560,maxHeight:'85vh',display:'flex',flexDirection:'column',border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+        <div className="admin-backdrop" style={{position:'fixed',inset:0,background:'rgba(8,6,5,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1100,padding:24}} onClick={()=>setPreviewDoc(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Document preview" className="admin-modal" style={{background:d.white,borderRadius:20,width:'100%',maxWidth:560,maxHeight:'85vh',display:'flex',flexDirection:'column',border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:'20px 24px 16px',borderBottom:'1px solid '+d.border,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
               <div>
-                <div style={{fontFamily:'Playfair Display,serif',fontSize:17,fontWeight:600,color:d.text}}>{previewDoc.title}</div>
-                <div style={{fontSize:11,color:d.text3,marginTop:2}}>Review before {previewAction === 'send' ? 'sending' : 'downloading'}</div>
+                <div style={{fontFamily:ADMIN_FONTS.display,fontSize:17,fontWeight:600,color:d.text}}>{previewDoc.title}</div>
+                <div style={{fontSize:12,color:d.text3,marginTop:2}}>Review before {previewAction === 'send' ? 'sending' : 'downloading'}</div>
               </div>
-              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setPreviewDoc(null)}>x</button>
+              <button aria-label="Close" className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setPreviewDoc(null)}>x</button>
             </div>
             <div style={{overflowY:'auto',padding:'8px 24px 16px',flex:1}}>
               {previewDoc.sections.map((s,i)=>(
@@ -2649,11 +2813,11 @@ export default function AdminDashboard() {
 
       {/* ─── INVOICE DETAIL MODAL ────────────────────────────────────────────── */}
       {viewingInvoice && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingInvoice(null)}>
-          <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+        <div className="admin-backdrop" style={{position:'fixed',inset:0,background:'rgba(8,6,5,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingInvoice(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Invoice details" className="admin-modal" style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-              <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text}}>Invoice #{viewingInvoice.invoice_number}</div>
-              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setViewingInvoice(null)}>x</button>
+              <div style={{fontFamily:ADMIN_FONTS.display,fontSize:18,fontWeight:600,color:d.text}}>Invoice #{viewingInvoice.invoice_number}</div>
+              <button aria-label="Close" className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setViewingInvoice(null)}>x</button>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:20}}>
               {[
@@ -2670,7 +2834,7 @@ export default function AdminDashboard() {
                 {label:'Status',val:viewingInvoice.status==='awaiting_deposit'?'Awaiting Deposit':viewingInvoice.status==='deposit_paid'?'Deposit Paid':viewingInvoice.status==='paid'?'Paid in Full':'Pending'},
               ].map((row,i)=>(
                 <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid '+d.border}}>
-                  <div style={{fontSize:11,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>{row.label}</div>
+                  <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>{row.label}</div>
                   <div style={{fontSize:13,color:d.text,fontWeight:500}}>{row.val}</div>
                 </div>
               ))}
@@ -2685,11 +2849,11 @@ export default function AdminDashboard() {
 
       {/* ─── PROJECT DETAIL MODAL ────────────────────────────────────────────── */}
       {viewingProject && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingProject(null)}>
-          <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+        <div className="admin-backdrop" style={{position:'fixed',inset:0,background:'rgba(8,6,5,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setViewingProject(null)}>
+          <div role="dialog" aria-modal="true" aria-label="Project details" className="admin-modal" style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:480,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-              <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text}}>{viewingProject.name}</div>
-              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setViewingProject(null)}>x</button>
+              <div style={{fontFamily:ADMIN_FONTS.display,fontSize:18,fontWeight:600,color:d.text}}>{viewingProject.name}</div>
+              <button aria-label="Close" className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setViewingProject(null)}>x</button>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:0,marginBottom:20}}>
               {[
@@ -2700,15 +2864,15 @@ export default function AdminDashboard() {
                 {label:'Deadline',val:viewingProject.end_date?fmtShort(viewingProject.end_date):'None set'},
               ].map((row,i)=>(
                 <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid '+d.border}}>
-                  <div style={{fontSize:11,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>{row.label}</div>
+                  <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>{row.label}</div>
                   <div style={{fontSize:13,color:d.text,fontWeight:500}}>{row.val}</div>
                 </div>
               ))}
             </div>
             <div style={{marginBottom:16}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                <div style={{fontSize:11,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>Notes</div>
-                <button className="icon-btn" style={{color:d.accent,fontSize:11}} onClick={()=>setEditingProjectNotes(!editingProjectNotes)}>{editingProjectNotes?'cancel':'edit'}</button>
+                <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em'}}>Notes</div>
+                <button className="icon-btn" style={{color:d.accent,fontSize:12}} onClick={()=>setEditingProjectNotes(!editingProjectNotes)}>{editingProjectNotes?'cancel':'edit'}</button>
               </div>
               {editingProjectNotes ? (
                 <div>
@@ -2728,11 +2892,11 @@ export default function AdminDashboard() {
 
       {/* ─── EMAIL MODAL ─────────────────────────────────────────────────────── */}
       {showEmailModal && focusedClient && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setShowEmailModal(false)}>
-          <div style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:520,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
+        <div className="admin-backdrop" style={{position:'fixed',inset:0,background:'rgba(8,6,5,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:24}} onClick={()=>setShowEmailModal(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Email client" className="admin-modal" style={{background:d.white,borderRadius:20,padding:32,width:'100%',maxWidth:520,border:'1px solid '+d.border}} onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-              <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text}}>Email {focusedClient.name.split(' ')[0]}</div>
-              <button className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setShowEmailModal(false)}>x</button>
+              <div style={{fontFamily:ADMIN_FONTS.display,fontSize:18,fontWeight:600,color:d.text}}>Email {focusedClient.name.split(' ')[0]}</div>
+              <button aria-label="Close" className="icon-btn" style={{color:d.text3,fontSize:18}} onClick={()=>setShowEmailModal(false)}>x</button>
             </div>
             <div style={{fontSize:12,color:d.text3,marginBottom:20}}>{focusedClient.email} · CC: {MY_EMAIL}</div>
             {emailSent ? (
@@ -2764,9 +2928,9 @@ export default function AdminDashboard() {
 
       {/* ─── ACTIVE PROJECT POPUP ────────────────────────────────────────────── */}
       {showActiveProjectPopup && pendingAdvanceClient && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
-          <div style={{background:d.white,borderRadius:20,padding:32,width:380,border:'1px solid '+d.border}}>
-            <div style={{fontFamily:'Playfair Display,serif',fontSize:18,fontWeight:600,color:d.text,marginBottom:6}}>Moving to Active Project</div>
+        <div className="admin-backdrop" style={{position:'fixed',inset:0,background:'rgba(8,6,5,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+          <div role="dialog" aria-modal="true" aria-label="Start active project" className="admin-modal" style={{background:d.white,borderRadius:20,padding:32,width:380,border:'1px solid '+d.border}}>
+            <div style={{fontFamily:ADMIN_FONTS.display,fontSize:18,fontWeight:600,color:d.text,marginBottom:6}}>Moving to Active Project</div>
             <div style={{fontSize:12,color:d.text3,marginBottom:24}}>{pendingAdvanceClient.name} is now an active client. Add project details below.</div>
             <div className="form-group" style={{marginBottom:12}}>
               <div className="form-label" style={{color:d.text3}}>Project value ($)</div>
@@ -2780,6 +2944,16 @@ export default function AdminDashboard() {
               <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={()=>{setShowActiveProjectPopup(false);setPendingAdvanceClient(null)}}>Cancel</button>
               <button className="btn-save" onClick={confirmActiveProject}>Confirm and Advance</button>
             </div>
+          </div>
+        </div>
+      )}
+      {sessionExpired && (
+        <div className="admin-backdrop" style={{position:'fixed',inset:0,background:'rgba(8,6,5,0.78)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1300,padding:16}}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="session-title" aria-describedby="session-body" className="admin-modal" style={{background:d.white,border:'1px solid '+d.border2,padding:28,maxWidth:420,width:'100%'}}>
+            <div className="admin-eyebrow">Admin</div>
+            <h2 id="session-title" style={{fontFamily:ADMIN_FONTS.display,fontSize:24,fontWeight:600,color:d.text,marginBottom:8}}>Your session has ended</h2>
+            <p id="session-body" style={{color:d.text2,fontSize:14,lineHeight:1.6,marginBottom:20}}>Sign in again to keep working. Anything you were typing on this page hasn&rsquo;t been sent or saved since the session ended.</p>
+            <a className="btn-save" href="/admin/login?from=/admin&expired=1" style={{display:'inline-flex',alignItems:'center',textDecoration:'none'}}>Sign In Again</a>
           </div>
         </div>
       )}
