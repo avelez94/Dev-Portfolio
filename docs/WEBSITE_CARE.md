@@ -28,7 +28,7 @@ Admin /admin/care ─▶ /api/care/admin/* (admin cookie) ─▶ review, approve
 | Migration (pending, separate from released ones) | `supabase/pending/website-care/20261030_website_care.sql` |
 | Server logic | `src/lib/care/*` (config, sites, cycles, runs, findings, report, report-pdf, send, stripe, notify, emails, ics, schedule, cron, url-safety) |
 | API | `src/app/api/care/admin/[...path]`, `runner/[...path]`, `stripe/webhook`, `resend/webhook`, `cron` |
-| Admin UI | `src/app/admin/care/*` (link in the admin sidebar shows only when the feature is on); care items in the existing Schedule calendar in `src/app/admin/page.tsx` |
+| Admin UI | `src/app/admin/(dashboard)/care/*` (link in the admin sidebar shows only when the feature is on); care items in the Schedule calendar in `src/app/admin/(dashboard)/schedule/_parts/ScheduleView.tsx` |
 | Client report | `src/lib/care/report-model.ts` (content rules), `report-pdf.ts` (PDF), `src/components/care/ReportView.tsx` (web view), `issue-catalog.ts` (client wording) |
 | Public samples | `src/content/care-samples.ts`, `src/components/site/CareSample.tsx`, `/care/sample-report/[slug].pdf` |
 | Public page | `src/app/(site)/care/page.tsx`, `src/content/offers.ts`, `src/app/(site)/care/subscribed` |

@@ -10,7 +10,7 @@ export default function CarePage() {
   if (!careEnabled()) {
     const t = ADMIN_THEMES.teal
     return (
-      <main style={{ minHeight: '100vh', background: t.bg, color: t.text, fontFamily: ADMIN_FONTS.body, display: 'grid', placeItems: 'center', padding: 20 }}>
+      <main id="admin-main" className="care-frame" style={{ minHeight: '100vh', background: t.bg, color: t.text, fontFamily: ADMIN_FONTS.body, display: 'grid', placeItems: 'center', padding: 20 }}>
         <div role="status" style={{ maxWidth: 480, background: t.white, border: `1px solid ${t.border}`, borderRadius: 18, padding: 24 }}>
           <h1 style={{ fontFamily: ADMIN_FONTS.display, fontSize: 24, margin: '0 0 8px' }}>Website Care is switched off here</h1>
           <p style={{ color: t.text2, margin: '0 0 16px' }}>

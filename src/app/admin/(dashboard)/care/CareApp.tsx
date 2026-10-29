@@ -25,7 +25,6 @@ export default function CareApp() {
   const [view, setView] = useState<View>('overview')
   const [site, setSite] = useState<string | null>(null)
   const [cycle, setCycle] = useState<string | null>(null)
-  const [expired, setExpired] = useState(false)
 
   useEffect(() => {
     const u = readUrl()
@@ -35,10 +34,9 @@ export default function CareApp() {
     else if (u.view) setView(u.view)
     /* eslint-enable react-hooks/set-state-in-effect */
     const onPop = () => { const x = readUrl(); setCycle(x.cycle); setSite(x.site); setView(x.view || (x.site ? 'sites' : 'overview')) }
-    const onExpired = () => setExpired(true)
+    // The shared admin shell shows the sign in prompt when the session ends.
     window.addEventListener('popstate', onPop)
-    window.addEventListener('admin-session-expired', onExpired)
-    return () => { window.removeEventListener('popstate', onPop); window.removeEventListener('admin-session-expired', onExpired) }
+    return () => window.removeEventListener('popstate', onPop)
   }, [])
 
   const go = useCallback((next: { view?: View; site?: string | null; cycle?: string | null }) => {
@@ -56,10 +54,9 @@ export default function CareApp() {
 
   const nav: [View, string][] = [['overview', 'Overview'], ['queue', 'Review queue'], ['sites', 'Websites'], ['settings', 'Settings'], ['activity', 'Activity']]
   return (
-    <div className="care">
+    <div className="care care-frame">
       <style>{CARE_CSS}</style>
       <header className="care-top">
-        <a href="/admin" className="care-mark" aria-label="Back to the admin dashboard">AV</a>
         <div style={{ marginRight: 'auto' }}>
           <div className="care-label">Admin</div>
           <h1 style={{ fontSize: 20 }}>Website Care</h1>
@@ -68,11 +65,9 @@ export default function CareApp() {
           {nav.map(([v, label]) => (
             <button key={v} aria-current={!cycle && view === v ? 'page' : undefined} onClick={() => go({ view: v })}>{label}</button>
           ))}
-          <a href="/admin" className="care-btn small" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Dashboard</a>
         </nav>
       </header>
-      <main className="care-main">
-        {expired && <div className="care-err" role="alert">Your admin session expired. <a href="/admin/login?from=/admin/care">Sign in again</a>; nothing you typed has been sent.</div>}
+      <main id="admin-main" tabIndex={-1} className="care-main">
         {status.data && <EnvBanner s={status.data} />}
         {cycle ? <CycleView id={cycle} go={go} /> :
           view === 'sites' ? <SiteView id={site} go={go} /> :
