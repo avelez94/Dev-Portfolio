@@ -25,7 +25,7 @@ function SiteList({ go }: { go: Go }) {
 }
 
 const blankSite = {
-  client_id: '', label: 'Main website', plan: 'essential', site_url: '', approved_domains: '', pages: [{ url: '', label: 'Home' }], destinations: [] as Row[],
+  client_id: '', label: 'Main website', plan: 'essential', agreed_monthly_price: '', site_url: '', approved_domains: '', pages: [{ url: '', label: 'Home' }], destinations: [] as Row[],
   features: '', manual_checklist: [] as Row[], recipient_name: '', recipient_email: '', review_window_days: '', scan_limits: {} as Row,
   is_additional_site: false, additional_site_terms: '', internal_notes: '',
 }
@@ -33,7 +33,7 @@ const blankSite = {
 function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () => void }) {
   const tpl = useLoad<Row>('template')
   const cl = useLoad<{ clients: Row[] }>('clients')
-  const [f, setF] = useState<Row>(() => site ? { ...site, approved_domains: (site.approved_domains || []).join(', '), review_window_days: site.review_window_days ?? '' } : blankSite)
+  const [f, setF] = useState<Row>(() => site ? { ...site, approved_domains: (site.approved_domains || []).join(', '), review_window_days: site.review_window_days ?? '', agreed_monthly_price: site.agreed_monthly_price ?? '' } : blankSite)
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -44,11 +44,12 @@ function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () =>
 
   const clients = useMemo(() => (cl.data?.clients || []).filter((c) => !q || `${c.name} ${c.business} ${c.email}`.toLowerCase().includes(q.toLowerCase())), [cl.data, q])
   const chosen = (cl.data?.clients || []).find((c) => c.id === f.client_id)
+  const advertised = (tpl.data?.plans || []).find((p: Row) => p.id === f.plan)
 
   async function save() {
     setBusy(true); setErr(null); setMsg(null)
     try {
-      const body = { ...f, approved_domains: String(f.approved_domains).split(/[\s,]+/).filter(Boolean), review_window_days: f.review_window_days === '' ? null : Number(f.review_window_days) }
+      const body = { ...f, approved_domains: String(f.approved_domains).split(/[\s,]+/).filter(Boolean), review_window_days: f.review_window_days === '' ? null : Number(f.review_window_days), agreed_monthly_price: f.agreed_monthly_price === '' ? null : Number(f.agreed_monthly_price) }
       if (site) {
         const r = await careApi<Row>(`sites/${site.id}`, { method: 'PUT', json: body })
         setMsg(r.needsConfirmation ? 'Saved. What gets checked changed, so recurring reviews are paused until you confirm the setup again.' : 'Saved.')
@@ -91,6 +92,9 @@ function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () =>
             <select id="f-plan" value={f.plan} onChange={(e) => set('plan', e.target.value)} disabled={linked}>
               {(tpl.data?.plans || []).map((p: Row) => <option key={p.id} value={p.id}>{p.name}, ${p.monthly}/mo{p.includedMinutes ? `, ${p.includedMinutes} min` : ''}{p.priceConfigured ? '' : ' (no Stripe price set)'}</option>)}
             </select>
+          </Field>
+          <Field label="Agreed monthly price (whole dollars)" id="f-price" hint={`The price this client agreed to. Reports show it, never the advertised price${advertised ? ` ($${advertised.monthly} today)` : ''}.`}>
+            <input id="f-price" inputMode="numeric" value={f.agreed_monthly_price} onChange={(e) => set('agreed_monthly_price', e.target.value.replace(/[^\d]/g, ''))} placeholder="Not recorded" />
           </Field>
         </div>
         <div className="care-two">

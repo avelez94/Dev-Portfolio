@@ -2027,7 +2027,7 @@ details[open] > summary .summaryIcon {
 
 .benefits {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -2038,10 +2038,6 @@ details[open] > summary .summaryIcon {
   background: var(--paper);
   border: 1.5px solid var(--line);
   color: var(--ink-soft);
-}
-
-.benefit:nth-child(2) {
-  margin-top: 24px;
 }
 
 .benefitNum {
@@ -3030,10 +3026,6 @@ details[open] > summary .summaryIcon {
 
   .benefits {
     grid-template-columns: 1fr;
-  }
-
-  .benefit:nth-child(2) {
-    margin-top: 0;
   }
 
   .aboutPhotoWrap {

@@ -29,6 +29,8 @@ export type Block =
   | { type: 'callout'; title: string; html: string; tone?: 'teal' | 'coral' }
   | { type: 'lineItems'; rows: [string, string][]; total?: [string, string] }
   | { type: 'divider' }
+  /** Prebuilt table markup with its own plain text version (inputs must already be escaped). */
+  | { type: 'html'; html: string; text: string }
 
 export type EmailInput = {
   /** Short summary shown in the inbox preview line. */
@@ -39,6 +41,8 @@ export type EmailInput = {
   titleAccent?: string
   blocks: Block[]
   audience?: 'client' | 'admin'
+  /** Extra phone width rules for 'html' blocks, placed inside the layout's media query. */
+  mobileCss?: string
 }
 
 export type RenderedEmail = { html: string; text: string }
@@ -63,6 +67,8 @@ function blockHtml(b: Block): string {
       return `<p style="margin:0 0 14px;font-family:${FONTS.body};font-size:14px;line-height:22px;color:${C.muted};">${b.html}</p>`
     case 'divider':
       return `<div style="height:1px;line-height:1px;background:${C.line};margin:8px 0 22px;">&nbsp;</div>`
+    case 'html':
+      return b.html
     case 'details': {
       const rows = b.rows
         .map(
@@ -125,6 +131,8 @@ function blockText(b: Block): string {
       return htmlToText(b.html)
     case 'divider':
       return '----'
+    case 'html':
+      return b.text
     case 'details':
       return (b.title ? `${b.title}\n` : '') + b.rows.map(([l, v]) => `${l}: ${htmlToText(v)}`).join('\n')
     case 'lineItems':
@@ -159,6 +167,7 @@ export function renderEmail(input: EmailInput): RenderedEmail {
     .h1 { font-size: 28px !important; line-height: 34px !important; }
     .btn, .btn-td { display: block !important; width: 100% !important; margin-right: 0 !important; }
     .btn-a { display: block !important; text-align: center !important; }
+    ${input.mobileCss || ''}
   }
 </style>
 </head>

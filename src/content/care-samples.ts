@@ -13,13 +13,15 @@ const pageSet = (url: string) => [
   pass('images', url, 'desktop'), pass('images', url, 'mobile'), pass('overflow', url, 'desktop'), pass('overflow', url, 'mobile'),
 ]
 
-function base(p: Pick<ModelInput, 'client' | 'recipient' | 'site' | 'pages' | 'destinations'> & { planId: 'essential' | 'business' | 'premium' }): Omit<ModelInput, 'findings' | 'earlierFindings' | 'manual' | 'notes' | 'content'> {
+function base(p: Pick<ModelInput, 'client' | 'recipient' | 'site' | 'pages' | 'destinations' | 'minutesUsed'> & { planId: 'essential' | 'business' | 'premium' }): Omit<ModelInput, 'findings' | 'earlierFindings' | 'manual' | 'notes' | 'content'> {
   const pl = plan(p.planId)
   return {
     reportId: 'sample', cycleId: 'sample', version: 1, sample: true,
     client: p.client, recipient: p.recipient, site: p.site, pages: p.pages, destinations: p.destinations,
-    plan: { id: pl.id, name: pl.name, includedMinutes: pl.includedMinutes },
-    period: { start: 'Wed, October 1, 2026', end: 'Sun, November 1, 2026', label: 'October 2026' },
+    // Fictional clients on the current published price.
+    plan: { id: pl.id, name: pl.name, includedMinutes: pl.includedMinutes, monthlyPrice: pl.monthly },
+    minutesUsed: p.minutesUsed,
+    period: { start: 'Thu, October 1, 2026', end: 'Sun, November 1, 2026', label: 'October 2026', range: 'October 1 to November 1, 2026' },
     reviewDate: 'Thu, October 2, 2026',
     scanStatus: 'succeeded',
   }
@@ -43,6 +45,7 @@ const bakery = buildReport({
     site: { label: 'Harbor Street Bakery', url: 'https://www.example.com' },
     pages: bakeryPages,
     destinations: [{ label: 'Catering order form', url: 'https://orders.example.com/catering', kind: 'booking' }],
+    minutesUsed: 10,
   }),
   findings: [
     ...bakeryPages.flatMap((p) => pageSet(p.url)),
@@ -82,6 +85,7 @@ const physio = buildReport({
     site: { label: 'Northside Physio', url: 'https://physio.example.com' },
     pages: physioPages,
     destinations: [{ label: 'Online booking', url: 'https://booking.example.com/northside', kind: 'booking' }],
+    minutesUsed: 5,
   }),
   findings: [
     ...physioPages.flatMap((p) => pageSet(p.url).filter((f) => !(p.url === team && f.check_key === 'overflow' && f.viewport === 'mobile'))),
@@ -94,16 +98,20 @@ const physio = buildReport({
   manual: [
     { item_id: 'visual', label: 'Desktop appearance looks right', status: 'passed', note: 'Checked on a laptop.' },
     { item_id: 'content', label: 'Hours, prices, and contact details are correct', status: 'passed', note: 'Matches your September price list.' },
-    { item_id: 'booking', label: 'Booking shows open times and the steps make sense', status: 'not_checked', reason: 'Your booking provider was down for maintenance during this review. I’ll check it next week.' },
+    { item_id: 'booking', label: 'Booking shows open times and the steps make sense', status: 'not_checked', reason: 'The booking service was unavailable during my manual review. I’ll recheck next week.' },
   ],
   notes: [
     { group_key: 'overflow:overflow', resolution: 'approval', client_note: 'Rebuilding the team section so photos resize on phones' },
     { group_key: 'internal_links:link_broken', resolution: 'fixed', verification_note: 'Rechecked automatically: no longer found.', client_note: '' },
+    // Crawler blocking, not a confirmed visitor problem: stays under "Not verified".
+    { group_key: 'destination:blocked_by_site', resolution: null, client_note: 'The automated check was blocked. The booking service was also unavailable during my manual review, so I couldn’t verify booking. I’ll recheck next week.' },
   ],
   content: {
-    summary: 'One issue needs your approval: the team page doesn’t fit phone screens. The booking page couldn’t be verified this month because the booking service blocked the automated check and was down when I tried by hand.',
+    summary: 'One issue needs your approval: the team page doesn’t fit phone screens. I couldn’t verify booking this month: the automated check was blocked, and the booking service was unavailable during my manual review. I’ll recheck next week.',
     fixes: 'Fixed a broken link on the services page that pointed to the old pricing page (5 minutes of your included time).',
     estimate: 'about 1.5 hours, $150',
+    estimate_scope: 'Rebuilding the team section is a larger fix, not a small update or quick troubleshooting, and your plan estimates larger fixes separately.',
+    estimate_allowance: 'This estimate doesn’t use your remaining 25 minutes. They stay available for small updates until this period ends on November 1.',
   },
 })
 

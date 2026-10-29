@@ -69,6 +69,9 @@ create table if not exists public.care_sites (
   stripe_customer_id text,
   stripe_subscription_id text,
   stripe_price_id text,
+  -- The client's agreed monthly price in whole dollars. Can differ from the
+  -- advertised price; reports show this, never the advertised one.
+  agreed_monthly_price int check (agreed_monthly_price is null or agreed_monthly_price between 0 and 100000),
   subscription_status text,
   billing_state text not null default 'not_started',
   billing_attention_since timestamptz,
@@ -104,6 +107,10 @@ create table if not exists public.care_cycles (
   paid_at timestamptz,
   amount_paid int,
   currency text,
+  -- Agreed monthly price for this period, copied from the website when the cycle is created.
+  agreed_price int check (agreed_price is null or agreed_price between 0 and 100000),
+  -- Recorded update or troubleshooting time for this period. null = not recorded.
+  minutes_used int check (minutes_used is null or minutes_used between 0 and 1440),
   scan_after timestamptz,
   review_start_at timestamptz,
   review_due_at timestamptz not null,
@@ -410,6 +417,11 @@ end $$;
 -- ------------------------------------------------------------------
 -- Access: server only.
 -- ------------------------------------------------------------------
+-- Columns added after the first local test build; safe on a database that already has the tables.
+alter table public.care_sites add column if not exists agreed_monthly_price int check (agreed_monthly_price is null or agreed_monthly_price between 0 and 100000);
+alter table public.care_cycles add column if not exists agreed_price int check (agreed_price is null or agreed_price between 0 and 100000);
+alter table public.care_cycles add column if not exists minutes_used int check (minutes_used is null or minutes_used between 0 and 1440);
+
 do $$
 declare t text;
 begin

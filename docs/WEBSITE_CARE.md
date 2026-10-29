@@ -9,7 +9,7 @@ Status: built and tested locally on `feature/website-care`. **Not merged, not de
 3. Nothing is scanned until you **confirm the setup** (website, client authorization, checklist). A paid period that arrives earlier waits.
 4. A read only scan runs in GitHub Actions (Playwright). It records findings and screenshots and emails you a summary with a link to the draft.
 5. You complete the manual checklist and write the report. Draft, then Ready for review, then Approved (with a frozen snapshot and PDF), then Sent.
-6. Sending attaches the exact approved PDF through Resend. Each review also appears in your existing admin **Schedule** calendar, with reminders and overdue notices by email.
+6. Sending puts the complete approved report in the email body and attaches the exact approved PDF through Resend. Each review also appears in your existing admin **Schedule** calendar, with reminders and overdue notices by email.
 
 ```
 Stripe ──webhook──▶ /api/care/stripe/webhook ──▶ care_cycles (1 per paid period)
@@ -109,21 +109,33 @@ Reports, approvals, sent versions, send records, findings, and activity are neve
 
 ## The client report
 
-A one page summary for a typical month, built from one frozen snapshot shared by the preview, the PDF, and the email summary:
-- Top: client, website, review date, a short scope ("4 pages, 1 booking page, 3 hand checks"), an accurate headline, and three counts with icon and text: **Passed** (agreed checks), **Issues found**, **Not verified**.
-- **Needs attention**: one entry per kind of problem, with all affected pages and devices listed once. Each says what's wrong, why it matters, and what happens next (I'm looking into it, needs your input, needs your approval, or fixed and verified).
+A short report built from one frozen snapshot. The preview, the PDF, and the email body all come from the same approved version:
+- **Top:** client, website, review date, and a short scope ("4 pages, 1 booking page, 3 hand checks").
+- **Your plan** (right under the top, never in small print): plan name, the client's **agreed** monthly price, the service period, and the included update or troubleshooting time. Where time is included, it shows the time recorded for this period and what's left, or **"Time usage not recorded"** if you haven't recorded it (it never assumes the full allowance is left). It says monthly checks and preparing the report don't use that time and unused time doesn't roll over. Essential Care says updates and fixes are quoted separately.
+- An accurate headline and three counts with icon and text: **Passed** (agreed checks), **Issues found**, **Not verified**.
+- **Needs attention** (full width): one entry per kind of problem, with all affected pages and devices listed once. Each says what's wrong, why it matters, and what happens next (I'm looking into it, needs your input, needs your approval, or fixed and verified).
 - **Fixed and verified** only when you mark it fixed **and** either a recheck no longer finds it or you record how you verified it.
-- **This month's checks**: the agreed checks with a green check, red X, or amber warning plus a text label. A check is "Passed" only with an automated pass or your recorded manual pass. A booking, checkout, or contact page row says the page opens but the booking, payment, or message itself wasn't tested. Not applicable items are listed separately.
-- **Not verified this month** with reasons, a short "What I did", and a **Next step** box ("No action needed", "Please send…", "Approval needed for…" with your estimate).
-- Plan line: checks and the report are included; fixes use the plan's included minutes or a separate estimate approved first.
+- **This month's checks**: two columns on desktop with thin row dividers and a thin divider between the columns, one column on phones. Every row has the icon, the label, and the status in the same positions. A check is "Passed" only with an automated pass or your recorded manual pass. A booking, checkout, or contact page row says the page opens but the booking, payment, or message itself wasn't tested. Not applicable items are listed separately.
+- **Not verified this month** with reasons. A site blocking the automated checker is listed here, never as an issue, and the wording never claims visitors are fine or affected; your note on the item explains what you found by hand.
+- A short "What I did" and a **Next step** box ("No action needed", "Please send…", "Approval needed for…").
+- **Estimates:** a report that asks for payment needs the price in the Estimate field, the work it covers, **why it's outside the included care scope**, and (on plans with included time) **whether the remaining included time applies**. Readiness refuses the report until all of these are filled in, and also refuses a price typed anywhere else. Nothing is deducted automatically; you decide case by case and say so in the report.
 - The headline is computed, and readiness refuses a summary that reads as all clear while issues or unverified items remain. Every red issue needs a decision before the report can be marked ready.
-- Technical detail (error codes per result, redirect chains, screenshots, every individual result) stays in admin.
+- Technical detail (error codes per result, redirect chains, screenshots, every individual result), private notes, and logs stay in admin. They're never part of the snapshot, so they can't reach the PDF or the email.
+
+### Plan price and recorded time
+- **Agreed monthly price**: set it on the website (Website settings). Each new review period copies it, so a later price change doesn't rewrite an old report. You can also set it on a single review under **Plan and time**. A report can't be marked ready without it.
+- **Time used**: record update and troubleshooting minutes on the review under **Plan and time**. Changing the price or time after approval returns the report to draft.
+
+### The client email
+The email has your message, then the complete report (plan and time, counts, issues and next actions, the checklist, unverified items, work completed, approval requests and estimate explanations), then a note that the PDF is attached for their records. It uses tables with inline styles; the two column parts stack on phones (Gmail, Apple Mail, and other clients that honor the media query; others keep two columns). The plain text version carries the same content. Review, approval, and sending stay separate steps.
 
 Public samples: two fictional reports (no outstanding issues; an issue plus unverified items) on example.com addresses are on the public Website Care page with PDF downloads. Every PDF page says "Sample report • Illustrative findings". They are static content built with the real report template and never read the database. They appear publicly only when this branch is merged.
 
 ## Verification
 
-**Verified locally** (242 automated Website Care checks on real Postgres 16 + PostgREST, a stateful fake Stripe API, fake Resend with signed delivery events, fixture websites, the production build, and the real runner with Chromium; axe found 0 WCAG A/AA violations on the review screen, sent review, and public Care page at desktop and phone width; no horizontal overflow; the earlier regression suites pass 385 of 385: flow 133, site 78, admin 60, documents 26, targeting 30, real database 39, document links 19):
+**Refinements verified locally (Oct 29, second pass):** typecheck and lint clean; production build; 11 report logic checks (Essential Care quoted separately, "Time usage not recorded", recorded and over allowance time, missing agreed price blocks readiness, estimate explanations required, prices outside the Estimate field refused, crawler blocking stays "Not verified" with no visitor claim, private notes never in the snapshot or email, email escaping, no dashes in client text); the pending migration applied twice on a fresh local Postgres 16 with the new price and time limits enforced; the public Care page, both samples, and both emails at desktop and phone width with no horizontal overflow; both sample PDFs (the no issues sample is one page; the issue sample runs to two, with the Next step box kept whole). The admin screens weren't driven in a browser this pass because they need the care tables, and the only database here is the shared one.
+
+**Verified locally earlier** (242 automated Website Care checks on real Postgres 16 + PostgREST, a stateful fake Stripe API, fake Resend with signed delivery events, fixture websites, the production build, and the real runner with Chromium; axe found 0 WCAG A/AA violations on the review screen, sent review, and public Care page at desktop and phone width; no horizontal overflow; the earlier regression suites pass 385 of 385: flow 133, site 78, admin 60, documents 26, targeting 30, real database 39, document links 19):
 - Everything from the first build (activation only after a verified paid invoice, duplicate and out of order webhooks, one cycle per paid period, failed payments and cancellations, client association, incomplete enrollment, job retries and recovery, read only and private network safety, approval invalidation, exact attachment, send failure recovery, nothing unintended).
 - Admin calendar: one item per cycle with client, website, deadline, status, and link; the deadline change updates the same item; reruns add nothing; delivery states shown only from signed events; availability, blocked times, bookings, and meetings unchanged; admin only.
 - Report: grouping (one issue per type across pages and devices), every red issue needs a decision, fixed needs verification, fixed and verified after a clean recheck, all clear summaries refused while issues remain, not applicable items listed separately, booking caveat, counts match the lists, one page for a typical month, sent version unchanged.
@@ -147,6 +159,6 @@ Public samples: two fictional reports (no outstanding issues; an issue plus unve
 5. **Billing:** Create Stripe checkout link, then send it to the client yourself. When Stripe reports the paid invoice, a review appears in the queue with its due date. (Billed by invoice instead? Use "Add a paid service period by hand".)
 6. **Check:** the scan starts automatically and the review appears in your Schedule calendar. You get an email with grouped results and a link. Open the review: each issue is one card with its pages; choose what happens next for every red issue, and open individual results or screenshots only when you need them.
 7. **Manual review:** record each checklist item. Use Not checked with a reason when needed.
-8. **Write:** a short summary, what you fixed (only confirmed fixes), and anything needing approval with an estimate. If you fix something, run the check again or record how you verified it, and it shows as Fixed and verified.
+8. **Plan and time, then write:** check the agreed price and record the minutes you spent on updates or fixes. Then write a short summary, what you fixed (only confirmed fixes), and anything needing approval with an estimate, why it's outside the plan, and whether the remaining time applies. If you fix something, run the check again or record how you verified it, and it shows as Fixed and verified.
 9. **Approve:** Mark ready for review, open the client report and PDF preview, tick sign off, type your name, and approve.
 10. **Send:** check the name and exact email, adjust the subject and message, type the address to confirm, then Send Report. Or download the PDF without sending. The review counts as complete only once sent.

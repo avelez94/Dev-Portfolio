@@ -5,15 +5,8 @@
  * Copy rule: no dashes in client facing text.
  */
 import { COLORS as C, FONTS } from '@/lib/brand'
-import type { Snapshot, RowState } from '@/lib/care/report-model'
-
-const STATE_LABEL: Record<RowState, string> = { passed: 'Passed', issue: 'Issue found', unverified: 'Not verified', fixed: 'Fixed and verified' }
-const TONE = {
-  passed: { fill: '#E3F2E7', line: '#2E7D4F', text: '#1F5A37' },
-  fixed: { fill: '#E3F2E7', line: '#2E7D4F', text: '#1F5A37' },
-  issue: { fill: '#FBE3DD', line: '#B33A26', text: '#8E2A19' },
-  unverified: { fill: '#FFF2D9', line: '#A86B12', text: '#7A4E0B' },
-} as const
+import { STATE_LABEL, TONE, nextStepLines, planFacts, type Snapshot, type RowState, type PlanBox } from '@/lib/care/report-model'
+import css from './ReportView.module.css'
 
 export function StateIcon({ state, size = 18 }: { state: RowState; size?: number }) {
   const c = TONE[state].line
@@ -43,14 +36,12 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
     ['issue', s.counts.issues, s.counts.issues === 1 ? 'Issue found' : 'Issues found'],
     ['unverified', s.counts.unverified, 'Not verified'],
   ]
-  const next: string[] = []
-  if (s.next_step.none) next.push('No action needed.')
-  s.next_step.send.forEach((t) => next.push(`Please send: ${t}`))
-  s.next_step.approve.forEach((t) => next.push(`Approval needed for: ${t}`))
-  if (s.next_step.estimate && s.next_step.approve.length) next.push(`Estimate: ${s.next_step.estimate}. Nothing starts until you approve it.`)
-  if (s.next_step.more) next.push(s.next_step.more)
+  const next = nextStepLines(s)
+  // Column major, like the PDF: the first half reads down the left column.
+  const half = Math.ceil(s.checklist.length / 2)
+  const cols = [s.checklist.slice(0, half), s.checklist.slice(half)].filter((c) => c.length)
   return (
-    <article style={{ background: C.paper, color: C.ink, fontFamily: FONTS.body, borderRadius: 18, border: `1px solid ${C.line}`, padding: 'clamp(16px, 4vw, 28px)', lineHeight: 1.5 }} aria-label={`Monthly health report for ${s.site.label}`}>
+    <article className={css.report} style={{ background: C.paper, color: C.ink, fontFamily: FONTS.body, borderRadius: 18, border: `1px solid ${C.line}`, padding: 'clamp(16px, 4vw, 28px)', lineHeight: 1.5, ['--rv-line' as string]: C.line }} aria-label={`Monthly health report for ${s.site.label}`}>
       {(s.sample || sampleLabel) && (
         <p style={{ margin: '0 0 14px', background: C.coralSoft, color: C.coralDeep, fontWeight: 700, fontSize: 13, textAlign: 'center', borderRadius: 10, padding: '6px 10px' }}>{sampleLabel || 'Sample report • Illustrative findings'}</p>
       )}
@@ -60,6 +51,7 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
         {[s.recipient.name, s.client.business].filter(Boolean).join(', ')}{s.recipient.name || s.client.business ? ' • ' : ''}{s.site.url}
       </p>
       <p style={{ margin: '2px 0 0', fontSize: 14, color: C.inkSoft }}>Reviewed {s.review_date || 'not yet'} • Checked: {s.scope.line}</p>
+      {s.plan_box && <PlanSummary b={s.plan_box} />}
 
       <p style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: 19, margin: '16px 0 10px', lineHeight: 1.3 }}>{s.headline}</p>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
@@ -105,18 +97,22 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
 
       <section aria-label="This month’s checks">
         <h4 style={sec}>This month’s checks</h4>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '6px 18px' }}>
-          {s.checklist.map((r, i) => (
-            <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '4px 0', borderBottom: `1px solid ${C.line}` }}>
-              <StateIcon state={r.state} size={18} />
-              <span style={{ flex: 1, fontSize: 14 }}>
-                <strong>{r.label}</strong>
-                {r.note && <span style={{ display: 'block', fontSize: 12.5, color: C.inkSoft }}>{r.note}</span>}
-              </span>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: TONE[r.state].text, whiteSpace: 'nowrap' }}>{STATE_LABEL[r.state]}</span>
-            </li>
+        <div className={css.checks}>
+          {cols.map((col, ci) => (
+            <ul key={ci} className={css.col}>
+              {col.map((r, i) => (
+                <li key={i} className={css.row}>
+                  <span className={css.icon}><StateIcon state={r.state} size={18} /></span>
+                  <span style={{ fontSize: 14, lineHeight: '21px' }}>
+                    <strong>{r.label}</strong>
+                    {r.note && <span style={{ display: 'block', fontSize: 12.5, lineHeight: 1.45, color: C.inkSoft }}>{r.note}</span>}
+                  </span>
+                  <span className={css.status} style={{ color: TONE[r.state].text }}>{STATE_LABEL[r.state]}</span>
+                </li>
+              ))}
+            </ul>
           ))}
-        </ul>
+        </div>
         {s.not_applicable.length > 0 && <p style={{ margin: '6px 0 0', fontSize: 12.5, color: C.inkSoft }}>Not part of this month: {s.not_applicable.join(', ')}.</p>}
       </section>
 
@@ -140,11 +136,30 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
 
       <section aria-label="Next step" style={{ marginTop: 18, background: C.tealSoft, border: `1.5px solid ${C.ink}`, borderRadius: 14, padding: '12px 14px' }}>
         <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.tealDeep }}>Next step</p>
-        {next.map((t, i) => <p key={i} style={{ margin: '4px 0 0', fontSize: 15, fontWeight: i === 0 ? 700 : 400 }}>{t}</p>)}
+        {next.map((t, i) => <p key={i} style={{ margin: '4px 0 0', fontSize: i === 0 ? 15 : 14, fontWeight: i === 0 ? 700 : 400 }}>{t}</p>)}
       </section>
       {s.notes && <p style={{ margin: '12px 0 0', fontSize: 14, whiteSpace: 'pre-wrap' }}>{s.notes}</p>}
-      <p style={{ margin: '14px 0 0', fontSize: 12.5, color: C.inkSoft }}>{s.allowance}</p>
-      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: C.inkSoft }}>{s.disclaimer}</p>
+      <p style={{ margin: '14px 0 0', fontSize: 12.5, color: C.inkSoft }}>{s.disclaimer}</p>
     </article>
+  )
+}
+
+/** Plan, price, period, and included time, near the top of the report. */
+function PlanSummary({ b }: { b: PlanBox }) {
+  return (
+    <section aria-label="Your plan" style={{ margin: '14px 0 0', background: C.cream, border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.teal}`, borderRadius: 12, padding: '12px 14px' }}>
+      <dl className={css.facts}>
+        {planFacts(b).map(([k, v]) => (
+          <div key={k}>
+            <dt style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.tealDeep }}>{k}</dt>
+            <dd style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: C.ink }}>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {b.included_minutes > 0 && (
+        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: C.ink }}><strong>Time this period:</strong> {b.usage_label}</p>
+      )}
+      <p style={{ margin: '4px 0 0', fontSize: 13.5, color: C.inkSoft }}>{b.rules.join(' ')}</p>
+    </section>
   )
 }

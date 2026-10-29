@@ -8,7 +8,7 @@ import { careEnabled, careOff, clientEmailAllowed } from '@/lib/care/config'
 import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCKET, REPORTS_BUCKET, type Row } from '@/lib/care/db'
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
 import { createCycle, enqueueScan, cancelScan, releaseHeldCycles } from '@/lib/care/cycles'
-import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote } from '@/lib/care/report'
+import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote, updatePlanTime } from '@/lib/care/report'
 import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
 import { reportPdf } from '@/lib/care/report-pdf'
 import { sendPreview, sendReport, markStuckSend } from '@/lib/care/send'
@@ -186,6 +186,11 @@ async function putSite({ seg, body }: Ctx) {
   if (site.recipient_email !== saved.recipient_email || site.recipient_name !== saved.recipient_name) {
     const open = (await db.from('care_cycles').select('id').eq('site_id', siteId).is('completed_at', null)).data || []
     for (const c of open) await invalidateApproval(c.id, 'The report recipient changed.', ACTOR)
+  }
+  // Open reviews without their own recorded price show the website's agreed price.
+  if (site.agreed_monthly_price !== saved.agreed_monthly_price) {
+    const open = (await db.from('care_cycles').select('id').eq('site_id', siteId).is('completed_at', null).is('agreed_price', null)).data || []
+    for (const c of open) await invalidateApproval(c.id, 'The agreed monthly price changed.', ACTOR)
   }
   return ok({ site: saved, needsConfirmation: changed })
 }
@@ -372,6 +377,11 @@ async function putDue({ seg, body }: Ctx) {
   return ok({ ok: true })
 }
 
+async function putPlanTime({ seg, body }: Ctx) {
+  await updatePlanTime(id(seg[1]), body, ACTOR)
+  return ok({ ok: true })
+}
+
 async function putReport({ seg, body }: Ctx) {
   const cycleId = id(seg[1])
   const r = must(await db.from('care_reports').select('id').eq('cycle_id', cycleId).single(), 'Report')
@@ -485,6 +495,7 @@ const routes: [string, string, Handler][] = [
   ['PUT', 'cycles/:id/manual/:item', putManual],
   ['PUT', 'cycles/:id/due', putDue],
   ['PUT', 'cycles/:id/report', putReport],
+  ['PUT', 'cycles/:id/plan-time', putPlanTime],
   ['PUT', 'cycles/:id/issue', putIssue],
   ['GET', 'calendar', calendarItems],
   ['POST', 'cycles/:id/ready', ready],

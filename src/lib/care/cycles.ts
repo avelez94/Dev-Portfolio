@@ -43,6 +43,8 @@ export async function createCycle(i: CycleInput): Promise<{ cycle: Row; created:
     paid_at: i.paidAt ? i.paidAt.toISOString() : null,
     amount_paid: i.amountPaid ?? null,
     currency: i.currency ?? null,
+    // The agreed price only carries over while the plan matches; otherwise it's recorded on the review.
+    agreed_price: site.plan === i.plan && typeof site.agreed_monthly_price === 'number' ? site.agreed_monthly_price : null,
     scan_after: dates.scanAfter.toISOString(),
     review_start_at: dates.reviewStartAt.toISOString(),
     review_due_at: dates.reviewDueAt.toISOString(),

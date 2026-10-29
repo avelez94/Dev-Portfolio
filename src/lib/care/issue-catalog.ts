@@ -19,7 +19,8 @@ export const ISSUE_TEXT: Record<string, IssueText> = {
   overflow: { title: 'Page doesn’t fit the screen', what: 'These pages are wider than the screen, so they scroll sideways.', why: 'Parts of the page can be cut off, especially on phones.' },
   overflow_minor: { title: 'Slightly too wide', what: 'These pages are a few pixels wider than the screen.', why: 'It may not be noticeable; it needs a quick look.' },
   link_broken: { title: 'Broken links', what: 'Links on your pages lead to pages that no longer exist.', why: 'Visitors who click them reach an error page.' },
-  blocked_by_site: { title: 'Site blocked the automated check', what: 'These pages showed an access or robot check page to the checker.', why: 'This isn’t a problem for visitors, but these pages weren’t verified automatically.' },
+  // Crawler blocking only: it says nothing either way about what visitors see.
+  blocked_by_site: { title: 'Automated check was blocked', what: 'These pages showed an access or robot check page to the automated checker.', why: 'Blocking automated checkers is common and doesn’t show whether visitors can use these pages, so they weren’t verified automatically.' },
   timeout: { title: 'Too slow to check', what: 'These pages didn’t respond in time during the check.', why: 'A slow response isn’t proof of a problem, so they weren’t verified.' },
   not_allowed: { title: 'Address couldn’t be opened', what: 'The checker only opens public web addresses, so these weren’t opened.', why: 'These weren’t verified this month.' },
   dns: { title: 'Domain not found', what: 'The domain name couldn’t be found during the check.', why: 'It could be temporary, or the domain may need attention.' },

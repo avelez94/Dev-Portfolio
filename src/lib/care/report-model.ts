@@ -37,8 +37,11 @@ export type ModelInput = {
   client: { name: string; business: string }
   recipient: { name: string; email: string }
   site: { label: string; url: string }
-  plan: { id: string; name: string; includedMinutes: number }
-  period: { start: string; end: string; label: string }
+  /** monthlyPrice is the client's agreed price (null when not recorded), never the advertised one. */
+  plan: { id: string; name: string; includedMinutes: number; monthlyPrice: number | null }
+  /** Recorded update or troubleshooting minutes this period; null when not recorded. */
+  minutesUsed: number | null
+  period: { start: string; end: string; label: string; range?: string }
   reviewDate: string | null
   scanStatus: string | null
   pages: Page[]
@@ -52,6 +55,13 @@ export type ModelInput = {
 
 export type RowState = 'passed' | 'issue' | 'unverified' | 'fixed'
 export const STATE_LABEL: Record<RowState, string> = { passed: 'Passed', issue: 'Issue found', unverified: 'Not verified', fixed: 'Fixed and verified' }
+/** Status colors for every report output. Always paired with an icon shape and a text label. */
+export const TONE = {
+  passed: { fill: '#E3F2E7', line: '#2E7D4F', text: '#1F5A37' },
+  fixed: { fill: '#E3F2E7', line: '#2E7D4F', text: '#1F5A37' },
+  issue: { fill: '#FBE3DD', line: '#B33A26', text: '#8E2A19' },
+  unverified: { fill: '#FFF2D9', line: '#A86B12', text: '#7A4E0B' },
+} as const
 
 export const RESOLUTION_LABEL: Record<string, string> = {
   fixed: 'Fixed and verified',
@@ -199,7 +209,10 @@ export function buildReport(i: ModelInput) {
   }))
   const fixed = visible.filter((g) => g.state === 'fixed').map((g) => ({ title: g.title, pages: g.pages, verified: g.verification, note: g.clientNote }))
   const notVerified = [
-    ...visible.filter((g) => g.state === 'unverified').map((g) => ({ label: g.title, why: g.clientNote || g.why, pages: g.pages })),
+    // A destination is named by itself (for example "Online booking") rather than by the check result.
+    ...visible.filter((g) => g.state === 'unverified').map((g) => (g.check === 'destination' && g.pages.length
+      ? { label: g.pages.join(', '), why: g.clientNote || `${g.title}. ${g.why}`, pages: [] as string[] }
+      : { label: g.title, why: g.clientNote || g.why, pages: g.pages })),
     ...i.manual.filter((m) => m.status === 'not_checked' || m.status === 'could_not_check' || m.status === 'needs_review').map((m) => ({ label: m.label, why: (m.reason || '').trim() || 'Not checked by hand this month.', pages: [] as string[] })),
     ...(noScan ? [{ label: 'Automated checks', why: 'The automated check didn’t complete this month.', pages: [] as string[] }] : []),
   ]
@@ -221,16 +234,17 @@ export function buildReport(i: ModelInput) {
   const c = i.content
   const sendItems = attention.filter((a) => a.kind === 'client_input' && a.note).map((a) => a.note)
   const approveItems = [...attention.filter((a) => a.kind === 'approval' && a.note).map((a) => a.note), ...(c.proposed_work ? [c.proposed_work] : [])]
+  const estimate = (c.estimate || '').trim()
   const nextStep = {
     send: sendItems,
     approve: approveItems,
-    estimate: c.estimate || '',
+    estimate,
+    // Required whenever a report asks for payment beyond the plan (see modelProblems).
+    estimate_scope: estimate ? (c.estimate_scope || '').trim() : '',
+    estimate_allowance: estimate && i.plan.includedMinutes ? (c.estimate_allowance || '').trim() : '',
     none: !sendItems.length && !approveItems.length,
     more: c.next_steps || '',
   }
-  const allowance = i.plan.includedMinutes
-    ? `Checks and this report are included in ${i.plan.name}. Fixes use your ${i.plan.includedMinutes} included minutes a month, or a separate estimate you approve first.`
-    : `Checks and this report are included in ${i.plan.name}. Fixes are quoted separately and start only after you approve.`
 
   const scopeParts = [`${i.pages.length} page${i.pages.length === 1 ? '' : 's'}`]
   for (const kind of ['booking', 'checkout', 'contact', 'other']) {
@@ -241,7 +255,7 @@ export function buildReport(i: ModelInput) {
   if (handCount) scopeParts.push(`${handCount} hand check${handCount === 1 ? '' : 's'}`)
 
   return {
-    schema: 2 as const,
+    schema: 3 as const,
     sample: !!i.sample,
     report_id: i.reportId,
     cycle_id: i.cycleId,
@@ -264,12 +278,46 @@ export function buildReport(i: ModelInput) {
     work: { fixes: (c.fixes || '').trim(), investigated: (c.investigated || '').trim(), outstanding: (c.outstanding || '').trim() },
     next_step: nextStep,
     notes: (c.client_notes || '').trim(),
-    allowance,
+    plan_box: planBox(i),
     disclaimer: 'Automated checks are read only. A page opening doesn’t prove booking, payment, or form delivery works unless it’s listed as checked by hand. This report isn’t a security, accessibility, or compliance certification.',
   }
 }
 
 export type Snapshot = ReturnType<typeof buildReport>
+export type PlanBox = ReturnType<typeof planBox>
+
+const mins = (n: number) => `${n} minute${n === 1 ? '' : 's'}`
+
+/**
+ * The plan and allowance block shown near the top of every report and email.
+ * Uses the client's agreed price and the time recorded for this period only;
+ * nothing is assumed when either is missing.
+ */
+export function planBox(i: Pick<ModelInput, 'plan' | 'minutesUsed' | 'period'>) {
+  const included = i.plan.includedMinutes
+  const price = i.plan.monthlyPrice
+  const used = included ? i.minutesUsed : null
+  const remaining = used === null ? null : Math.max(0, included - used)
+  const over = used === null ? 0 : Math.max(0, used - included)
+  return {
+    name: i.plan.name,
+    price,
+    price_label: price === null ? 'Not recorded' : `$${price.toLocaleString('en-US')}`,
+    period_label: i.period.range || i.period.label,
+    included_minutes: included,
+    included_label: included ? `${mins(included)} for updates or troubleshooting` : 'No update or troubleshooting time included',
+    used,
+    remaining,
+    usage_label: !included
+      ? 'Updates and fixes are quoted separately.'
+      : used === null
+        ? 'Time usage not recorded'
+        : `${mins(used)} used, ${mins(remaining!)} remaining${over ? ` (${mins(over)} beyond your included time)` : ''}`,
+    rules: included
+      ? ['Monthly checks and preparing this report don’t use your included time.', 'Unused time doesn’t roll over to the next period.']
+      : ['Monthly checks and this report are included in your plan.', 'Updates and fixes aren’t included. Each one is quoted separately, and nothing starts until you approve it.'],
+  }
+}
 
 /** Problems that must be fixed before the report can be marked ready. */
 export function modelProblems(i: ModelInput, s: Snapshot): string[] {
@@ -284,8 +332,45 @@ export function modelProblems(i: ModelInput, s: Snapshot): string[] {
     if ((n?.resolution === 'client_input' || n?.resolution === 'approval') && !(n.client_note || '').trim()) p.push(`Say what you need from the client for “${g.title}”.`)
     if (n?.resolution === 'not_an_issue' && !(n.internal_note || '').trim()) p.push(`Add a private note explaining why “${g.title}” isn’t an issue.`)
   }
+  if (i.plan.monthlyPrice === null) p.push('Record the client’s agreed monthly price for this period under Plan and time.')
+  // Any request for payment beyond the plan has to say why it's outside the plan and how included time applies.
+  const c = i.content
+  const estimate = (c.estimate || '').trim()
+  const askedMoney = /\$\s?\d/.test([...s.next_step.approve, s.next_step.more, s.work.outstanding, s.notes].join(' '))
+  if (askedMoney && !estimate) p.push('A price appears outside the Estimate field. Put it in Estimate so it carries the required explanation.')
+  if (estimate) {
+    if (!s.next_step.approve.length) p.push('The estimate needs the work it covers: fill in “Additional work needing approval” or mark an issue as needing approval.')
+    if (!(c.estimate_scope || '').trim()) p.push('Explain why the estimated work is outside the included care scope.')
+    if (i.plan.includedMinutes && !(c.estimate_allowance || '').trim()) p.push('Say whether the remaining included time applies to the estimate.')
+  }
   if (s.summary && (s.counts.issues || s.counts.unverified) && ALL_CLEAR.test(s.summary)) {
     p.push('The summary reads as if everything is fine, but some checks found issues or weren’t verified. Adjust the wording.')
   }
   return p
+}
+
+/** The Next step lines, shared by the web view, the PDF, and the email so they always match. The first line is the lead. */
+export function nextStepLines(s: Snapshot): string[] {
+  const n = s.next_step
+  const out: string[] = []
+  if (n.none) out.push('No action needed.')
+  for (const t of n.send) out.push(`Please send: ${t}`)
+  for (const t of n.approve) out.push(`Approval needed for: ${t}`)
+  if (n.estimate && n.approve.length) {
+    out.push(`Estimate: ${n.estimate}. Nothing starts until you approve it.`)
+    if (n.estimate_scope) out.push(`Why it’s outside your plan: ${n.estimate_scope}`)
+    if (n.estimate_allowance) out.push(`Your included time: ${n.estimate_allowance}`)
+  }
+  if (n.more) out.push(n.more)
+  return out
+}
+
+/** Plan facts in display order, shared by every output. */
+export function planFacts(b: PlanBox): [string, string][] {
+  return [
+    ['Plan', b.name],
+    ['Monthly plan price', b.price_label],
+    ['Service period', b.period_label],
+    ['Included time', b.included_minutes ? b.included_label : 'None. Updates and fixes are quoted separately.'],
+  ]
 }

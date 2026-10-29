@@ -34,6 +34,8 @@ export type SiteInput = {
   site_url: string
   approved_domains: string[]
   plan: PlanId
+  /** The client's agreed monthly price in whole dollars; null until recorded. */
+  agreed_monthly_price: number | null
   pages: Page[]
   destinations: Destination[]
   features: string
@@ -111,12 +113,16 @@ export function parseSiteInput(body: Record<string, unknown>): { value: SiteInpu
     if (limitsIn[k] !== undefined && limitsIn[k] !== '' && Number.isFinite(n)) scan_limits[k] = Math.max(1, Math.min(LIMIT_CAPS[k], Math.round(n)))
   }
 
+  const priceIn = body.agreed_monthly_price
+  const agreed_monthly_price = priceIn === null || priceIn === undefined || priceIn === '' ? null : Number(priceIn)
+  if (agreed_monthly_price !== null && (!Number.isInteger(agreed_monthly_price) || agreed_monthly_price < 0 || agreed_monthly_price > 100000)) errors.push('Agreed monthly price must be a whole dollar amount.')
+
   const is_additional_site = body.is_additional_site === true
   const additional_site_terms = str(body.additional_site_terms, 400)
 
   return {
     value: {
-      client_id, label, site_url: shape.ok ? shape.url.toString() : site_url, approved_domains, plan: plan as PlanId, pages, destinations,
+      client_id, label, site_url: shape.ok ? shape.url.toString() : site_url, approved_domains, plan: plan as PlanId, agreed_monthly_price, pages, destinations,
       features: str(body.features, 2000), manual_checklist, recipient_name: str(body.recipient_name, 120), recipient_email,
       review_window_days: rw, scan_limits, is_additional_site, additional_site_terms, internal_notes: str(body.internal_notes, 4000),
     },

@@ -11,7 +11,7 @@ import { plan as planInfo, type PlanId } from './plans'
 import { buildReport, modelProblems, type Snapshot, type ModelInput, type FindingIn, type ManualIn, type IssueNoteIn } from './report-model'
 import { formatDateOnly } from './schedule'
 
-export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'proposed_work', 'estimate', 'client_notes'] as const
+export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'proposed_work', 'estimate', 'estimate_scope', 'estimate_allowance', 'client_notes'] as const
 export type ContentField = (typeof CONTENT_FIELDS)[number]
 export type ReportContent = Partial<Record<ContentField, string>>
 
@@ -49,6 +49,21 @@ export async function loadBundle(cycleId: string) {
 
 export type Bundle = Awaited<ReturnType<typeof loadBundle>>
 
+/** The agreed price for this period: the cycle's own, else the website's while the plan matches. Never the advertised price. */
+export function agreedPrice(b: Pick<Bundle, 'cycle' | 'site'>): number | null {
+  if (typeof b.cycle.agreed_price === 'number') return b.cycle.agreed_price
+  if (b.site.plan === b.cycle.plan && typeof b.site.agreed_monthly_price === 'number') return b.site.agreed_monthly_price
+  return null
+}
+
+/** "October 1 to November 1, 2026", the service period as Stripe bills it. */
+export function periodRange(start: string, end: string, tz: string) {
+  const f = (d: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', { timeZone: tz, ...o }).format(new Date(d))
+  const sy = f(start, { year: 'numeric' })
+  const ey = f(end, { year: 'numeric' })
+  return `${f(start, { month: 'long', day: 'numeric', ...(sy === ey ? {} : { year: 'numeric' }) })} to ${f(end, { month: 'long', day: 'numeric', year: 'numeric' })}`
+}
+
 async function modelInput(b: Bundle): Promise<ModelInput> {
   const tz = (await getSettings()).timezone
   const p = planInfo(b.cycle.plan as PlanId)
@@ -58,8 +73,13 @@ async function modelInput(b: Bundle): Promise<ModelInput> {
     client: { name: b.client?.name || '', business: b.client?.business || '' },
     recipient: { name: b.site.recipient_name || b.client?.name || '', email: b.site.recipient_email || '' },
     site: { label: b.site.label, url: b.site.site_url },
-    plan: { id: p.id, name: p.name, includedMinutes: p.includedMinutes },
-    period: { start: formatDateOnly(b.cycle.period_start, tz), end: formatDateOnly(b.cycle.period_end, tz), label: new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'long', year: 'numeric' }).format(new Date(b.cycle.period_start)) },
+    plan: { id: p.id, name: p.name, includedMinutes: p.includedMinutes, monthlyPrice: agreedPrice(b) },
+    minutesUsed: typeof b.cycle.minutes_used === 'number' ? b.cycle.minutes_used : null,
+    period: {
+      start: formatDateOnly(b.cycle.period_start, tz), end: formatDateOnly(b.cycle.period_end, tz),
+      label: new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'long', year: 'numeric' }).format(new Date(b.cycle.period_start)),
+      range: periodRange(b.cycle.period_start, b.cycle.period_end, tz),
+    },
     reviewDate: b.latest?.finished_at ? formatDateOnly(b.latest.finished_at, tz) : null,
     scanStatus: b.latest?.status || null,
     // Scope comes from the run that was actually checked, not the current settings.
@@ -161,6 +181,25 @@ export async function updateContent(reportId: string, body: { content?: Record<s
   await db.from('care_reports').update(patch).eq('id', reportId)
   if (changedClient) await invalidateApproval(r.cycle_id, 'The report text was edited after approval.', actor)
   return must(await db.from('care_reports').select('*').eq('id', reportId).single(), 'Report')
+}
+
+/** The agreed price and recorded time for one period. Both appear in the report, so a change clears an approval. */
+export async function updatePlanTime(cycleId: string, body: Record<string, unknown>, actor: string) {
+  const c = must(await db.from('care_cycles').select('id, site_id, agreed_price, minutes_used').eq('id', cycleId).single(), 'Cycle')
+  const num = (v: unknown, max: number, what: string) => {
+    if (v === null || v === '') return null
+    const n = Number(v)
+    if (!Number.isInteger(n) || n < 0 || n > max) throw new CareError(`${what} must be a whole number from 0 to ${max}.`, 422)
+    return n
+  }
+  const patch: Record<string, unknown> = {}
+  if ('agreed_price' in body) patch.agreed_price = num(body.agreed_price, 100000, 'The agreed monthly price')
+  if ('minutes_used' in body) patch.minutes_used = num(body.minutes_used, 1440, 'Recorded minutes')
+  const changed = Object.entries(patch).filter(([k, v]) => v !== (c as Row)[k])
+  if (!changed.length) return
+  await db.from('care_cycles').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', cycleId)
+  await logActivity({ cycle_id: cycleId, site_id: c.site_id, actor, action: 'plan_time_changed', detail: Object.fromEntries(changed) })
+  await invalidateApproval(cycleId, 'The plan price or recorded time changed after approval.', actor)
 }
 
 export async function updateManual(cycleId: string, itemId: string, body: Record<string, unknown>, actor: string) {
