@@ -2,26 +2,24 @@
 
 Preview and production share one Supabase database, so all release testing is done on production with clearly labeled test records and your own email. No synthetic seeding, race tests, outage simulations, or destructive tests run against this database. All of those ran only on a local copy (PostgreSQL 16 + PostgREST 12).
 
-## Status
+## Status (final, October 29)
 
-| Step | Status | Who |
-|---|---|---|
-| Code deployed to production (`main` = `5f74966`) | **Done.** Vercel reports the Production deployment of `5f74966` as successful at 06:38 UTC. | Claude |
-| 1. Backup confirmed | **To do** | You |
-| 2. Read-only precheck | **To do** | You |
-| 3. Migrations 1 to 4 (additive) | **To do** | You |
-| 4. Live checks | **To do** | You, with the steps below |
-| 5. Lockdown migration | **To do, last** | You |
-| 6. Final live checks | **To do** | You |
-
-### Why the code went first
-
-The new code works on the current database and on the migrated one. It was tested both ways:
-- Without the intake migration, leads still save. Short notes don't get a private continue link until it runs.
-- Without the brand version migration, invoices save without a stamp and keep the original layout.
-- Without the booking index, the code still lets only the earliest claim win. The index adds the database guarantee.
-- **Without the terms migration, issuing new proposals, SOWs, and contracts is blocked** with a clear message. Run migrations 1 to 4 soon.
-- The new admin reads data through the server, so the lockdown can safely come **after** this deploy. Running the lockdown with the old admin live would have broken the old admin.
+| Step | Result |
+|---|---|
+| Code on production (`main` = `5f74966`) | **Live.** Vercel Production deployment succeeded; alantevelez.com serves the new site and dark admin. |
+| Backup | Confirmed: physical backup Oct 29, 06:21 UTC. |
+| Read only precheck | Done. No booking conflicts, text status column, no status constraint. |
+| `20261028_terms_version.sql` | Applied and verified. No historical document stamped. |
+| `20261028_intake_flow.sql` | Applied and verified. Existing leads unchanged. |
+| `20261029_document_brand_version.sql` | Applied and verified. No existing invoice stamped. |
+| `20261029_booking_integrity.sql` | Applied and verified (two unique indexes, created_at default now()). |
+| `20261029_server_role_grants.sql` | Applied and verified (server key full rights on 16 tables; admin 403s on pricing and invoice_milestones fixed). |
+| `20261029_lock_down_private_tables.sql` | Applied and verified: RLS on, 0 policies, 0 public grants on 16 tables, row counts unchanged; public key refused (401); trades still open; admin all 200; dog walking and TBR2026 working. |
+| Admin uses protected routes | Verified: no browser requests to Supabase; data route returns Unauthorized when signed out. |
+| Public pages, pricing guide, old routes, admin login, document link protection | Verified on production. |
+| Inquiry, questionnaire, booking, emails, Zoom, TEST proposal after the migrations | **Not verified.** Owner's earlier tests ran before the migrations and were deleted. |
+| Test records | Deleted: 2 inquiries, 1 booking (Nov 2 10:30 EST), 1 client from the morning tests. |
+| Not touched | `payments` table (another app, still readable with the public key); August "Test" client and SOWs; ownership clause. |
 
 ## 1. Backup (before any migration)
 
