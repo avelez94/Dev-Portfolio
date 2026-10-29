@@ -26,6 +26,10 @@ import * as sows from '@/app/api/sows/route'
 import * as contracts from '@/app/api/contracts/route'
 import * as contractsSigned from '@/app/api/contracts/send-signed/route'
 import * as debtPayoff from '@/app/api/debt-payoff/route'
+import * as proposalDoc from '@/app/api/proposals/[id]/route'
+import * as sowDoc from '@/app/api/sows/[id]/route'
+import * as contractDoc from '@/app/api/contracts/[id]/route'
+import { DEMO_PUBLIC_DOCS } from './mode'
 
 export type DemoRequest = { method: string; path: string; search: string; headers: Record<string, string>; body: string }
 export type DemoResponse = { status: number; headers: Record<string, string>; body: string }
@@ -170,6 +174,15 @@ export async function dispatchDemo(r: DemoRequest, origin: string, cookie: strin
     return res
   }
 
+  // Client document pages opened from a demo session: the real handlers, on demo data.
+  const doc = r.path.match(DEMO_PUBLIC_DOCS)
+  if (doc) {
+    const m = ({ proposals: proposalDoc, sows: sowDoc, contracts: contractDoc } as unknown as Record<string, RouteModule>)[doc[1]]
+    const h = m?.[r.method as 'GET']
+    if (!h) return reply(405, { error: 'Method not allowed' })
+    return fromResponse(await h(new NextRequest(url, init), { params: Promise.resolve({ id: r.path.split('/').pop() }) }))
+  }
+
   const mod = ROUTES[r.path]
   const handler = mod?.[r.method as 'POST']
   if (!handler) return reply(404, { error: 'Not available in the demo' })
@@ -178,10 +191,11 @@ export async function dispatchDemo(r: DemoRequest, origin: string, cookie: strin
 
 /** The parts of a new demo session that go through the real care functions. */
 export async function seedWork() {
-  await simulateRunner()
   const preset = must(await db.from('care_task_presets').select('id').eq('key', 'image-replace').single(), 'Preset')
   await recordWork(DEMO_IDS.cycles.physio, {
     batch_key: 'demo-seed-physio-images', confirmed: true, completed_on: new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10),
     lines: [{ source: 'preset', preset_id: preset.id, quantity: 2, client_description: 'Replaced two treatment room photos you supplied.' }],
   }, 'admin')
+  // The checks finish last, so the suggested Report text starts from the seeded work too.
+  await simulateRunner()
 }

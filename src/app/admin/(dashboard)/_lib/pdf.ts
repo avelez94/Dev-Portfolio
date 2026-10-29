@@ -9,7 +9,8 @@ import jsPDF from 'jspdf'
 import { createBrandedPdf } from '@/lib/pdf/writer'
 import { contractPdf } from '@/lib/pdf/contract'
 import { usesStudioBrand } from '@/lib/brand-version'
-import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, additionalWorkSentence, proposalPaymentLines } from '@/lib/terms'
+import { STANDARD_HOURLY_RATE, additionalWorkSentence, proposalPaymentLines } from '@/lib/terms'
+import { checkSchedule, milestoneLabel, money, scheduleLines } from '@/lib/payment-schedule'
 import { contractTermsDoc, currentTerms, type ContractForm, type LineItem, type MilestoneDraft, type ProposalForm } from './documents'
 import type { InvoiceMilestone } from './types'
 
@@ -115,11 +116,11 @@ export function fixedFeePDF(f: { invoice_number: string; due_date: string; servi
 
 export function milestonePDF(clientName: string, clientEmail: string, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
   // Existing milestone records: original layout unless created after the styling cutoff.
-  const { addLine, addSpace, addDivider, save } = makePDF(brandedRecord(milestone) ? { docType: 'Invoice', title: 'Invoice #' + invoiceNumber, subtitle: 'Milestone ' + (index + 1) + ' of ' + totalCount + ' for ' + clientName } : undefined)
+  const { addLine, addSpace, addDivider, save } = makePDF(brandedRecord(milestone) ? { docType: 'Invoice', title: 'Invoice #' + invoiceNumber, subtitle: milestoneLabel(milestone, index, totalCount) + ' for ' + clientName } : undefined)
   addLine('INVOICE', 16, true, true)
   addLine('Alante Velez | Full Stack Web Developer', 10)
   addDivider(); addSpace()
-  addLine('INVOICE #' + invoiceNumber + ' — Milestone ' + (index + 1) + ' of ' + totalCount, 12, true); addSpace(0.5)
+  addLine('INVOICE #' + invoiceNumber + '  |  ' + milestoneLabel(milestone, index, totalCount), 12, true); addSpace(0.5)
   addLine('Due Date: ' + (milestone.due_date || 'Upon completion'))
   addSpace(); addDivider()
   addLine('BILL TO', 10, true, true); addSpace(0.5)
@@ -130,7 +131,7 @@ export function milestonePDF(clientName: string, clientEmail: string, milestone:
   if (milestone.deliverables) { addSpace(0.5); addLine(milestone.deliverables) }
   addSpace(); addDivider()
   addLine('PAYMENT', 10, true, true); addSpace(0.5)
-  addLine('Milestone fee: $' + milestone.fee.toLocaleString(), 12, true)
+  addLine('Amount due: ' + money(Number(milestone.fee)), 12, true)
   addSpace(0.5)
   addLine('Payment method: Zelle')
   addLine('Reference: Invoice #' + invoiceNumber + ' | ' + milestone.name)
@@ -164,27 +165,19 @@ export function proposalPDF(f: ProposalForm, lineItems: LineItem[], proposalMile
   addSpace(0.5)
   addLine('TOTAL: $' + total.toLocaleString(), 12, true)
   addSpace(0.5)
-  proposalPaymentLines({ ...currentTerms(f.payment_plan), deposit_pct: f.payment_plan === 'standard' ? STANDARD_DEPOSIT_PCT : parseFloat(f.deposit_pct) }, total).forEach((l) => addLine(l))
+  const check = checkSchedule(total, proposalMilestones)
+  proposalPaymentLines(currentTerms(f.hourly_rate), total).forEach((l) => addLine(l))
   addLine('Change orders and additional revisions: ' + additionalWorkSentence(parseFloat(f.hourly_rate) || STANDARD_HOURLY_RATE))
   addSpace(); addDivider()
   if (f.out_of_scope) {
     addLine('WHAT IS NOT INCLUDED', 10, true, true); addSpace(0.5)
     addLine(f.out_of_scope); addSpace(); addDivider()
   }
-  const validMilestones = f.payment_plan === 'milestones' ? proposalMilestones.filter((m) => m.deliverables && m.fee) : []
-  if (validMilestones.length > 0) {
-    addLine('MILESTONE SCHEDULE', 10, true, true); addSpace(0.5)
-    validMilestones.forEach((m, i) => {
-      addLine('Milestone ' + (i + 1) + ': ' + m.name, 11, true)
-      if (m.dueDate) addLine('Due: ' + new Date(m.dueDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), 10)
-      addLine('Fee: $' + parseFloat(m.fee).toLocaleString(), 10)
-      addLine(m.deliverables, 10)
-      addSpace(0.5)
-    })
-    addDivider()
-  }
+  addLine('PAYMENT SCHEDULE', 10, true, true); addSpace(0.5)
+  scheduleLines(check.schedule).forEach((l) => { addLine(l, 10); addSpace(0.3) })
+  addSpace(); addDivider()
   addLine('TIMELINE', 10, true, true); addSpace(0.5)
-  addLine(f.timeline || 'See milestone schedule above.')
+  addLine(f.timeline || 'See the payment schedule above.')
   addSpace(); addDivider()
   addLine('NEXT STEPS', 10, true, true); addSpace(0.5)
   addLine(f.next_steps)

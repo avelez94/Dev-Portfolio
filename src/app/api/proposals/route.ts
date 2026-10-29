@@ -4,7 +4,9 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { BRAND } from '@/lib/brand'
 import * as mail from '@/lib/email/templates'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, parsePaymentPlan } from '@/lib/terms'
+import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION } from '@/lib/terms'
+import { checkSchedule, toCents } from '@/lib/payment-schedule'
+import { BOOKING_PROJECT_TYPE, bookingAutomationLines } from '@/lib/automation'
 import { MigrationRequiredError, assertTermsSchema, migrationResponse, throwIfMissingColumn } from '@/lib/terms-schema'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -17,25 +19,30 @@ export async function POST(req: NextRequest) {
     const {
       clientId, clientName, clientEmail, clientBusiness,
       projectTitle, projectType, understood, lineItems, milestones, total,
-      depositPct, outOfScope, timeline, startDate, deliveryDate,
+      outOfScope, timeline, startDate, deliveryDate,
       revisions, hourlyRate, nextSteps, message, paymentPlan,
     } = body
 
-    const plan = parsePaymentPlan(paymentPlan)
-    if (!plan) {
-      return NextResponse.json({ error: 'INVALID', message: 'Choose a payment schedule: standard (50/50) or milestones.' }, { status: 400 })
+    // New proposals use the current payment policy: 50% deposit, remaining 50% across the milestones given.
+    if (paymentPlan !== 'milestone_balance') {
+      return NextResponse.json({ error: 'INVALID', message: 'New proposals use the current payment schedule: a 50% deposit and milestones for the remaining 50%.' }, { status: 400 })
     }
-    const validMilestones = Array.isArray(milestones) ? milestones : []
-    if (plan === 'milestones' && validMilestones.length === 0) {
-      return NextResponse.json({ error: 'INVALID', message: 'A milestone payment schedule needs at least one milestone.' }, { status: 400 })
+    const items = Array.isArray(lineItems) ? lineItems : []
+    const itemCents = items.reduce((sum: number, i: { price?: unknown }) => sum + (Number.isFinite(toCents(i.price)) ? toCents(i.price) : 0), 0)
+    if (itemCents !== toCents(total)) {
+      return NextResponse.json({ error: 'INVALID', message: 'The total doesn’t match the line items. Nothing was sent.' }, { status: 400 })
     }
+    const check = checkSchedule(total, Array.isArray(milestones) ? milestones : [])
+    if (!check.ok) return NextResponse.json({ error: 'INVALID', message: check.problems.join(' ') }, { status: 400 })
+    if (projectType === BOOKING_PROJECT_TYPE && bookingAutomationLines(items).length) {
+      return NextResponse.json({ error: 'INVALID', message: 'Booking & Payments already includes booking confirmations and reminders. Remove the separate charge for them, or describe the custom automation it covers.' }, { status: 400 })
+    }
+    const { deposit, balance, milestones: schedule } = check.schedule
 
     await assertTermsSchema(['proposals', 'sows', 'contracts'])
 
-    // Standard website projects are always 50% upfront, 50% at delivery.
-    const pct = plan === 'standard' ? STANDARD_DEPOSIT_PCT : parseFloat(depositPct) || STANDARD_DEPOSIT_PCT
-    const deposit = (Number(total) || 0) * (pct / 100)
-    const balance = (Number(total) || 0) - deposit
+    const plan = 'milestone_balance'
+    const pct = STANDARD_DEPOSIT_PCT
     const rate = Number(hourlyRate) > 0 ? Number(hourlyRate) : STANDARD_HOURLY_RATE
 
     const { data: proposal, error } = await supabaseAdmin
@@ -48,8 +55,8 @@ export async function POST(req: NextRequest) {
         project_title: projectTitle,
         project_type: projectType,
         understood: understood || null,
-        line_items: lineItems || [],
-        total: total || 0,
+        line_items: items,
+        total: check.schedule.total,
         deposit_pct: pct,
         out_of_scope: outOfScope || null,
         timeline: timeline || null,
@@ -66,8 +73,8 @@ export async function POST(req: NextRequest) {
     throwIfMissingColumn(error, 'proposals')
     if (error || !proposal) throw error
 
-    // Milestone projects keep their schedule in a linked SOW.
-    if (plan === 'milestones') {
+    // The milestone schedule lives in the linked SOW, which the proposal page shows.
+    {
       const { error: sowError } = await supabaseAdmin.from('sows').insert({
         proposal_id: proposal.id,
         client_name: clientName,
@@ -77,8 +84,8 @@ export async function POST(req: NextRequest) {
         project_type: projectType,
         understood: understood || null,
         out_of_scope: outOfScope || null,
-        line_items: validMilestones,
-        total: total || 0,
+        line_items: schedule,
+        total: check.schedule.total,
         deposit,
         balance,
         deposit_pct: pct,

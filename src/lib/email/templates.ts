@@ -6,6 +6,7 @@
  */
 import { BRAND } from '@/lib/brand'
 import { esc, escLines, renderEmail, usd, type Block } from './layout'
+import { formatDue, money, type Milestone } from '@/lib/payment-schedule'
 
 export type Email = { subject: string; html: string; text: string }
 
@@ -427,12 +428,17 @@ export function sowAcceptedClient(p: { clientName: string; projectTitle: string 
 /* Contracts                                                           */
 /* ================================================================== */
 
-type Money = { totalFee: number; deposit: number; balance: number; depositLabel: string; balanceLabel: string }
+/** schedule: the milestones for the remaining 50%, on documents issued under the current terms. */
+type Money = { totalFee: number; deposit: number; balance: number; depositLabel: string; balanceLabel: string; schedule?: Milestone[] }
+
+const milestoneRows = (schedule: Milestone[] | undefined): [string, string][] =>
+  (schedule || []).map((m, i) => [`Milestone ${i + 1}: ${esc(m.name)}`, `${money(m.fee)}<br><span style="color:#5C4A42;">${escLines(m.deliverables)}${m.dueDate ? `<br>Target ${esc(formatDue(m.dueDate))}` : ''}</span>`])
 
 const moneyRows = (m: Money): [string, string][] => [
-  ['Total fee', usd(m.totalFee)],
-  [m.depositLabel, usd(m.deposit)],
-  [m.balanceLabel, usd(m.balance)],
+  ['Total fee', m.schedule ? money(m.totalFee) : usd(m.totalFee)],
+  [m.depositLabel, m.schedule ? money(m.deposit) : usd(m.deposit)],
+  [m.balanceLabel, m.schedule ? money(m.balance) : usd(m.balance)],
+  ...milestoneRows(m.schedule),
 ]
 
 export function contractReady(p: Money & { clientName: string; projectTitle: string; url: string }): Email {
@@ -524,6 +530,7 @@ export function depositInvoice(p: {
   depositLabel: string
   balanceLabel: string
   paymentMethod: string
+  schedule?: Milestone[]
 }): Email {
   return done(
     `Invoice ${p.invoiceNumber}: ${p.projectTitle}`,
@@ -540,10 +547,12 @@ export function depositInvoice(p: {
             ['Service', esc(p.serviceDesc)],
             ['Due date', esc(p.dueDate)],
             ['Total project fee', usd(p.totalFee)],
-            [p.depositLabel, `<strong style="font-size:20px;color:#B33A26;">${usd(p.deposit)}</strong>`],
-            [p.balanceLabel, usd(p.balance)],
+            [p.depositLabel, `<strong style="font-size:20px;color:#B33A26;">${p.schedule ? money(p.deposit) : usd(p.deposit)}</strong>`],
+            [p.balanceLabel, p.schedule ? money(p.balance) : usd(p.balance)],
+            ...milestoneRows(p.schedule),
           ],
         },
+        ...(p.schedule ? ([{ type: 'note', html: 'Each milestone is invoiced separately when it’s reached. Nothing is charged automatically.' }] as Block[]) : []),
         { type: 'callout', title: 'How to pay', html: `${escLines(p.paymentMethod)}<br>Reference: Invoice #${esc(p.invoiceNumber)} | ${esc(p.clientName)}` },
         { type: 'note', html: 'Work begins once the deposit is received.' },
       ],
@@ -584,16 +593,19 @@ export function invoice(p: {
 }): Email {
   const isProject = p.invoiceType === 'project'
   const balance = Number(p.totalFee || 0) - Number(p.depositAmount || 0)
+  const hourly = p.invoiceType === 'revision' || (p.hours !== undefined && p.hours !== null && Number(p.hours) > 0)
   const payRows: [string, string][] = isProject
     ? [
         ['Total project fee', usd(p.totalFee)],
         ['Deposit due now (50%)', `<strong style="font-size:20px;color:#B33A26;">${usd(p.depositAmount)}</strong>`],
         ['Balance due on delivery (50%)', usd(balance)],
       ]
-    : [
-        ['Hours', `${esc(p.hours)}h x $${esc(p.hourlyRate)}/hr`],
-        ['Total due', `<strong style="font-size:20px;color:#B33A26;">${usd(p.totalFee)}</strong>`],
-      ]
+    : hourly
+      ? [
+          ['Hours', `${esc(p.hours)}h x $${esc(p.hourlyRate)}/hr`],
+          ['Total due', `<strong style="font-size:20px;color:#B33A26;">${usd(p.totalFee)}</strong>`],
+        ]
+      : [['Amount due', `<strong style="font-size:20px;color:#B33A26;">${money(Number(p.totalFee) || 0)}</strong>`]]
   return done(
     `Invoice #${p.invoiceNumber} from ${BRAND.name}`,
     renderEmail({

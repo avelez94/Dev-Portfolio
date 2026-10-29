@@ -44,7 +44,8 @@ export function publicContract(row: Row): Row {
   // The client's own email is shown under Parties. The signature, signer name,
   // time, and IP are never sent back; once signed, the page only shows a
   // confirmation, and the signed copy goes out by email as a PDF.
-  return pick(row, CONTRACT_FIELDS)
+  // The milestone schedule (current terms) is part of the payment clause the client reads.
+  return { ...pick(row, CONTRACT_FIELDS), line_items: list(row.line_items).map(milestone) }
 }
 
 export const NO_STORE = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }

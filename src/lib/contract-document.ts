@@ -32,6 +32,8 @@ export type ContractDoc = {
   terms_version?: string | null
   hourly_rate?: number | null
   payment_plan?: string | null
+  /** Milestones for the remaining 50% (current terms). */
+  line_items?: unknown
 }
 
 export function killFeeAmount(c: Pick<ContractDoc, 'total_fee' | 'kill_fee_pct'>): number {

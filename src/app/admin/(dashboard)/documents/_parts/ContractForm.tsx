@@ -1,19 +1,20 @@
 'use client'
 /** Contract form, filled from an accepted proposal. All legal terms are preloaded. */
-import { STANDARD_HOURLY_RATE, TERMS_VERSION, formatRate } from '@/lib/terms'
+import { PROJECT_PAYMENT_POLICY, STANDARD_HOURLY_RATE, TERMS_VERSION, formatRate } from '@/lib/terms'
 import { useTheme } from '../../_components/theme'
 import type { PendingPreview } from '../../_components/PreviewDialog'
-import { PROJECT_TYPES, contractFromProposal, contractPreview, contractTermsDoc, type ContractForm as Form } from '../../_lib/documents'
+import { PROJECT_TYPES, contractFromProposal, contractPreview, linkedClient, type ContractForm as Form } from '../../_lib/documents'
 import { contractDoc } from '../../_lib/pdf'
-import type { Row } from '../../_lib/types'
+import type { Client, Row } from '../../_lib/types'
+import MilestoneEditor from './MilestoneEditor'
 
 export type ContractFormProps = {
-  contractForm: Form; setContractForm: (f: Form) => void; proposals: Row[]
+  contractForm: Form; setContractForm: (f: Form) => void; proposals: Row[]; sows: Row[]; clients: Client[]
   error: string | null; sent: boolean; sending: boolean
   onSend: () => void; onClose: () => void; onPreview: (p: PendingPreview) => void
 }
 
-export default function ContractForm({ contractForm, setContractForm, proposals, error, sent, sending, onSend, onClose, onPreview }: ContractFormProps) {
+export default function ContractForm({ contractForm, setContractForm, proposals, sows, clients, error, sent, sending, onSend, onClose, onPreview }: ContractFormProps) {
   const { d, inputStyle } = useTheme()
   const generateContractDoc = () => contractDoc(contractForm)
   const docError = error ? { kind: 'contract', message: error } : null
@@ -29,7 +30,7 @@ export default function ContractForm({ contractForm, setContractForm, proposals,
         <div className="form-group" style={{gridColumn:'1/-1'}}>
           <select aria-label="Select from accepted proposals" style={inputStyle} onChange={e=>{
             const p = proposals.find(pr=>pr.id===e.target.value)
-            if(p) { setContractForm(contractFromProposal(p, contractForm)); return }
+            if(p) { setContractForm(contractFromProposal(p, contractForm, sows.find(sw=>sw.proposal_id===p.id)?.line_items)); return }
           }} defaultValue="">
             <option value="" disabled>Select a client...</option>
             {proposals.filter(p=>p.status==='accepted').map(p=>(
@@ -51,17 +52,17 @@ export default function ContractForm({ contractForm, setContractForm, proposals,
       </div>
       <div className="section-divider" style={{background:d.border}}/>
       <div className="section-mini-label" style={{color:d.text3}}>Payment</div>
-      <div className="form-grid-3">
-        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total fee ($)</div><input style={inputStyle} type="number" value={contractForm.total_fee} onChange={e=>setContractForm({...contractForm,total_fee:e.target.value})} placeholder="0"/></div>
-        <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Payment schedule</div><select style={inputStyle} value={contractForm.payment_plan} onChange={e=>setContractForm({...contractForm,payment_plan:e.target.value})}><option value="standard">Standard website: 50% upfront, 50% at delivery</option><option value="milestones">Custom project: milestones defined in the proposal</option></select></div>
-        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit ($)</div><input style={inputStyle} type="number" disabled={contractForm.payment_plan!=='milestones'} value={contractForm.payment_plan==='milestones'?contractForm.deposit:String(contractTermsDoc(contractForm).deposit)} onChange={e=>setContractForm({...contractForm,deposit:e.target.value})} placeholder="0"/></div>
-        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Balance ($)</div><input style={inputStyle} type="number" disabled={contractForm.payment_plan!=='milestones'} value={contractForm.payment_plan==='milestones'?contractForm.balance:String(contractTermsDoc(contractForm).balance)} onChange={e=>setContractForm({...contractForm,balance:e.target.value})} placeholder="0"/></div>
+      <div className="form-grid">
+        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Total fee ($)</div><input aria-label="Total fee" style={inputStyle} type="number" step="0.01" value={contractForm.total_fee} onChange={e=>setContractForm({...contractForm,total_fee:e.target.value})} placeholder="0"/></div>
+        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Hourly rate for additional work ($)</div><input aria-label="Contract hourly rate" style={inputStyle} inputMode="decimal" value={contractForm.hourly_rate} onChange={e=>setContractForm({...contractForm,hourly_rate:e.target.value})}/><div style={{fontSize:12,color:d.text3,marginTop:4}}>{Number(contractForm.hourly_rate)===STANDARD_HOURLY_RATE?'Standard rate.':'Carried from the accepted proposal or agreed with this client.'}</div></div>
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Kill fee (%)</div><input style={inputStyle} value={contractForm.kill_fee_pct} onChange={e=>setContractForm({...contractForm,kill_fee_pct:e.target.value})}/></div>
-        <div className="form-group" style={{gridColumn:'2/-1'}}><div className="form-label" style={{color:d.text3}}>Payment method</div><input style={inputStyle} value={contractForm.payment_method} onChange={e=>setContractForm({...contractForm,payment_method:e.target.value})}/></div>
+        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Payment method</div><input style={inputStyle} value={contractForm.payment_method} onChange={e=>setContractForm({...contractForm,payment_method:e.target.value})}/></div>
       </div>
+      <MilestoneEditor idPrefix="cm" total={contractForm.total_fee} milestones={contractForm.milestones} onChange={(v)=>setContractForm({...contractForm,milestones:v})}/>
+      {(() => { const c = linkedClient(clients, contractForm.client_email); return <div style={{fontSize:12,color:d.text3,marginBottom:10}}>{c ? `The invoice schedule is linked to ${c.name}${c.business ? ', ' + c.business : ''} in Pipeline.` : 'No client record has exactly this email, so the invoice schedule appears under Revenue only.'}</div> })()}
       <div className="section-divider" style={{background:d.border}}/>
       <div className="section-mini-label" style={{color:d.text3}}>Deposit invoice (sent automatically on signature)</div>
-      <div style={{fontSize:12,color:d.text3,marginBottom:10}}>These details go on the deposit invoice that gets sent the moment the client signs the contract.</div>
+      <div style={{fontSize:12,color:d.text3,marginBottom:10}}>The deposit invoice is sent the moment the client signs. The milestones are saved with it as one invoice schedule; you send each milestone’s invoice yourself when it’s reached, and nothing is charged automatically.</div>
       <div className="form-grid">
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice number</div><input style={inputStyle} value={contractForm.invoice_number} onChange={e=>setContractForm({...contractForm,invoice_number:e.target.value})} placeholder="INV-2026-001"/></div>
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Due date</div><input style={inputStyle} type="date" value={contractForm.invoice_due_date} onChange={e=>setContractForm({...contractForm,invoice_due_date:e.target.value})}/></div>
@@ -71,11 +72,11 @@ export default function ContractForm({ contractForm, setContractForm, proposals,
       <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>
       <div style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,fontSize:12,color:d.text2,lineHeight:1.8}}>
         <div style={{marginBottom:6}}>Same 12 clauses as the contract the client signs online (terms version {TERMS_VERSION}):</div>
-        <div style={{marginBottom:6}}>1. Services: scope and change order rate ({formatRate(STANDARD_HOURLY_RATE)}, one hour minimum, estimate approved first)</div>
-        <div style={{marginBottom:6}}>2. Payment: {contractForm.payment_plan === 'milestones' ? 'Deposit, then milestones defined in the proposal' : '50% upfront, 50% at delivery before launch or handoff'}, late payment interest (1.5%/month)</div>
+        <div style={{marginBottom:6}}>1. Services: scope and change order rate ({formatRate(Number(contractForm.hourly_rate) || STANDARD_HOURLY_RATE)}, one hour minimum, or an agreed fixed quote; estimate approved first)</div>
+        <div style={{marginBottom:6}}>2. Payment: {PROJECT_PAYMENT_POLICY} Milestones listed with their triggers; late payment interest (1.5%/month)</div>
         <div style={{marginBottom:6}}>3. Kill fee: {contractForm.kill_fee_pct}% of total if cancelled after work begins</div>
         <div style={{marginBottom:6}}>4. Intellectual property: full ownership transfers on final payment</div>
-        <div style={{marginBottom:6}}>5. Revisions: 2 rounds included, additional at {formatRate(STANDARD_HOURLY_RATE)} with an approved estimate</div>
+        <div style={{marginBottom:6}}>5. Revisions: 2 rounds included, additional at {formatRate(Number(contractForm.hourly_rate) || STANDARD_HOURLY_RATE)} (one hour minimum) or an agreed fixed quote, with an approved estimate</div>
         <div style={{marginBottom:6}}>6. Client responsibilities: content, assets, credentials, and feedback on time</div>
         <div style={{marginBottom:6}}>7. Confidentiality: both parties keep proprietary info confidential</div>
         <div style={{marginBottom:6}}>8. Warranties: original work; defects reported within 30 days of launch are fixed without using care time</div>

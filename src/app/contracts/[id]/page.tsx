@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { DocShell } from '@/components/docs/DocShell'
 import { contractClauses } from '@/lib/contract-document'
-import { balanceLabel, depositLabel, usesCurrentTerms } from '@/lib/terms'
+import { formatDue, money, storedMilestones } from '@/lib/payment-schedule'
+import { balanceLabel, depositLabel, usesCurrentTerms, usesMilestoneBalance } from '@/lib/terms'
 
 type Contract = {
   id: string
@@ -240,12 +241,18 @@ export default function ContractPage() {
         </div>
         <div className="payment-row">
           <span className="payment-label">{depositLabel(contract)}</span>
-          <span className="payment-value">${contract.deposit.toLocaleString()}</span>
+          <span className="payment-value">{usesMilestoneBalance(contract) ? money(contract.deposit) : '$' + contract.deposit.toLocaleString()}</span>
         </div>
         <div className="payment-row">
           <span className="payment-label">{balanceLabel(contract)}</span>
-          <span className="payment-value">${contract.balance.toLocaleString()}</span>
+          <span className="payment-value">{usesMilestoneBalance(contract) ? money(contract.balance) : '$' + contract.balance.toLocaleString()}</span>
         </div>
+        {usesMilestoneBalance(contract) && storedMilestones(contract.line_items).map((m, i) => (
+          <div className="payment-row" key={i}>
+            <span className="payment-label">Milestone {i + 1}: {m.name}<br /><span style={{ fontSize: 12, opacity: 0.8 }}>{m.deliverables}{m.dueDate ? ` · target ${formatDue(m.dueDate)}` : ''}</span></span>
+            <span className="payment-value">{money(m.fee)}</span>
+          </div>
+        ))}
         <div className="payment-row">
           <span className="payment-label">Payment method</span>
           <span className="payment-value">{contract.payment_method}</span>

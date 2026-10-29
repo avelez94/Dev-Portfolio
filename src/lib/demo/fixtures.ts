@@ -5,6 +5,7 @@
  * session; each session still has its own separate copy of the data.
  */
 import 'server-only'
+import { TERMS_VERSION } from '@/lib/terms'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
@@ -15,6 +16,7 @@ export const DEMO_IDS = {
   estimates: { physioTeam: id(401) },
   leads: { booked: id(501), pending: id(502), inquiry: id(503) },
   bookings: { booked: id(511) },
+  documents: { pendingProposal: id(933), acceptedProposal: id(934), legacyProposal: id(932), signedContract: id(943), unsignedContract: id(944), legacyContract: id(941), scheduleInvoice: id(805), unsignedInvoice: id(806) },
 } as const
 
 const DAY = 86_400_000
@@ -50,6 +52,7 @@ type Rows = Record<string, Record<string, unknown>[]>
 export function adminRows(): Rows {
   const C = DEMO_IDS.clients
   const L = DEMO_IDS.leads
+  const D = DEMO_IDS.documents
   return {
     intake_submissions: [
       { id: L.booked, name: 'Dana Brooks', email: 'dana@example.com', business: 'Brooks Bike Repair', project_type: 'Business Website', description: 'A five page site with online repair booking.', budget: '$3k to $5k', timeline: 'Next two months', heard_from: 'Google', status: 'booked', submitted_at: at(-3), stage: 'details', source: 'questionnaire', interest: 'business-website' },
@@ -60,12 +63,12 @@ export function adminRows(): Rows {
       { id: DEMO_IDS.bookings.booked, intake_id: L.booked, scheduled_at: at(2, 17), zoom_join_url: 'https://demo.invalid/zoom/join/brooks', zoom_host_url: 'https://demo.invalid/zoom/host/brooks', status: 'scheduled', created_at: at(-3) },
     ],
     clients: [
-      { id: C.physio, name: 'Sam Patel', email: 'frontdesk@example.com', business: 'Northside Physio', pipeline_stage: 'complete', created_at: at(-120), notes: 'On Business Care since launch.', platform: 'direct' },
-      { id: C.bakery, name: 'Jordan Reyes', email: 'owner@example.com', business: 'Harbor Street Bakery', pipeline_stage: 'complete', created_at: at(-200), notes: 'Premium Care. Agreement predates the flexible plan time terms.', platform: 'referral' },
-      { id: C.dental, name: 'Avery Kim', email: 'office@example.com', business: 'Lakeside Dental', pipeline_stage: 'complete', created_at: at(-60), notes: null, platform: 'direct' },
+      { id: C.physio, name: 'Sam Patel', email: 'frontdesk@example.com', business: 'Northside Physio', pipeline_stage: 'closed', created_at: at(-120), notes: 'On Business Care since launch.', platform: 'direct' },
+      { id: C.bakery, name: 'Jordan Reyes', email: 'owner@example.com', business: 'Harbor Street Bakery', pipeline_stage: 'closed', created_at: at(-200), notes: 'Premium Care. Agreement predates the flexible plan time terms.', platform: 'referral' },
+      { id: C.dental, name: 'Avery Kim', email: 'office@example.com', business: 'Lakeside Dental', pipeline_stage: 'closed', created_at: at(-60), notes: null, platform: 'direct' },
       { id: C.studio, name: 'Morgan Ellis', email: 'morgan@example.com', business: 'Ellis Yoga Studio', pipeline_stage: 'proposal_sent', created_at: at(-9), notes: 'Wants class schedule embedded.', platform: 'direct' },
       { id: C.garden, name: 'Casey Rivera', email: 'casey@example.com', business: 'Rivera Garden Design', pipeline_stage: 'active_project', created_at: at(-30), notes: null, platform: 'referral' },
-      { id: C.tutor, name: 'Taylor Brooks', email: 'taylor@example.com', business: null, pipeline_stage: 'discovery_call', created_at: at(-2), notes: 'Met at the small business fair.', platform: 'direct' },
+      { id: C.tutor, name: 'Taylor Brooks', email: 'taylor@example.com', business: 'Brooks Tutoring', pipeline_stage: 'proposal_sent', created_at: at(-2), notes: 'Met at the small business fair.', platform: 'direct' },
     ],
     availability: [0, 1, 2, 3, 4, 5, 6].map((d) => ({ id: id(600 + d), day_of_week: d, start_time: '09:00:00', end_time: '17:00:00', is_active: d > 0 && d < 6 })),
     blocked_dates: [{ id: id(611), blocked_date: day(12), reason: 'Conference (demo)' }],
@@ -78,21 +81,48 @@ export function adminRows(): Rows {
       { id: id(801), project_id: id(701), client_id: C.garden, invoice_number: 'INV-DEMO-101', amount: 2100, status: 'paid', invoice_type: 'fixed_fee', total_fee: 4200, deposit_amount: 2100, deposit_paid_date: day(-19), hours: 0, hourly_rate: 100, service_desc: 'Website build, 50% deposit', due_date: day(-19), paid_date: day(-19), created_at: at(-20) },
       { id: id(802), project_id: id(701), client_id: C.garden, invoice_number: 'INV-DEMO-102', amount: 2100, status: 'pending', invoice_type: 'fixed_fee', total_fee: 4200, deposit_amount: 2100, hours: 0, hourly_rate: 100, service_desc: 'Website build, balance on launch', due_date: day(26), created_at: at(-20) },
       { id: id(803), project_id: null, client_id: C.dental, invoice_number: 'INV-DEMO-095', amount: 150, status: 'pending', invoice_type: 'hourly', total_fee: 150, deposit_amount: 0, hours: 1.5, hourly_rate: 100, service_desc: 'Occasional support: insurance page update (1.5 hours)', due_date: day(-4), created_at: at(-18) },
+      { id: DEMO_IDS.documents.scheduleInvoice, project_id: null, client_id: C.dental, invoice_number: 'INV-DEMO-110', amount: 1800, status: 'deposit_paid', invoice_type: 'milestone', total_fee: 1800, deposit_amount: 900, deposit_paid_date: day(-11), hours: 0, hourly_rate: 70, service_desc: 'Online booking add on', due_date: day(-12), notes: `contract_id:${DEMO_IDS.documents.signedContract}`, created_at: at(-14) },
+      { id: DEMO_IDS.documents.unsignedInvoice, project_id: null, client_id: C.tutor, invoice_number: 'INV-DEMO-120', amount: 6000, status: 'awaiting_signature', invoice_type: 'milestone', total_fee: 6000, deposit_amount: 3000, hours: 0, hourly_rate: 70, service_desc: 'Tutoring portal: deposit to begin', due_date: day(7), notes: `contract_id:${DEMO_IDS.documents.unsignedContract}`, created_at: at(-1) },
       { id: id(804), project_id: id(702), client_id: C.dental, invoice_number: 'INV-DEMO-080', amount: 5200, status: 'paid', invoice_type: 'fixed_fee', total_fee: 5200, deposit_amount: 2600, deposit_paid_date: day(-108), hours: 0, hourly_rate: 100, service_desc: 'Website build', due_date: day(-60), paid_date: day(-58), created_at: at(-110) },
     ],
-    invoice_milestones: [],
+    invoice_milestones: [
+      // Lakeside Dental's add-on project on the current terms: deposit paid, first milestone invoiced.
+      { id: id(851), invoice_id: id(805), name: 'Deposit (50%)', deliverables: 'Due before work begins', due_date: day(-12), fee: 900, status: 'paid', paid_date: day(-11), created_at: at(-14, 10) },
+      { id: id(852), invoice_id: id(805), name: 'Booking flow design approved', deliverables: 'Approval of the booking flow design', due_date: day(-2), fee: 450, status: 'invoiced', created_at: at(-14, 11) },
+      { id: id(853), invoice_id: id(805), name: 'Launch', deliverables: 'Online booking live on the site', due_date: day(14), fee: 450, status: 'pending', created_at: at(-14, 12) },
+      // Taylor Brooks's contract, waiting for signature: the deposit is invoiced when they sign.
+      { id: id(861), invoice_id: id(806), name: 'Deposit (50%)', deliverables: 'Due before work begins', due_date: day(7), fee: 3000, status: 'pending', created_at: at(-1, 10) },
+      { id: id(862), invoice_id: id(806), name: 'Design approved', deliverables: 'Approval of the portal screens', due_date: null, fee: 1000, status: 'pending', created_at: at(-1, 11) },
+      { id: id(863), invoice_id: id(806), name: 'Portal ready for testing', deliverables: 'Booking and progress notes working on the preview site', due_date: null, fee: 1250, status: 'pending', created_at: at(-1, 12) },
+      { id: id(864), invoice_id: id(806), name: 'Launch', deliverables: 'Portal live for your families', due_date: null, fee: 750, status: 'pending', created_at: at(-1, 13) },
+    ],
     documents: [{ id: id(901), client_id: C.garden, name: 'garden-brief.pdf', type: 'other', storage_path: 'clients/demo/garden-brief.pdf', created_at: at(-19) }],
+    // Titles as stored before the November rename; the admin shows the new titles.
     pricing: [
-      { id: id(911), name: 'Landing Page', price: '$1,500', description: 'One focused page.', updated_at: at(-50) },
-      { id: id(912), name: 'Business Website', price: '$3,500', description: 'Up to five pages.', updated_at: at(-50) },
+      { id: id(911), name: 'Landing Page', price: 'From $1,500', description: 'A focused business website: up to five pages.', updated_at: at(-50) },
+      { id: id(912), name: 'Booking + Payments', price: 'From $2,500', description: 'Online booking and one payment flow, with the service’s standard confirmations and reminders.', updated_at: at(-50) },
+      { id: id(913), name: 'Web Application', price: 'From $5,000', description: 'Accounts, dashboards, stores, portals.', updated_at: at(-50) },
+      { id: id(914), name: 'AI Workflow', price: 'Quoted', description: 'Custom automations and AI integrations, scoped separately.', updated_at: at(-50) },
+      { id: id(915), name: 'Deposit', price: '50%', description: '50% deposit before work begins; remaining 50% across the milestones in the proposal.', updated_at: at(-50) },
     ],
     meetings: [{ id: id(921), client_id: C.garden, scheduled_at: at(4, 18), zoom_join_url: 'https://demo.invalid/zoom/join/rivera', zoom_host_url: 'https://demo.invalid/zoom/host/rivera', title: 'Design review', status: 'scheduled', created_at: at(-5) }],
     proposals: [
-      { id: id(931), client_id: C.studio, client_name: 'Morgan Ellis', client_email: 'morgan@example.com', client_business: 'Ellis Yoga Studio', project_title: 'Ellis Yoga Studio website', project_type: 'Business Website', understood: 'A calm site with the class schedule and online sign up.', line_items: [{ name: 'Design and build', price: 3200 }], total: 3200, deposit_pct: 50, status: 'pending', terms_version: '2026-10-standard-rate', hourly_rate: 100, payment_plan: 'standard', created_at: at(-4) },
-      { id: id(932), client_id: C.garden, client_name: 'Casey Rivera', client_email: 'casey@example.com', client_business: 'Rivera Garden Design', project_title: 'Rivera Garden Design website', project_type: 'Business Website', line_items: [{ name: 'Design and build', price: 4200 }], total: 4200, deposit_pct: 50, status: 'accepted', responded_at: at(-21), terms_version: '2026-10-standard-rate', hourly_rate: 100, payment_plan: 'standard', created_at: at(-24) },
+      // Current terms: 50% deposit, remaining 50% across milestones (in the linked SOW). Waiting for the client.
+      { id: D.pendingProposal, client_id: C.studio, client_name: 'Morgan Ellis', client_email: 'morgan@example.com', client_business: 'Ellis Yoga Studio', project_title: 'Ellis Yoga Studio website', project_type: 'Booking & Payments', understood: 'A calm site with the class schedule, online class booking, and a drop in class payment.', line_items: [{ description: 'Design and build, five pages', price: 2400 }, { description: 'Class booking and drop in payment setup', price: 800 }], total: 3200, deposit_pct: 50, timeline: '5 to 6 weeks from the deposit', next_steps: 'Once you accept, I’ll send the contract. Your deposit invoice follows the signature.', status: 'pending', terms_version: TERMS_VERSION, hourly_rate: 70, payment_plan: 'milestone_balance', created_at: at(-2) },
+      // Current terms, accepted: ready for a contract.
+      { id: D.acceptedProposal, client_id: C.tutor, client_name: 'Taylor Brooks', client_email: 'taylor@example.com', client_business: 'Brooks Tutoring', project_title: 'Tutoring portal', project_type: 'Custom Website or Application', understood: 'A portal where families book sessions and see progress notes.', line_items: [{ description: 'Discovery and design', price: 1500 }, { description: 'Portal build', price: 4500 }], total: 6000, deposit_pct: 50, status: 'accepted', responded_at: at(-1), terms_version: TERMS_VERSION, hourly_rate: 70, payment_plan: 'milestone_balance', created_at: at(-3) },
+      // Issued under the October terms: kept exactly as issued (50% at delivery, $100 an hour).
+      { id: D.legacyProposal, client_id: C.garden, client_name: 'Casey Rivera', client_email: 'casey@example.com', client_business: 'Rivera Garden Design', project_title: 'Rivera Garden Design website', project_type: 'Landing Page', line_items: [{ description: 'Design and build', price: 4200 }], total: 4200, deposit_pct: 50, status: 'accepted', responded_at: at(-21), terms_version: '2026-10-standard-rate', hourly_rate: 100, payment_plan: 'standard', created_at: at(-24) },
     ],
-    sows: [],
-    contracts: [{ id: id(941), client_name: 'Casey Rivera', client_email: 'casey@example.com', client_business: 'Rivera Garden Design', project_title: 'Rivera Garden Design website', status: 'signed', signed_at: at(-20), total_fee: 4200, deposit: 2100, balance: 2100, terms_version: '2026-10-standard-rate', hourly_rate: 100, payment_plan: 'standard', created_at: at(-21) }],
+    sows: [
+      { id: id(961), proposal_id: D.pendingProposal, client_name: 'Morgan Ellis', client_email: 'morgan@example.com', client_business: 'Ellis Yoga Studio', project_title: 'Ellis Yoga Studio website', project_type: 'Booking & Payments', line_items: [{ name: 'Design approved', deliverables: 'Approval of the homepage and class schedule designs', dueDate: day(14), fee: 800 }, { name: 'Booking ready for testing', deliverables: 'Class booking and payment working on the preview site', dueDate: day(28), fee: 500 }, { name: 'Launch', deliverables: 'Site live on your domain', dueDate: null, fee: 300 }], total: 3200, deposit: 1600, balance: 1600, deposit_pct: 50, revisions: '2', hourly_rate: 70, payment_method: 'Stripe, PayPal, Zelle, or Wise', status: 'pending', terms_version: TERMS_VERSION, payment_plan: 'milestone_balance', created_at: at(-2) },
+      { id: id(962), proposal_id: D.acceptedProposal, client_name: 'Taylor Brooks', client_email: 'taylor@example.com', client_business: 'Brooks Tutoring', project_title: 'Tutoring portal', project_type: 'Custom Website or Application', line_items: [{ name: 'Design approved', deliverables: 'Approval of the portal screens', dueDate: null, fee: 1000 }, { name: 'Portal ready for testing', deliverables: 'Booking and progress notes working on the preview site', dueDate: null, fee: 1250 }, { name: 'Launch', deliverables: 'Portal live for your families', dueDate: null, fee: 750 }], total: 6000, deposit: 3000, balance: 3000, deposit_pct: 50, revisions: '2', hourly_rate: 70, payment_method: 'Stripe, PayPal, Zelle, or Wise', status: 'accepted', terms_version: TERMS_VERSION, payment_plan: 'milestone_balance', created_at: at(-3) },
+    ],
+    contracts: [
+      { id: D.legacyContract, client_name: 'Casey Rivera', client_email: 'casey@example.com', client_business: 'Rivera Garden Design', project_title: 'Rivera Garden Design website', project_type: 'Landing Page', status: 'signed', signed_at: at(-20), total_fee: 4200, deposit: 2100, balance: 2100, kill_fee_pct: 25, payment_method: 'Stripe, PayPal, Zelle, or Wise', line_items: [], terms_version: '2026-10-standard-rate', hourly_rate: 100, payment_plan: 'standard', created_at: at(-21) },
+      { id: D.unsignedContract, client_name: 'Taylor Brooks', client_email: 'taylor@example.com', client_business: 'Brooks Tutoring', project_title: 'Tutoring portal', project_type: 'Custom Website or Application', status: 'pending', total_fee: 6000, deposit: 3000, balance: 3000, kill_fee_pct: 25, payment_method: 'Stripe, PayPal, Zelle, or Wise', line_items: [{ name: 'Design approved', deliverables: 'Approval of the portal screens', dueDate: null, fee: 1000 }, { name: 'Portal ready for testing', deliverables: 'Booking and progress notes working on the preview site', dueDate: null, fee: 1250 }, { name: 'Launch', deliverables: 'Portal live for your families', dueDate: null, fee: 750 }], terms_version: TERMS_VERSION, hourly_rate: 70, payment_plan: 'milestone_balance', created_at: at(-1) },
+      { id: D.signedContract, client_name: 'Avery Kim', client_email: 'office@example.com', client_business: 'Lakeside Dental', project_title: 'Online booking add on', project_type: 'Booking & Payments', status: 'signed', signed_at: at(-13), total_fee: 1800, deposit: 900, balance: 900, kill_fee_pct: 25, payment_method: 'Stripe, PayPal, Zelle, or Wise', line_items: [{ name: 'Booking flow design approved', deliverables: 'Approval of the booking flow design', dueDate: day(-2), fee: 450 }, { name: 'Launch', deliverables: 'Online booking live on the site', dueDate: day(14), fee: 450 }], terms_version: TERMS_VERSION, hourly_rate: 70, payment_plan: 'milestone_balance', created_at: at(-14) },
+    ],
     debt_payoff: [
       { id: id(951), creditor: 'Demo Card A', promo_name: '0% balance transfer', original_balance: 2400, current_balance: 1350, promo_deadline: day(90), deadline_is_estimated: false, priority: 1, completed: false, created_at: at(-200), updated_at: at(-10) },
       { id: id(952), creditor: 'Demo Laptop Plan', promo_name: null, original_balance: 900, current_balance: 0, promo_deadline: null, deadline_is_estimated: false, priority: 2, completed: true, completed_at: at(-40), created_at: at(-300), updated_at: at(-40) },

@@ -165,3 +165,64 @@ test('a client on older terms is flagged, and Quick add stays off until reviewed
   assert.ok(over <= 1, `phone width overflows by ${over}px`)
   await p.context().close()
 })
+
+/* ---------------------------- suggested Report text ---------------------------- */
+
+const report = () => one(`select * from care_reports where cycle_id = ${q(ids.cycle)}`)
+
+test('suggested text fills untouched fields and proposes, never overwrites, edited ones', { skip }, async () => {
+  sql(`update care_reports set suggestions = '{}', content = '{"summary":"My own summary for this month."}', status = 'draft' where cycle_id = ${q(ids.cycle)}`)
+  const r = await api(`cycles/${ids.cycle}/suggest`, { method: 'POST', json: {} })
+  assert.equal(r.status, 200, JSON.stringify(r.data))
+  const rep = report()
+  assert.equal(rep.content.summary, 'My own summary for this month.', 'your edited summary is kept')
+  assert.ok(rep.suggestions.pending.summary, 'a replacement is proposed instead')
+  assert.match(rep.content.investigated, /^Automated checks opened/, 'an empty field is filled')
+  assert.equal(rep.status, 'draft', 'nothing is approved or sent')
+
+  // Edit a generated field, refresh again: the edit stays.
+  await api(`cycles/${ids.cycle}/report`, { method: 'PUT', json: { content: { ...rep.content, investigated: 'I checked everything by hand.' }, base_version: rep.version } })
+  await api(`cycles/${ids.cycle}/suggest`, { method: 'POST', json: {} })
+  assert.equal(report().content.investigated, 'I checked everything by hand.')
+  assert.match(report().suggestions.pending.investigated, /^Automated checks opened/)
+})
+
+test('accepting one proposal changes only that field; Keep mine drops it', { skip }, async () => {
+  const before = report()
+  await api(`cycles/${ids.cycle}/suggest/accept`, { method: 'POST', json: { field: 'summary' } })
+  const after = report()
+  assert.equal(after.content.summary, before.suggestions.pending.summary)
+  assert.equal(after.content.investigated, 'I checked everything by hand.')
+  await api(`cycles/${ids.cycle}/suggest/dismiss`, { method: 'POST', json: { field: 'investigated' } })
+  assert.equal(report().suggestions.pending.investigated, undefined)
+  assert.equal(report().content.investigated, 'I checked everything by hand.')
+})
+
+test('suggestions are flagged outdated when hand checks, findings, work, or estimates change', { skip }, async () => {
+  let c = await api(`cycles/${ids.cycle}`)
+  assert.equal(c.data.suggestions.outdated, false)
+  await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'failed', note: 'Header overlaps on a laptop.' } })
+  c = await api(`cycles/${ids.cycle}`)
+  assert.equal(c.data.suggestions.outdated, true)
+  await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note: 'Checked on a laptop.' } })
+})
+
+test('private notes never appear in suggested text', { skip }, async () => {
+  sql(`update care_reports set internal_notes = 'PRIVATE-REPORT-NOTE' where cycle_id = ${q(ids.cycle)}`)
+  sql(`update care_issue_notes set internal_note = 'PRIVATE-ISSUE-NOTE' where cycle_id = ${q(ids.cycle)}`)
+  sql(`update care_manual_results set internal_note = 'PRIVATE-MANUAL-NOTE' where cycle_id = ${q(ids.cycle)}`)
+  sql(`update care_work_entries set private_note = 'PRIVATE-WORK-NOTE' where cycle_id = ${q(ids.cycle)}`)
+  sql(`update care_reports set content = '{}', suggestions = '{}' where cycle_id = ${q(ids.cycle)}`)
+  await api(`cycles/${ids.cycle}/suggest`, { method: 'POST', json: {} })
+  const rep = report()
+  assert.doesNotMatch(JSON.stringify(rep.content) + JSON.stringify(rep.suggestions), /PRIVATE/)
+})
+
+test('updating suggestions on an approved report returns it to draft for approval again', { skip }, async () => {
+  sql(`update care_reports set status = 'approved', content = '{}', suggestions = '{}' where cycle_id = ${q(ids.cycle)}`)
+  const v = report().version
+  await api(`cycles/${ids.cycle}/suggest`, { method: 'POST', json: {} })
+  const rep = report()
+  assert.equal(rep.status, 'draft')
+  assert.equal(rep.version, v + 1, 'a new version, so the approved one stays distinct')
+})

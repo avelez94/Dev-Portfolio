@@ -11,7 +11,7 @@ import { PageFrame, PageHeader, PageState } from '../../_components/ui'
 import { useUnsaved } from '../../_components/unsaved'
 import PreviewDialog, { type PendingPreview } from '../../_components/PreviewDialog'
 import { combine, useRows } from '../../_lib/useRows'
-import { blankContract, resendSignedContract, saveProposalDraft, savedLineItems, savedMilestones, savedProposalForm, sendContract, sendProposal, type ContractForm as ContractFields, type LineItem, type MilestoneDraft, type ProposalForm as ProposalFields } from '../../_lib/documents'
+import { blankContract, linkedClient, resendSignedContract, saveProposalDraft, savedLineItems, savedMilestones, savedProposalForm, sendContract, sendProposal, type ContractForm as ContractFields, type LineItem, type MilestoneDraft, type ProposalForm as ProposalFields } from '../../_lib/documents'
 import { deleteDocument, downloadDoc, uploadTemplate } from '../../_lib/files'
 import type { Client, Document, Pricing, Row } from '../../_lib/types'
 import PricingCards from './PricingCards'
@@ -29,6 +29,7 @@ export default function DocumentsView() {
   const clients = useRows<Client>(() => supabase.from('clients').select('*').order('created_at', { ascending: false }))
   const proposals = useRows<Row>(() => supabase.from('proposals').select('*').order('created_at', { ascending: false }))
   const contracts = useRows<Row>(() => supabase.from('contracts').select('*').order('created_at', { ascending: false }))
+  const sows = useRows<Row>(() => supabase.from('sows').select('id, proposal_id, line_items'))
   const templates = useRows<Document>(() => supabase.from('documents').select('*').is('client_id', null).order('created_at', { ascending: false }))
   const page = combine(pricing, clients, proposals, contracts, templates)
 
@@ -61,7 +62,7 @@ export default function DocumentsView() {
     if (!contractForm.client_email || !contractForm.client_name) return
     if (!contractForm.invoice_number) { alert('Please fill in the invoice number before sending.'); return }
     setError(null); setSending(true)
-    const r = await sendContract(contractForm)
+    const r = await sendContract(contractForm, linkedClient(clients.rows, contractForm.client_email)?.id)
     setSending(false)
     if (!r.ok) { setError({ kind: 'contract', message: r.message }); return }
     setSent('contract'); setTimeout(() => setSent(null), 3000)
@@ -122,7 +123,7 @@ export default function DocumentsView() {
             <div className="doc-actions"><button className="doc-btn fill" onClick={() => toggle('contract')}>{open === 'contract' ? 'Close form' : 'Fill out contract'}</button></div>
           </div>
           {open === 'contract' && (
-            <ContractForm contractForm={contractForm} setContractForm={setContractForm} proposals={proposals.rows.filter((p) => p.status === 'accepted')}
+            <ContractForm contractForm={contractForm} setContractForm={setContractForm} proposals={proposals.rows.filter((p) => p.status === 'accepted')} sows={sows.rows} clients={clients.rows}
               error={error?.kind === 'contract' ? error.message : null} sent={sent === 'contract'} sending={sending}
               onSend={onSendContract} onClose={() => setOpen(null)} onPreview={setPreview} />
           )}

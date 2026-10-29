@@ -4,6 +4,7 @@ import WorkPanel from './WorkPanel'
 import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus } from './ui'
 import { SitesTable } from './CareApp'
 import { CARE_TERMS_VERSION } from '@/content/care-terms'
+import { STANDARD_HOURLY_RATE } from '@/lib/terms'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Go = (n: { view?: 'sites'; site?: string | null; cycle?: string | null }) => void
@@ -232,7 +233,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             <label className="care-row"><input type="checkbox" checked={conf.confirm_checklist} onChange={(e) => setConf({ ...conf, confirm_checklist: e.target.checked })} /> The manual checklist matches what we agreed.</label>
             <Field label="How the client authorized it" id="c-auth"><input id="c-auth" value={conf.authorization_note} onChange={(e) => setConf({ ...conf, authorization_note: e.target.value })} placeholder="Signed care agreement, Oct 28" /></Field>
             {site.care_terms_version !== CARE_TERMS_VERSION && <>
-              <label className="care-row"><input type="checkbox" checked={conf.confirm_terms} onChange={(e) => setConf({ ...conf, confirm_terms: e.target.checked })} /> The client accepted the current care terms ({CARE_TERMS_VERSION}): flexible plan time, and additional work at $100 an hour with a one hour minimum or an agreed fixed quote.</label>
+              <label className="care-row"><input type="checkbox" checked={conf.confirm_terms} onChange={(e) => setConf({ ...conf, confirm_terms: e.target.checked })} /> The client accepted the current care terms ({CARE_TERMS_VERSION}): flexible plan time, and additional work at ${STANDARD_HOURLY_RATE} an hour with a one hour minimum or an agreed fixed quote.</label>
               <Field label="How the client accepted the care terms" id="c-terms"><input id="c-terms" value={conf.terms_note} onChange={(e) => setConf({ ...conf, terms_note: e.target.value })} placeholder="Signed care agreement, Oct 28" /></Field>
             </>}
             <div><Action tone="primary" label="Confirm setup and enable reviews" run={() => careApi(`sites/${id}/confirm`, { method: 'POST', json: conf })} done={reload} /></div>

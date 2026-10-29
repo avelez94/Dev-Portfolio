@@ -4,7 +4,7 @@
  * the run's own scope before it is stored.
  */
 import { db, must, CareError, logActivity } from './db'
-import { invalidateApproval } from './report'
+import { invalidateApproval , refreshSuggestions } from './report'
 import { queueScanNotification } from './notify'
 import { STATUSES, CHECK_LABELS, fingerprint, type FindingStatus } from './findings'
 export { CHECK_LABELS, STATUSES, ISSUE, diffFindings, fingerprint } from './findings'
@@ -111,6 +111,10 @@ export async function completeRun(runId: string, owner: string, body: Completion
   if (outcome === 'succeeded' || outcome === 'partial') await invalidateApproval(run.cycle_id, 'New automated check results replaced the ones in the approved report.', 'runner')
   await logActivity({ site_id: run.site_id, cycle_id: run.cycle_id, actor: 'runner', action: `scan_${outcome}`, detail: { run_id: runId, counts } })
   if (outcome !== 'canceled') await queueScanNotification(runId)
+  // Suggested Report text from the new results. Only a draft's untouched fields change; nothing is approved or sent.
+  if (outcome === 'succeeded' || outcome === 'partial') {
+    try { await refreshSuggestions(run.cycle_id, 'auto', 'runner') } catch (e) { console.error('report suggestions failed', e) }
+  }
   return { status: outcome, summary }
 }
 

@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { DocShell } from '@/components/docs/DocShell'
-import { sowRevisionsText, usesCurrentTerms } from '@/lib/terms'
+import { sowRevisionsText, usesCurrentTerms, usesLatestTerms } from '@/lib/terms'
+import { money } from '@/lib/payment-schedule'
 
 type Milestone = { name: string; deliverables: string; dueDate: string; fee: string }
 type SOW = {
@@ -206,10 +207,17 @@ export default function SOWPage() {
             <span>Total</span>
             <span className="total-amount">${sow.total.toLocaleString()}</span>
           </div>
+          {usesLatestTerms(sow) ? (
+            <div className="deposit-note">
+              Deposit (50% due before work begins): <strong>{money(sow.deposit)}</strong><br/>
+              The remaining 50% ({money(sow.balance)}) is divided across the milestones above, each invoiced when its deliverable or payment trigger is reached.
+            </div>
+          ) : (
           <div className="deposit-note">
             Deposit ({sow.deposit_pct}% due to begin): <strong>${sow.deposit.toLocaleString()}</strong><br/>
             Remaining balance paid across milestones as outlined above.
           </div>
+          )}
         </div>
       )}
 

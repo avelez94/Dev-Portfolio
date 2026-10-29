@@ -4,10 +4,12 @@
  * always has), so leaving the page doesn't lose it.
  */
 import { ADMIN_FONTS } from '@/lib/admin-theme'
-import { STANDARD_DEPOSIT_PCT } from '@/lib/terms'
+import { STANDARD_HOURLY_RATE, hourlyWorkSentence } from '@/lib/terms'
+import { BOOKING_AUTOMATION_NOTE, bookingAutomationLines } from '@/lib/automation'
 import { useTheme } from '../../_components/theme'
 import type { PendingPreview } from '../../_components/PreviewDialog'
 import { PROJECT_TYPES, proposalPreview, type LineItem, type MilestoneDraft, type ProposalForm as Form } from '../../_lib/documents'
+import MilestoneEditor from './MilestoneEditor'
 import { proposalPDF } from '../../_lib/pdf'
 import type { Client } from '../../_lib/types'
 
@@ -54,6 +56,9 @@ export default function ProposalForm({ proposalForm, setProposalForm, lineItems,
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project title</div><input style={inputStyle} value={proposalForm.project_title} onChange={e=>setProposalForm({...proposalForm,project_title:e.target.value})} placeholder="Beyond the Horizon Website"/></div>
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Project type</div><select style={inputStyle} value={proposalForm.project_type} onChange={e=>setProposalForm({...proposalForm,project_type:e.target.value})}>{PROJECT_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
       </div>
+      {proposalForm.project_type === 'Booking & Payments' && (
+        <div role="note" style={{fontSize:12,color:d.text2,background:d.surface2,border:'1px solid '+d.border,borderRadius:8,padding:'8px 12px',marginBottom:10,lineHeight:1.6}}>{BOOKING_AUTOMATION_NOTE}</div>
+      )}
       <div className="section-divider" style={{background:d.border}}/>
       <div className="section-mini-label" style={{color:d.text3}}>Scope</div>
       <div className="form-grid">
@@ -71,6 +76,11 @@ export default function ProposalForm({ proposalForm, setProposalForm, lineItems,
         </div>
       ))}
       <button onClick={()=>setLineItems([...lineItems,{description:'',price:''}])} style={{background:d.accentBg,border:'1px solid '+d.border2,color:d.text,fontFamily:ADMIN_FONTS.body,fontSize:13,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add line item</button>
+      {proposalForm.project_type === 'Booking & Payments' && bookingAutomationLines(lineItems).length > 0 && (
+        <div role="alert" style={{fontSize:12,color:d.redText,background:d.red,borderRadius:8,padding:'8px 12px',marginBottom:10,lineHeight:1.6}}>
+          These lines look like booking confirmations or reminders, which Booking &amp; Payments already includes: {bookingAutomationLines(lineItems).map(i=>i.description).join(', ')}. Remove the charge, or describe the separately scoped custom automation it covers.
+        </div>
+      )}
       {lineItems.some(i=>i.price) && (
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderTop:'1px solid '+d.border,marginBottom:12}}>
           <div style={{fontSize:12,fontWeight:500,color:d.text}}>Total</div>
@@ -78,55 +88,21 @@ export default function ProposalForm({ proposalForm, setProposalForm, lineItems,
         </div>
       )}
       <div className="section-divider" style={{background:d.border}}/>
-      <div className="section-mini-label" style={{color:d.text3}}>Payment and timeline</div>
+      <div className="section-mini-label" style={{color:d.text3}}>Timeline and additional work</div>
       <div className="form-grid">
-        <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Payment schedule</div><select style={inputStyle} value={proposalForm.payment_plan} onChange={e=>setProposalForm({...proposalForm,payment_plan:e.target.value})}><option value="standard">Standard website: 50% upfront, 50% at delivery</option><option value="milestones">Custom project: deposit, then milestones in this proposal</option></select></div>
-        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Deposit (%)</div><input style={inputStyle} disabled={proposalForm.payment_plan!=='milestones'} value={proposalForm.payment_plan==='milestones'?proposalForm.deposit_pct:String(STANDARD_DEPOSIT_PCT)} onChange={e=>setProposalForm({...proposalForm,deposit_pct:e.target.value})}/></div>
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Timeline estimate</div><input style={inputStyle} value={proposalForm.timeline} onChange={e=>setProposalForm({...proposalForm,timeline:e.target.value})} placeholder="4 to 6 weeks from deposit"/></div>
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Start date (est.)</div><input style={inputStyle} type="date" value={proposalForm.start_date} onChange={e=>setProposalForm({...proposalForm,start_date:e.target.value})}/></div>
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Delivery date (est.)</div><input style={inputStyle} type="date" value={proposalForm.delivery_date} onChange={e=>setProposalForm({...proposalForm,delivery_date:e.target.value})}/></div>
         <div className="form-group"><div className="form-label" style={{color:d.text3}}>Revisions included</div><input style={inputStyle} value={proposalForm.revisions} onChange={e=>setProposalForm({...proposalForm,revisions:e.target.value})}/></div>
-        <div className="form-group"><div className="form-label" style={{color:d.text3}}>Hourly rate ($)</div><input style={inputStyle} value={proposalForm.hourly_rate} onChange={e=>setProposalForm({...proposalForm,hourly_rate:e.target.value})}/></div>
+        <div className="form-group" style={{gridColumn:'1/-1'}}>
+          <div className="form-label" style={{color:d.text3}}>Hourly rate for additional work ($)</div>
+          <input aria-label="Hourly rate for additional work" style={inputStyle} inputMode="decimal" value={proposalForm.hourly_rate} onChange={e=>setProposalForm({...proposalForm,hourly_rate:e.target.value})}/>
+          <div style={{fontSize:12,color:d.text3,marginTop:4}}>Standard: {hourlyWorkSentence()}. Change it only for a rate you agreed with this client.{Number(proposalForm.hourly_rate)!==STANDARD_HOURLY_RATE && proposalForm.hourly_rate ? ' This proposal uses an agreed rate.' : ''}</div>
+        </div>
       </div>
       <div className="section-divider" style={{background:d.border}}/>
-      {proposalForm.payment_plan === 'milestones' ? (<>
-      <div className="section-mini-label" style={{color:d.text3}}>Milestone schedule</div>
-      <div style={{fontSize:12,color:d.text3,marginBottom:10}}>
-        Break the balance into milestones. Each has deliverables, a due date, and a fee.
-        {lineItems.some(i=>i.price) && (() => {
-          const total = lineItems.reduce((s,i)=>s+(parseFloat(i.price)||0),0)
-          const dep = total * (parseFloat(proposalForm.deposit_pct)/100)
-          const bal = total - dep
-          const mTotal = proposalMilestones.reduce((s,m)=>s+(parseFloat(m.fee)||0),0)
-          return <span style={{marginLeft:8,color:Math.round(mTotal)===Math.round(bal)?d.greenText:d.accent}}>Milestone total: ${mTotal.toLocaleString()} / ${bal.toLocaleString()} required (balance after ${dep.toLocaleString()} deposit)</span>
-        })()}
-      </div>
-      {proposalMilestones.map((milestone, idx) => (
-        <div key={idx} style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,marginBottom:10}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <input style={{...inputStyle,width:'auto',flex:1,fontWeight:500,fontSize:12}} value={milestone.name} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],name:e.target.value};setProposalMilestones(u)}} placeholder="Milestone name"/>
-            <button aria-label="Remove" onClick={()=>setProposalMilestones(proposalMilestones.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:d.text3,cursor:'pointer',fontSize:16,padding:'0 4px 0 12px',lineHeight:1}}>x</button>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-            <div>
-              <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Due date</div>
-              <input style={inputStyle} type="date" value={milestone.dueDate} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],dueDate:e.target.value};setProposalMilestones(u)}}/>
-            </div>
-            <div>
-              <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Fee ($)</div>
-              <input style={{...inputStyle,textAlign:'right'}} type="number" value={milestone.fee} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],fee:e.target.value};setProposalMilestones(u)}} placeholder="0"/>
-            </div>
-          </div>
-          <div>
-            <div style={{fontSize:12,color:d.text3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>Deliverables</div>
-            <textarea className="form-input" style={{background:d.surface,borderColor:d.border,color:d.text,minHeight:60}} value={milestone.deliverables} onChange={e=>{const u=[...proposalMilestones];u[idx]={...u[idx],deliverables:e.target.value};setProposalMilestones(u)}} placeholder="What will be delivered at this milestone..."/>
-          </div>
-        </div>
-      ))}
-      <button onClick={()=>setProposalMilestones([...proposalMilestones,{name:'Milestone '+(proposalMilestones.length+1),deliverables:'',dueDate:'',fee:''}])} style={{background:d.accentBg,border:'1px solid '+d.border2,color:d.text,fontFamily:ADMIN_FONTS.body,fontSize:13,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',marginBottom:12}}>+ Add milestone</button>
-      </>) : (
-      <div style={{fontSize:12,color:d.text3,marginBottom:10}}>Standard website project: 50% upfront to reserve the project and begin work, remaining 50% due at delivery, before public launch or final handoff. Switch to milestones for larger custom projects.</div>
-      )}
+      <div className="section-mini-label" style={{color:d.text3}}>Payment schedule</div>
+      <MilestoneEditor idPrefix="pm" total={lineItems.reduce((s,i)=>s+(parseFloat(i.price)||0),0)} milestones={proposalMilestones} onChange={setProposalMilestones}/>
       <div className="section-divider" style={{background:d.border}}/>
       <div className="section-mini-label" style={{color:d.text3}}>Next steps</div>
       <div className="form-group" style={{marginBottom:12}}>
@@ -151,7 +127,7 @@ export default function ProposalForm({ proposalForm, setProposalForm, lineItems,
       )}
       <div className="form-actions">
         <button className="btn-cancel" style={{borderColor:d.border,color:d.text2}} onClick={onClose}>Cancel</button>
-        <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>onPreview({ doc: proposalPreview(proposalForm, lineItems), action: 'download', onConfirm: generateProposalDoc })}>Preview</button>
+        <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={()=>onPreview({ doc: proposalPreview(proposalForm, lineItems, proposalMilestones), action: 'download', onConfirm: generateProposalDoc })}>Preview</button>
         <button className="btn-save" style={{background:d.surface2,color:d.text}} onClick={generateProposalDoc}>Download PDF</button>
         <button className="btn-save" disabled={sendingProposal||!proposalForm.client_email} onClick={sendProposalEmail}>
           {sendingProposal?'Sending...':'Send to Client'}

@@ -54,7 +54,7 @@ export default function PipelineView() {
     await supabase.from('clients').update({ pipeline_stage: 'active_project' }).eq('id', c.id)
     if (projectForm.value) {
       await supabase.from('projects').insert({
-        client_id: c.id, name: c.name + (c.business ? ' — ' + c.business : ''), type: 'Web Application',
+        client_id: c.id, name: c.name + (c.business ? ' — ' + c.business : ''), type: 'Custom Website or Application',
         value: parseFloat(projectForm.value), platform: c.platform || 'direct', status: 'active', end_date: projectForm.end_date || null,
       })
     }

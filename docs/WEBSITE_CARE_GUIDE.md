@@ -27,7 +27,7 @@ The admin **Schedule** page also shows each review’s due date (a green diamond
 3. In **Issues found**, choose **What happens next** for every issue and **Save**.
 4. In **Manual checklist**, choose a **Result** for every item and **Save** each one.
 5. In **Plan time and work**, record any finished work with **Quick add work**. Tick **All completed work for this period is recorded** when the period’s work is in.
-6. In **Report text**, write the **Client summary** and **Save report text**.
+6. In **Report text**, read the **Suggested text**, change anything that isn’t right, and **Save report text**.
 7. In **Preview and approve**: **Mark ready for review**, open the preview or PDF, tick the sign off, type your name, **Approve this version**.
 8. In **Send**: type the recipient address to confirm, **Send Report**. Check the badge says **Accepted by provider**.
 9. Look at **Billing attention** on the Overview. Reply to any payment problems in Stripe.
@@ -184,7 +184,7 @@ Tick **All completed work for this period is recorded** when you’re done. Unti
 
 1. Fill in **Title**, **Scope**, **Expected deliverables**, **Agreed schedule**, **Total standard minutes, including testing**, and **Included minutes proposed**.
 2. If there are additional minutes, enter the **Additional price ($)** and **How the price was calculated**:
-   - **Use hourly wording**: $100 an hour with a one hour minimum.
+   - **Use hourly wording**: $70 an hour with a one hour minimum (or a fixed quote you agree on).
    - **Use fixed quote wording**: an agreed fixed amount.
    - Standard minutes never set the price. You enter it.
 3. **Save as draft**. A draft reserves nothing and appears in the report under “Waiting for your approval”.
@@ -207,9 +207,44 @@ Tick **All completed work for this period is recorded** when you’re done. Unti
 
 **Demo:** real behavior. Client approval is recorded by you; there is no client approval link.
 
-## 8. Preview, approve, and send the report
+## 8. Report text, with suggested wording
 
-1. **Report text**: write the **Client summary** (required) and press **Save report text**. Recorded work is listed automatically.
+The **Report text** section drafts the client wording for you from templates (no AI service, nothing paid). It uses only what is on record: the latest automated check, the manual results you saved, your **What happens next** decisions and client notes, the work ledger, and estimate statuses. **Private notes are never used.**
+
+![Suggested text, outdated](website-care-guide/29-suggested-outdated.png)
+
+**When it runs**
+- Automatically after a check finishes (succeeded or partly succeeded), while the report is still a draft.
+- When you press **Update suggested text**. That button is greyed out while you have unsaved edits; save first.
+- **Generated** shows when the suggestions were written. **Outdated: results, checks, work, or estimates changed** appears once any of those changes after that time. Press **Update suggested text** to refresh.
+
+**Your edits are kept**
+- A field you haven’t touched is refreshed in place.
+- A field you edited keeps your words. The new wording appears under it as **Suggested replacement**, with **Use suggestion** and **Keep mine**. Each field is decided on its own.
+
+![Suggested replacement](website-care-guide/31-suggested-replacement.png)
+
+**The seven fields**
+
+![Report text fields](website-care-guide/30-suggested-fields.png)
+
+| Field | Shows in the report? | What the suggestion writes | What you should check |
+| --- | --- | --- | --- |
+| **Client summary (required)** | Yes, at the top and in the email | Two or three plain sentences: the overall result, any issue and its next step, and what you need from the client (or that nothing is needed). | It never says “fixed” unless a fix has a verification note, and never says everything passed while issues or unverified items remain. |
+| **What I looked into** | Yes | The automated checks that actually ran (pages, linked pages, desktop and phone), then **Checked by hand:** the manual items you recorded. | Unrecorded or skipped manual items aren’t listed. If the check didn’t complete, nothing automated is claimed. |
+| **Still open** | Yes | Left empty. Issues, unverified items, and approved work in progress already have their own sections, so nothing is repeated. | Add anything open that isn’t already in those sections. |
+| **Anything else for next month** | Yes | Only follow ups the records support, for example an item that couldn’t be verified. No dates or promises. | Add a commitment only if you mean it. |
+| **Other notes on work (optional)** | Yes | Left empty. Work from **Quick add work** is listed automatically. | Use only for work that isn’t in the ledger. |
+| **Note for the client** | Yes | A specific request (approve an estimate, or send something you need), or nothing. | Leave it blank when there’s nothing to ask. |
+| **Private notes (never in the report)** | No | Never filled, and never read by the suggestions. | Your own notes. |
+
+**Approval and sending stay with you.** Suggestions never approve or send anything. Applying a suggestion to an approved report returns it to draft, so it needs approval again. A sent version is never changed.
+
+**Demo:** real behavior. Open Rivera Garden Design’s review, run the check, and watch the fields fill in.
+
+## 9. Preview, approve, and send the report
+
+1. **Report text**: check the suggestions (section 8), make sure the **Client summary** is right, and press **Save report text**. Recorded work is listed automatically.
 2. **Preview and approve**: if **Before this can be marked ready** lists anything, fix it. Then press **Mark ready for review**.
 3. Open **Client report preview**, **Open PDF preview**, or **Download preview PDF**.
 4. Tick the sign off, type **Your name**, and press **Approve this version**.
@@ -235,7 +270,7 @@ Tick **All completed work for this period is recorded** when you’re done. Unti
 
 ![Simulated actions](website-care-guide/28-simulated-actions.png)
 
-## 9. Renewal, failed payment, cancellation, unfinished work
+## 10. Renewal, failed payment, cancellation, unfinished work
 
 **Implemented (Stripe clients)**
 
@@ -261,6 +296,73 @@ Today these settings only control flags and reminder emails; nothing is suspende
 **Demo:**
 - Renewal, failed payment, and cancellation come from Stripe events, so they can’t be triggered in the demo yet.
 - The demo website Lakeside Dental shows an active simulated subscription.
+
+## 11. Projects: pricing, proposals, contracts, and payments
+
+These steps are outside Website Care but use the same rates. Everything is in the admin **Documents** and **Pipeline** pages.
+
+### Your rates and payment terms
+
+- **Standard rate:** $70 an hour with a one hour minimum, or a fixed quote you agree on. New proposals, statements of work, contracts, estimates, and care terms all use it. It lives in one place in the code (`src/lib/terms.ts`), so changing it later is one edit.
+- **Project payments:** a 50% deposit is due before work begins. The remaining 50% is divided across the project milestones listed in the proposal and agreement. You choose the milestones; nothing is split for you.
+- **Agreed rates are kept.** A document can carry a different hourly rate you agreed with that client. Documents issued earlier keep their exact wording, rate, and payment plan (they are stamped with the terms version they were issued under).
+- **Monthly care prices and included minutes are unchanged.** Care minutes measure time; they never become a dollar charge on their own.
+
+### My Pricing cards
+
+![Pricing cards](website-care-guide/40-pricing-cards.png)
+
+The cards are **Business Website**, **Booking & Payments**, **Custom Website or Application**, **Custom Automations & AI Integrations**, and **Project Payments**. Press **edit** on a card to change its price or description; your edits are kept.
+
+**Booking & Payments versus automations.** Booking & Payments already includes the booking service’s standard confirmations and reminders. If a proposal for it has a priced line for confirmation or reminder emails, the form warns you so the client isn’t charged twice. Custom automations and AI integrations (a CRM, a workflow tool, an AI step) are scoped and priced separately under their own card.
+
+### 1. Write a proposal with a payment schedule
+
+1. **Documents, Fill out Proposal.** Fill in the client, project, type, and line items.
+2. **Timeline and additional work:** the **Hourly rate for additional work** starts at $70. Change it only if you agreed a different rate.
+3. **Payment schedule:** the deposit (50%) is calculated from the total. Add a milestone for each payment of the remaining 50%: a **name**, the **deliverable or payment trigger** (what has to happen before you invoice it), an **amount**, and an optional **target date**. **+ Add milestone** adds another.
+4. Watch the fourth box. **Still to assign** means the milestones don’t yet add up to the remaining 50%; the message underneath says by how much.
+
+![Not yet balanced](website-care-guide/41-proposal-schedule-short.png)
+
+5. When it reads **All assigned, $0**, the schedule balances to the cent. The proposal can’t be sent until it does (the server checks again).
+
+![Balanced](website-care-guide/42-proposal-schedule.png)
+
+**The client sees** the deposit and each milestone with its trigger and date, in the proposal page, its email, and its PDF.
+
+![Client proposal](website-care-guide/43-client-proposal.png)
+
+![Milestones on the proposal](website-care-guide/44-client-proposal-milestones.png)
+
+### 2. Send the contract
+
+1. **Documents, Fill out contract.** Choose the accepted proposal under **Select from accepted proposals**. The client, total, rate, and milestones fill in from it; you can adjust them.
+2. Check the **Payment** section: total fee, hourly rate, kill fee, payment method, and the schedule (it must say **All assigned**). The line under it shows which Pipeline client the invoice schedule will be linked to.
+3. **Deposit invoice:** the invoice number and due date for the deposit.
+4. **Legal terms included** lists the clauses the client signs, including the payment and rate clauses.
+5. **Preview**, then **Send for Signature**.
+
+![Contract schedule](website-care-guide/45-contract-schedule.png)
+
+**The client sees** the payment summary on the contract page: the deposit, the remaining 50%, each milestone, the payment method, and the kill fee. They sign with a drawn signature and their typed name.
+
+![Client contract payments](website-care-guide/46-client-contract-payments.png)
+
+### 3. After signing: the invoice schedule
+
+- Signing creates **one** invoice schedule for the contract: the deposit first, then each milestone. A contract can only ever have one, so milestone invoices can’t be duplicated.
+- The deposit invoice is emailed when the client signs.
+- **Nothing is charged automatically.** Each milestone stays **Not invoiced** until you press **Send invoice** in Pipeline. Sending one that was already sent asks first and goes as a reminder (**Resend reminder**).
+- Record payments yourself with **Record payment**. When the deposit is paid the schedule shows deposit paid; when every payment is in, it shows paid in full.
+
+![Pipeline schedule](website-care-guide/47-pipeline-schedule.png)
+
+**Revenue** lists the schedule as one row (marked **(ms)**). **dep** records the deposit and **next** records the next unpaid milestone; to pick a specific one, use Pipeline.
+
+![Revenue](website-care-guide/48-revenue-schedule.png)
+
+**Demo:** real behavior with simulated email and payments. The sample proposal is Ellis Yoga Studio’s, and Taylor Brooks’s contract can be signed as the client from its link.
 
 ## Less frequent tasks
 
@@ -301,6 +403,8 @@ Today these settings only control flags and reminder emails; nothing is suspende
 - **Agreed monthly price versus the Stripe charge.** Reports show the agreed price, but Stripe charges the plan’s price. They differ for any client with a custom price. That needs a decision: a separate Stripe price per custom price, or billing those clients by hand.
 - **“(no Stripe price set)” beside a plan.** The Stripe price ID for that plan isn’t configured, so checkout would fail. The demo hides this because checkout there is simulated.
 - **“Accepted by provider” is not “Delivered”.** Delivery is confirmed only with Resend’s webhook.
+- **Revenue shorthand.** **(ms)** is a milestone schedule, **(fixed)** a fixed fee invoice, **(rev)** a revision invoice. **Awaiting Dep** means the deposit is invoiced but not paid; **Dep Paid** means the deposit is in and milestones remain.
+- **Milestone “Invoiced” is not “Paid”.** Invoiced only means the email went out.
 - **Billing policy “proposed”.** These settings flag and remind; they don’t enforce anything yet.
 
 Fixed while writing this guide: confirming a real website’s setup failed for every public IPv4 address (the private address check matched IPv4 against an IPv6 rule). Every new enrollment would have been refused at **Confirm setup and enable reviews**.

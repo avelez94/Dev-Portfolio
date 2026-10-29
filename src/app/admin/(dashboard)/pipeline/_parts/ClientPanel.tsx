@@ -139,9 +139,9 @@ export default function ClientPanel({ client, onAdvance, onLost, onSaved, onPrev
               return (
                 <div key={inv.id} className="inv-row" style={{ background: d.surface }}>
                   <div style={{ fontSize: 12, color: d.text, fontWeight: 500, width: '100%' }}>#{inv.invoice_number} · Milestone Schedule</div>
-                  <div style={{ fontSize: 12, color: d.text2, width: '100%' }}>{inv.service_desc} · {ms.length} milestones</div>
+                  <div style={{ fontSize: 12, color: d.text2, width: '100%' }}>{inv.service_desc} · {ms.length} payments · nothing is charged automatically</div>
                   {ms.map((m, idx) => {
-                    const mc = m.status === 'paid' ? { bg: d.green, text: d.greenText } : { bg: d.amber, text: d.amberText }
+                    const mc = m.status === 'paid' ? { bg: d.green, text: d.greenText } : m.status === 'invoiced' ? { bg: d.accentBg, text: d.accent } : { bg: d.amber, text: d.amberText }
                     return (
                       <div key={m.id} style={{ width: '100%', background: d.surface2, borderRadius: 8, padding: '8px 10px' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -152,13 +152,13 @@ export default function ClientPanel({ client, onAdvance, onLost, onSaved, onPrev
                           </div>
                           <div style={{ flexShrink: 0, textAlign: 'right' }}>
                             <div style={{ fontSize: 12, color: d.accent, fontWeight: 500 }}>{fmtMoney(m.fee)}</div>
-                            <span className="status-pill" style={{ background: mc.bg, color: mc.text, marginTop: 3, display: 'inline-flex' }}>{m.status === 'paid' ? 'Paid' : 'Pending'}</span>
+                            <span className="status-pill" style={{ background: mc.bg, color: mc.text, marginTop: 3, display: 'inline-flex' }}>{m.status === 'paid' ? 'Paid' : m.status === 'invoiced' ? 'Invoiced' : 'Not invoiced'}</span>
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                           <button className="cr-btn" style={{ background: d.surface, color: d.text2, fontSize: 12, padding: '3px 8px' }} onClick={() => milestonePDF(client.name, client.email, m, inv.invoice_number, ms.length, idx)}>Download PDF</button>
-                          <button className="cr-btn" style={{ background: d.surface, color: d.text2, fontSize: 12, padding: '3px 8px' }} onClick={() => sendMilestoneEmail(client, m, inv.invoice_number, ms.length, idx)}>Send</button>
-                          {m.status !== 'paid' && <button className="cr-btn" style={{ background: d.accentBg, color: d.accent, fontSize: 12, padding: '3px 8px' }} onClick={async () => { await markMilestonePaid(m); await milestones.reload() }}>Mark Paid</button>}
+                          {m.status !== 'paid' && <button className="cr-btn" style={{ background: d.surface, color: d.text2, fontSize: 12, padding: '3px 8px' }} onClick={async () => { await sendMilestoneEmail(client, m, inv.invoice_number, ms.length, idx, () => window.confirm('This payment was already invoiced. Send the same invoice again as a reminder? Nothing is charged.')); await milestones.reload() }}>{m.status === 'invoiced' ? 'Resend reminder' : 'Send invoice'}</button>}
+                          {m.status !== 'paid' && <button className="cr-btn" style={{ background: d.accentBg, color: d.accent, fontSize: 12, padding: '3px 8px' }} onClick={async () => { await markMilestonePaid(m); await Promise.all([milestones.reload(), invoices.reload()]) }}>Record payment</button>}
                         </div>
                       </div>
                     )

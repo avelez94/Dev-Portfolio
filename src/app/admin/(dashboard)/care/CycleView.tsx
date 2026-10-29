@@ -378,16 +378,41 @@ function ReportEditor({ data, reload }: { data: Row; reload: () => void }) {
   const [msg, setMsg] = useState<string | null>(null)
   useEffect(() => { setC(report.content || {}); setInternal(report.internal_notes || '') }, [report.version, report.content, report.internal_notes]) // eslint-disable-line react-hooks/set-state-in-effect
   const locked = report.status === 'approved' || report.status === 'ready' || report.status === 'sent'
+  const sug = (data.suggestions || { generated_at: null, outdated: false, pending: {} }) as { generated_at: string | null; outdated: boolean; pending: Record<string, string> }
+  const unsaved = FIELDS.some(([k]) => (c[k] || '') !== (report.content?.[k] || '')) || internal !== (report.internal_notes || '')
   return (
     <div>
       {locked && <p className="care-sub" style={{ margin: '0 0 8px' }}>Editing now returns the report to draft{report.status === 'approved' ? ' and clears the approval' : report.status === 'sent' ? ' as a new version; the sent version is kept exactly as sent' : ''}.</p>}
+      <div className="care-sub" style={{ margin: '0 0 12px' }} aria-labelledby="sug-h" role="region">
+        <div className="care-between">
+          <div>
+            <b id="sug-h">Suggested text</b>{' '}
+            {sug.outdated && <Badge tone="warn">Outdated: results, checks, work, or estimates changed</Badge>}
+            <div className="care-muted">{sug.generated_at ? `Generated ${fmt(sug.generated_at, data.timezone)} from the latest automated check, your recorded checks and issue decisions, recorded work, and estimates.` : 'Not generated yet. Suggestions are written when the automated check finishes, or now with Update suggested text.'}</div>
+          </div>
+          <Action label="Update suggested text" disabled={unsaved} run={() => careApi(`cycles/${cycle.id}/suggest`, { method: 'POST', json: {} })} done={() => { setMsg('Suggestions updated. Fields you edited kept your words.'); reload() }} />
+        </div>
+        <p className="care-muted" style={{ marginTop: 6 }}>Fields you haven’t changed are refreshed. A field you edited keeps your words, and any new suggestion appears under it to use or dismiss. Everything stays editable; nothing is approved or sent automatically, and private notes are never used.{unsaved ? ' Save your text before updating suggestions.' : ''}</p>
+      </div>
       {msg && <div className="care-okmsg" role="status">{msg}</div>}
       <div className="care-grid">
         <div className="care-two">
           {FIELDS.map(([k, label, hint]) => (
-            <Field key={k} label={label} id={`rc-${k}`} hint={hint || undefined}>
-              {<textarea id={`rc-${k}`} value={c[k] || ''} onChange={(e) => setC({ ...c, [k]: e.target.value })} style={{ minHeight: k === 'summary' ? 96 : 70 }} />}
-            </Field>
+            <div key={k} className="care-grid" style={{ gap: 6 }}>
+              <Field label={label} id={`rc-${k}`} hint={hint || undefined}>
+                {<textarea id={`rc-${k}`} value={c[k] || ''} onChange={(e) => setC({ ...c, [k]: e.target.value })} style={{ minHeight: k === 'summary' ? 96 : 70 }} />}
+              </Field>
+              {sug.pending?.[k] !== undefined && (
+                <div className="care-sub" style={{ borderColor: 'var(--coral)' }} data-testid={`sug-${k}`}>
+                  <div className="care-label">Suggested replacement</div>
+                  <p style={{ margin: '4px 0 8px', whiteSpace: 'pre-wrap' }}>{sug.pending[k]}</p>
+                  <div className="care-actions">
+                    <Action small tone="primary" label="Use suggestion" disabled={unsaved} run={() => careApi(`cycles/${cycle.id}/suggest/accept`, { method: 'POST', json: { field: k } })} done={reload} />
+                    <Action small label="Keep mine" run={() => careApi(`cycles/${cycle.id}/suggest/dismiss`, { method: 'POST', json: { field: k } })} done={reload} />
+                  </div>
+                </div>
+              )}
+            </div>
           ))}
         </div>
         <Field label="Private notes (never in the report)" id="rc-int"><textarea id="rc-int" value={internal} onChange={(e) => setInternal(e.target.value)} style={{ borderColor: 'var(--amberText)', minHeight: 60 }} /></Field>

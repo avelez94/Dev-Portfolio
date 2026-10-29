@@ -38,10 +38,14 @@ export function fixtures() {
     ],
     invoice_milestones: [],
     documents: [{ id: 'dc-1', client_id: 'cl-a', name: 'brief.pdf', type: 'other', storage_path: 'clients/brief.pdf', created_at: iso(-2) }],
-    pricing: [{ id: 'p1', name: 'Landing page', price: '$1,500', description: 'One page', updated_at: iso(-50) }],
+    pricing: [
+      { id: 'p1', name: 'Landing page', price: '$1,500', description: 'One page', updated_at: iso(-50) },
+      { id: 'p2', name: 'Booking + Payments', price: '$2,500', description: 'My own booking note', updated_at: iso(-50) },
+      { id: 'p3', name: 'Deposit', price: '50%', description: 'My own deposit note', updated_at: iso(-50) },
+    ],
     meetings: [],
     proposals: [{ id: 'po-1', client_name: 'Blake Beta', client_email: 'blake@example.com', client_business: 'Beta LLC', project_title: 'Beta Website', project_type: 'Landing Page', status: 'accepted', responded_at: iso(-1), total: 2000, deposit_pct: 50, payment_plan: 'standard', created_at: iso(-4) }],
-    sows: [{ id: 'sw-1', project_title: 'Gamma SOW', line_items: [{ name: 'M1', deliverables: 'Design', fee: '1000', dueDate: '' }, { name: 'M2', deliverables: 'Build', fee: '1000', dueDate: '' }], created_at: iso(-6) }],
+    sows: [{ id: 'sw-2', proposal_id: 'po-1', project_title: 'Beta Website', line_items: [{ name: 'Launch', deliverables: 'Site live on the domain', fee: '1000', dueDate: '' }], created_at: iso(-4) }, { id: 'sw-1', project_title: 'Gamma SOW', line_items: [{ name: 'M1', deliverables: 'Design', fee: '1000', dueDate: '' }, { name: 'M2', deliverables: 'Build', fee: '1000', dueDate: '' }], created_at: iso(-6) }],
     contracts: [{ id: 'ct-1', client_name: 'Casey Gamma', client_email: 'casey@example.com', project_title: 'Gamma site', status: 'signed', signed_at: iso(-7), created_at: iso(-7) }],
   }
 }

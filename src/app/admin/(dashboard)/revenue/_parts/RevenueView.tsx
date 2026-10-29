@@ -13,7 +13,7 @@ import type { Client, Invoice, Project } from '../../_lib/types'
 import InvoiceDialog from './InvoiceDialog'
 import ProjectDialog from './ProjectDialog'
 
-const blankProject = () => ({ name: '', type: 'Landing Page', value: '', platform: 'direct', status: 'active', end_date: '' })
+const blankProject = () => ({ name: '', type: 'Business Website', value: '', platform: 'direct', status: 'active', end_date: '' })
 
 export default function RevenueView() {
   const { d, inputStyle } = useTheme()
@@ -127,7 +127,7 @@ export default function RevenueView() {
           </div>
           {invoices.rows.length === 0 ? <Empty>No invoices yet.</Empty> : invoices.rows.map((inv) => {
             const pill = inv.status === 'paid' ? { background: d.green, color: d.greenText } : inv.status === 'deposit_paid' ? { background: d.amber, color: d.amberText } : inv.status === 'awaiting_deposit' ? { background: d.surface2, color: d.text3 } : { background: d.amber, color: d.amberText }
-            const label = inv.status === 'awaiting_deposit' ? 'Awaiting Dep' : inv.status === 'deposit_paid' ? 'Dep Paid' : inv.status === 'paid' ? 'Paid' : 'Pending'
+            const label = inv.status === 'awaiting_signature' ? 'Unsigned' : inv.status === 'awaiting_deposit' ? 'Awaiting Dep' : inv.status === 'deposit_paid' ? 'Dep Paid' : inv.status === 'paid' ? 'Paid' : 'Pending'
             const pay = async () => { await markInvoicePaid(inv); await invoices.reload() }
             return (
               <div key={inv.id} className="dt-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 80px', borderColor: d.border }}>
@@ -138,7 +138,9 @@ export default function RevenueView() {
                 <div className="dt-cell" style={{ display: 'flex', gap: 4 }}>
                   <button className="icon-btn" style={{ color: d.text2, fontSize: 12 }} onClick={() => setViewingInvoice(inv)} title="View">view</button>
                   {inv.status === 'awaiting_deposit' && <button className="icon-btn" style={{ color: d.amberText, fontSize: 12 }} onClick={pay} title="Mark deposit paid">dep</button>}
-                  {inv.status === 'deposit_paid' && <button className="icon-btn" style={{ color: d.greenText, fontSize: 12 }} onClick={pay} title="Mark final paid">fin</button>}
+                  {inv.status === 'deposit_paid' && (inv.invoice_type === 'milestone'
+                    ? <button className="icon-btn" style={{ color: d.greenText, fontSize: 12 }} onClick={pay} title="Record the next milestone payment (manage each one in Pipeline)">next</button>
+                    : <button className="icon-btn" style={{ color: d.greenText, fontSize: 12 }} onClick={pay} title="Mark final paid">fin</button>)}
                   {inv.status === 'pending' && <button className="icon-btn" style={{ color: d.greenText, fontSize: 12 }} onClick={pay} title="Mark paid">ok</button>}
                   <button aria-label="Remove" className="icon-btn" style={{ color: d.text3 }} onClick={async () => { await supabase.from('invoices').delete().eq('id', inv.id); await invoices.reload() }}>x</button>
                 </div>

@@ -10,6 +10,7 @@ import { db, must, CareError, logActivity, getSettings, putObject, REPORTS_BUCKE
 import { plan as planInfo, type PlanId } from './plans'
 import { buildReport, modelProblems, type Snapshot, type ModelInput, type FindingIn, type ManualIn, type IssueNoteIn, type WorkEntryIn, type EstimateIn } from './report-model'
 import { formatDateOnly } from './schedule'
+import { DRAFT_FIELDS, draftReportText, draftSource, type DraftField } from './report-draft'
 
 // Larger work and its prices live in estimates (care_estimates), and completed work in the ledger, not in report text.
 export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'client_notes'] as const
@@ -276,4 +277,95 @@ export async function approve(cycleId: string, body: { snapshot_hash?: string; s
   }
   await logActivity({ cycle_id: cycleId, site_id: b.site.id, actor, action: 'report_approved', detail: { version: b.report.version, approver, hash: hash.slice(0, 12) } })
   return { approval_id: ins.data.id, version: b.report.version, hash }
+}
+
+/* ---------------------------- suggested text ---------------------------- */
+
+/**
+ * What the generator last wrote, per field (applied), the replacements it
+ * proposes for fields you changed (pending), when, and a fingerprint of the
+ * facts it used (source).
+ */
+export type Suggestions = { generated_at?: string; source?: string; mode?: string; applied?: Partial<Record<DraftField, string>>; pending?: Partial<Record<DraftField, string>> }
+
+const sourceHash = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 24)
+const manualResults = (b: Bundle) => b.manual.map((m: Row) => ({ label: m.label, status: m.status }))
+
+async function draftFor(b: Bundle) {
+  const snap = await buildSnapshot(b)
+  const manual = manualResults(b)
+  return { draft: draftReportText(snap, manual), source: sourceHash(draftSource(snap, manual)) }
+}
+
+/** For the review screen: the suggestions, and whether the facts changed since they were generated. */
+export async function suggestionState(b: Bundle) {
+  const sug = (b.report.suggestions || {}) as Suggestions
+  if (!sug.generated_at) return { generated_at: null, outdated: false, pending: {} }
+  const { source } = await draftFor(b)
+  return { generated_at: sug.generated_at, mode: sug.mode || null, outdated: source !== sug.source, pending: sug.pending || {} }
+}
+
+/**
+ * Writes suggested text. A field you haven't touched (empty, or still exactly
+ * what was last suggested) is refreshed; a field you edited keeps your words
+ * and gets a proposed replacement you can accept or dismiss.
+ *
+ * mode 'auto' (after a check finishes) only changes a report that is still a
+ * draft; otherwise everything becomes a proposal. mode 'manual' ("Update
+ * suggested text") goes through the normal edit path, so changing an
+ * approved report returns it to draft and needs approval again, and a sent
+ * version stays exactly as sent. Nothing here approves or sends anything.
+ */
+export async function refreshSuggestions(cycleId: string, mode: 'auto' | 'manual', actor: string) {
+  const b = await loadBundle(cycleId)
+  const r = b.report
+  const { draft, source } = await draftFor(b)
+  const prev = (r.suggestions || {}) as Suggestions
+  const content = { ...(r.content || {}) } as ReportContent
+  const applied = { ...(prev.applied || {}) }
+  const pending = { ...(prev.pending || {}) }
+  const canApply = mode === 'manual' || r.status === 'draft'
+  const changes: ReportContent = {}
+  for (const k of DRAFT_FIELDS) {
+    const cur = content[k] || ''
+    const next = draft[k]
+    // Untouched: still exactly what was last suggested, or never suggested and still empty.
+    // A field you cleared after a suggestion counts as edited.
+    const untouched = applied[k] !== undefined ? cur === applied[k] : cur === ''
+    if (next === cur) { delete pending[k]; applied[k] = next; continue }
+    if (untouched && canApply) {
+      changes[k] = next
+      applied[k] = next
+      delete pending[k]
+    } else if (next) pending[k] = next
+    else delete pending[k]
+  }
+  const suggestions: Suggestions = { generated_at: new Date().toISOString(), source, mode, applied, pending }
+  await db.from('care_reports').update({ suggestions, updated_at: new Date().toISOString() }).eq('id', r.id)
+  if (Object.keys(changes).length) await updateContent(r.id, { content: { ...content, ...changes } }, actor)
+  await logActivity({ cycle_id: cycleId, site_id: b.site.id, actor, action: 'report_text_suggested', detail: { mode, applied: Object.keys(changes), proposed: Object.keys(pending) } })
+  return { applied: Object.keys(changes), proposed: Object.keys(pending) }
+}
+
+/** Uses one proposed replacement. Your other fields stay as they are. */
+export async function acceptSuggestion(cycleId: string, field: string, actor: string) {
+  if (!(DRAFT_FIELDS as readonly string[]).includes(field)) throw new CareError('Unknown field.', 422)
+  const k = field as DraftField
+  const r = must(await db.from('care_reports').select('*').eq('cycle_id', cycleId).single(), 'Report')
+  const sug = (r.suggestions || {}) as Suggestions
+  const text = sug.pending?.[k]
+  if (text === undefined) throw new CareError('That suggestion is no longer available. Update suggested text to get a fresh one.', 409)
+  const pending = { ...(sug.pending || {}) }
+  delete pending[k]
+  await db.from('care_reports').update({ suggestions: { ...sug, pending, applied: { ...(sug.applied || {}), [k]: text } } }).eq('id', r.id)
+  await updateContent(r.id, { content: { ...(r.content || {}), [k]: text } }, actor)
+}
+
+/** Keeps your text and drops the proposed replacement. */
+export async function dismissSuggestion(cycleId: string, field: string) {
+  const r = must(await db.from('care_reports').select('*').eq('cycle_id', cycleId).single(), 'Report')
+  const sug = (r.suggestions || {}) as Suggestions
+  const pending = { ...(sug.pending || {}) }
+  delete pending[field as DraftField]
+  await db.from('care_reports').update({ suggestions: { ...sug, pending } }).eq('id', r.id)
 }

@@ -72,6 +72,12 @@ async function answer(scope: DemoScope, req: Request): Promise<Response> {
     return new Response(null, { status: 204 })
   }
 
+  if (url.pathname === '/api/contracts/send-signed') {
+    // The signing page asks the site to email the signed PDF; in the demo that email is simulated.
+    note(scope, 'email', 'Signed contract PDF to the client (simulated)')
+    return json({ success: true, simulated: true })
+  }
+
   note(scope, 'blocked', `Blocked outbound request to ${url.host}`, { method: req.method, path: url.pathname })
   throw new TypeError(`fetch failed: ${url.host} is not reachable from the demo`)
 }

@@ -6,13 +6,14 @@
  * (localStorage, one key per sign in), so each demo session is separate and
  * Reset demo starts again from the original fictional data.
  */
-import { REAL_ADMIN_API } from './mode'
+import { DEMO_PUBLIC_DOCS, REAL_ADMIN_API } from './mode'
 
 type Entry = { at: string; kind: string; summary: string; detail?: Record<string, unknown> }
 type State = { v: 1; created: string; log: Entry[]; [k: string]: unknown }
 
 const PREFIX = 'admin-demo-state:'
 const w = (typeof window === 'undefined' ? {} : window) as Window & { __demoFetch?: boolean }
+let publicDocs = false
 let state: State | null = null
 let loaded = false
 let queue: Promise<unknown> = Promise.resolve()
@@ -103,7 +104,12 @@ async function viaDemo(real: typeof fetch, req: Request): Promise<Response> {
 }
 
 function isAdminApi(u: URL) {
-  return u.origin === window.location.origin && REAL_ADMIN_API.test(u.pathname)
+  return u.origin === window.location.origin && (REAL_ADMIN_API.test(u.pathname) || (publicDocs && DEMO_PUBLIC_DOCS.test(u.pathname)))
+}
+
+/** True when this browser has a demo session (it signed in to the admin on a demo deployment). */
+export function hasDemoSession() {
+  return typeof document !== 'undefined' && /(?:^|;\s*)admin_demo_sid=/.test(document.cookie)
 }
 
 /** Opens or downloads an admin API file (a report PDF, a screenshot) through the demo. */
@@ -135,7 +141,8 @@ function queued<T>(f: () => Promise<T>): Promise<T> {
   return run
 }
 
-export function installDemoFetch() {
+export function installDemoFetch(opts: { publicDocs?: boolean } = {}) {
+  if (opts.publicDocs) publicDocs = true
   if (typeof window === 'undefined' || w.__demoFetch) return
   w.__demoFetch = true
   const real = window.fetch.bind(window)

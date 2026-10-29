@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { balanceLabel, depositLabel, invoiceDepositLabel } from '@/lib/terms'
+import { balanceLabel, depositLabel, invoiceDepositLabel, usesMilestoneBalance } from '@/lib/terms'
+import { storedMilestones } from '@/lib/payment-schedule'
 import { BRAND } from '@/lib/brand'
 import * as mail from '@/lib/email/templates'
 import { SITE_URL } from '@/content/site'
@@ -71,6 +72,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         status: 'awaiting_deposit',
       }).eq('id', invoice.id)
     }
+    // Current terms: the deposit row of the linked schedule is invoiced now; each later milestone is invoiced by you.
+    const schedule = usesMilestoneBalance(contract) ? storedMilestones(contract.line_items) : undefined
+    if (invoice && schedule) {
+      const first = await supabaseAdmin.from('invoice_milestones').select('id').eq('invoice_id', invoice.id).eq('name', 'Deposit (50%)').limit(1)
+      if (first.data?.[0]) await supabaseAdmin.from('invoice_milestones').update({ status: 'invoiced' }).eq('id', first.data[0].id).eq('status', 'pending')
+    }
 
     // Notify you
     const signedNote = mail.contractSignedAdmin({
@@ -84,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const signedCopy = mail.contractSignedClient({
       clientName: contract.client_name, projectTitle: contract.project_title, signerName, signedDate,
       totalFee: contract.total_fee, deposit: contract.deposit, balance: contract.balance,
-      depositLabel: depositLabel(contract), balanceLabel: balanceLabel(contract),
+      depositLabel: depositLabel(contract), balanceLabel: balanceLabel(contract), schedule,
     })
     const { error: mailErr_signedCopy } = await resend.emails.send({ from: BRAND.from, to: contract.client_email, subject: signedCopy.subject, html: signedCopy.html, text: signedCopy.text })
     if (mailErr_signedCopy) console.error('Email failed:', mailErr_signedCopy)
@@ -96,7 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         invoiceNumber: invoice.invoice_number, serviceDesc: invoice.service_desc || contract.project_title,
         dueDate: invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Within 7 days',
         totalFee: Number(invoice.total_fee), deposit: Number(invoice.deposit_amount), balance: Number(invoice.total_fee) - Number(invoice.deposit_amount),
-        depositLabel: invoiceDepositLabel(contract), balanceLabel: balanceLabel(contract), paymentMethod: contract.payment_method,
+        depositLabel: invoiceDepositLabel(contract), balanceLabel: balanceLabel(contract), paymentMethod: contract.payment_method, schedule,
       })
       const { error: mailErr_depositMail } = await resend.emails.send({ from: BRAND.from, to: contract.client_email, cc: BRAND.email, subject: depositMail.subject, html: depositMail.html, text: depositMail.text })
       if (mailErr_depositMail) console.error('Email failed:', mailErr_depositMail)

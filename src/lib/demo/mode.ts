@@ -22,3 +22,10 @@ export const DEMO_LABEL = 'Demo • Fictional data • Changes are temporary.'
  * engine instead, and the proxy closes the real ones.
  */
 export const REAL_ADMIN_API = /^\/api\/(admin\/data\/.+|care\/admin\/.+|invoices\/send|email\/send|meetings\/schedule|proposals|sows|contracts|contracts\/send-signed|debt-payoff)\/?$/
+
+/**
+ * The client document APIs (proposal, SOW, contract). In demo mode, a signed
+ * in admin viewing those pages on the preview uses the demo data instead, so
+ * accepting a demo proposal or signing a demo contract can be tried safely.
+ */
+export const DEMO_PUBLIC_DOCS = /^\/api\/(proposals|sows|contracts)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

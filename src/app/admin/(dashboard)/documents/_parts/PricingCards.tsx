@@ -7,6 +7,20 @@ import { useTheme } from '../../_components/theme'
 import { useUnsaved } from '../../_components/unsaved'
 import type { Pricing } from '../../_lib/types'
 
+/**
+ * Card titles approved November 2026. The rows keep their ids, prices, and
+ * your descriptions; until supabase/pending/pricing-and-payments is applied,
+ * stored rows with the earlier names show the new titles here.
+ */
+export const PRICING_CARD_TITLES: Record<string, string> = {
+  'Landing Page': 'Business Website',
+  'Booking + Payments': 'Booking & Payments',
+  'Web Application': 'Custom Website or Application',
+  'AI Workflow': 'Custom Automations & AI Integrations',
+  Deposit: 'Project Payments',
+}
+export const pricingTitle = (name: string) => PRICING_CARD_TITLES[name.trim()] || name
+
 export default function PricingCards({ pricing, onSaved }: { pricing: Pricing[]; onSaved: () => Promise<unknown> }) {
   const { d, inputStyle } = useTheme()
   const [editing, setEditing] = useState<string | null>(null)
@@ -30,7 +44,7 @@ export default function PricingCards({ pricing, onSaved }: { pricing: Pricing[];
         return (
           <div key={p.id} style={{ background: d.surface, borderRadius: 12, padding: '12px 14px', border: '1px solid ' + (isEditing ? d.accent : d.border), transition: 'border-color 0.2s' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: d.text }}>{p.name}</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: d.text }}>{pricingTitle(p.name)}</div>
               <button className="icon-btn" style={{ color: isEditing ? d.accent : d.text3, fontSize: 12 }} onClick={() => {
                 if (isEditing) setEditing(null)
                 else { setEditing(p.id); setEdits((prev) => ({ ...prev, [p.id]: { price: p.price, description: p.description } })) }

@@ -6,6 +6,7 @@ import * as mail from '@/lib/email/templates'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { MigrationRequiredError, assertTermsSchema, migrationResponse, throwIfMissingColumn } from '@/lib/terms-schema'
 import { STANDARD_HOURLY_RATE, TERMS_VERSION } from '@/lib/terms'
+import { checkSchedule } from '@/lib/payment-schedule'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -17,9 +18,14 @@ export async function POST(req: NextRequest) {
     const {
       clientName, clientEmail, projectTitle, projectType,
       understood, outOfScope, milestones,
-      total, deposit, balance, depositPct,
+      total,
       startDate, deliveryDate, revisions, hourlyRate, paymentMethod,
     } = body
+
+    // Current terms: 50% deposit, remaining 50% across these milestones, checked to the cent.
+    const check = checkSchedule(total, Array.isArray(milestones) ? milestones : [])
+    if (!check.ok) return NextResponse.json({ error: 'INVALID', message: check.problems.join(' ') }, { status: 400 })
+    const { deposit, balance, milestones: schedule } = check.schedule
 
     await assertTermsSchema(['proposals', 'sows', 'contracts'])
 
@@ -31,11 +37,11 @@ export async function POST(req: NextRequest) {
       understood: understood || null,
       deliverables: null,
       out_of_scope: outOfScope || null,
-      line_items: milestones || [],
-      total: total || 0,
-      deposit: deposit || 0,
-      balance: balance || 0,
-      deposit_pct: depositPct || 50,
+      line_items: schedule,
+      total: check.schedule.total,
+      deposit,
+      balance,
+      deposit_pct: 50,
       start_date: startDate || null,
       delivery_date: deliveryDate || null,
       revisions: revisions || '2',
@@ -43,7 +49,7 @@ export async function POST(req: NextRequest) {
       payment_method: paymentMethod || 'Stripe, PayPal, Zelle, or Wise',
       status: 'pending',
       terms_version: TERMS_VERSION,
-      payment_plan: 'milestones',
+      payment_plan: 'milestone_balance',
     }).select().single()
 
     throwIfMissingColumn(error, 'sows')

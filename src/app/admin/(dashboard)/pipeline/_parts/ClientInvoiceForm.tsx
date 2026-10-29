@@ -21,6 +21,7 @@ export default function ClientInvoiceForm({ client, onClose, onSaved, onPreview 
   const [fixed, setFixed] = useState(blankFixedFee)
   const [msNumber, setMsNumber] = useState('')
   const [sowId, setSowId] = useState('')
+  const [msError, setMsError] = useState<string | null>(null)
   const sows = useRows<Row>(() => supabase.from('sows').select('*').order('created_at', { ascending: false }))
   useUnsaved(Boolean(form.invoice_number || form.total_fee || form.hours || fixed.invoice_number || fixed.total_fee || msNumber))
 
@@ -68,9 +69,10 @@ export default function ClientInvoiceForm({ client, onClose, onSaved, onPreview 
               </div>
             )
           })()}
+          {msError && <div role="alert" style={{ fontSize: 12, color: d.redText, background: d.red, borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>{msError}</div>}
           <div className="form-actions">
             {back}
-            <button className="btn-save" disabled={!sowId || !msNumber} onClick={async () => done(await createMilestoneInvoice(client, sows.rows.find((s) => s.id === sowId), msNumber))}>Create</button>
+            <button className="btn-save" disabled={!sowId || !msNumber} onClick={async () => { const r = await createMilestoneInvoice(client, sows.rows.find((s) => s.id === sowId), msNumber); if (r === true) done(true); else setMsError(r) }}>Create</button>
           </div>
         </>
       ) : type === 'fixed_fee' ? (

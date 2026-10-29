@@ -1,5 +1,6 @@
 import 'server-only'
 import { CARE_FLEXIBLE_TIME, CARE_STANDARD_MINUTES } from './care-terms'
+import { PROJECT_PAYMENT_POLICY, STANDARD_HOURLY_RATE } from '@/lib/terms'
 
 /**
  * Offers and policies. SERVER ONLY.
@@ -103,6 +104,7 @@ export const packages: Package[] = [
     ],
     notes: [
       'I use existing booking and payment services where they fit. Fully custom scheduling, complex pricing rules, multiple workflows, and extra integrations are quoted separately.',
+      'The booking confirmations and reminders your chosen services send are part of this package, never charged again as automation. Custom automations and AI integrations are scoped separately.',
       'Provider subscriptions and transaction fees are separate.',
     ],
     cta: 'Ask About Booking & Payments',
@@ -126,7 +128,7 @@ export const packages: Package[] = [
     ],
     notes: [
       'Not every feature is included at the starting price. We choose what your project needs together.',
-      'Every custom project starts with discovery and a written scope. Larger projects may use milestone payments.',
+      'Every custom project starts with discovery and a written scope.',
     ],
     cta: 'Discuss a Custom Project',
   },
@@ -139,7 +141,7 @@ export const packages: Package[] = [
 export const projectTerms = [
   {
     title: 'Payments',
-    body: 'For standard website projects, 50% is due upfront to reserve your spot and begin work. The remaining 50% is due at delivery, before public launch or final handoff. Larger custom projects use payment milestones defined in the proposal.',
+    body: `${PROJECT_PAYMENT_POLICY} Each milestone is invoiced when it’s reached.`,
   },
   {
     title: 'Revisions',
@@ -268,7 +270,8 @@ export const careBenefits = [
 /* Occasional support (approved)                                        */
 /* ------------------------------------------------------------------ */
 
-export const HOURLY_RATE = 100
+/** The standard rate for new hourly work, from src/lib/terms.ts (one source for every document). */
+export const HOURLY_RATE = STANDARD_HOURLY_RATE
 
 export const occasionalSupport = [
   'You can ask for help without a monthly care plan.',

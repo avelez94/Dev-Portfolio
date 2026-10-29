@@ -10,7 +10,7 @@ import { careEnabled, careOff, clientEmailAllowed } from '@/lib/care/config'
 import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCKET, REPORTS_BUCKET, type Row } from '@/lib/care/db'
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
 import { createCycle, enqueueScan, cancelScan, releaseHeldCycles } from '@/lib/care/cycles'
-import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote, updatePlanTime } from '@/lib/care/report'
+import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote, updatePlanTime, suggestionState, refreshSuggestions, acceptSuggestion, dismissSuggestion } from '@/lib/care/report'
 import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
 import { reportPdf } from '@/lib/care/report-pdf'
 import { sendPreview, sendReport, markStuckSend } from '@/lib/care/send'
@@ -302,6 +302,7 @@ async function getCycle({ seg }: Ctx) {
   const currentUrls = { pages: (b.site.pages || []).map((p: Row) => p.url), destinations: (b.site.destinations || []).map((d: Row) => d.url) }
   return ok({
     ...b, allFindings, snapshot, snapshotHash: hash, problems: await readinessProblems(b), diff, notifications, activity, groups, cleared, manualIssues, statusCounts,
+    suggestions: await suggestionState(b),
     scope: { checked: checkedUrls, setupChangedSinceCheck: !!b.latest && JSON.stringify(checkedUrls) !== JSON.stringify(currentUrls) },
     timezone: settings.timezone, plan: planInfo(b.cycle.plan), recipientAllowed: b.site.recipient_email ? clientEmailAllowed(b.site.recipient_email) : null,
   })
@@ -527,6 +528,9 @@ const routes: [string, string, Handler][] = [
   ['PUT', 'cycles/:id/plan-time', putPlanTime],
   ['PUT', 'cycles/:id/issue', putIssue],
   ['GET', 'calendar', calendarItems],
+  ['POST', 'cycles/:id/suggest', async ({ seg }) => ok(await refreshSuggestions(id(seg[1]), 'manual', ACTOR))],
+  ['POST', 'cycles/:id/suggest/accept', async ({ seg, body }) => { await acceptSuggestion(id(seg[1]), String(body.field || ''), ACTOR); return ok({ ok: true }) }],
+  ['POST', 'cycles/:id/suggest/dismiss', async ({ seg, body }) => { await dismissSuggestion(id(seg[1]), String(body.field || '')); return ok({ ok: true }) }],
   ['POST', 'cycles/:id/ready', ready],
   ['POST', 'cycles/:id/draft', backToDraft],
   ['POST', 'cycles/:id/approve', approveRoute],

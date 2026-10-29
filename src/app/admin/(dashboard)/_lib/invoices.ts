@@ -5,7 +5,8 @@
  */
 import { supabase } from '@/lib/supabase-admin-browser'
 import { DOC_BRAND_VERSION, missingBrandColumn } from '@/lib/brand-version'
-import { STANDARD_HOURLY_RATE } from '@/lib/terms'
+import { STANDARD_HOURLY_RATE, usesLatestTerms } from '@/lib/terms'
+import { milestoneLabel } from '@/lib/payment-schedule'
 import { MY_EMAIL, postJson } from './api'
 import { clientInvoicePDF, fixedFeePDF } from './pdf'
 import type { Invoice, InvoiceMilestone, PreviewDoc, Row } from './types'
@@ -45,15 +46,25 @@ export async function sendInvoiceEmail(client: Pick<ClientRef, 'name' | 'email'>
   } catch (e) { console.error(e) }
 }
 
-export async function sendMilestoneEmail(client: Pick<ClientRef, 'name' | 'email'>, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
+/**
+ * Sends one milestone's invoice. The first send marks it invoiced; a second
+ * send only happens when you confirm it's a reminder of the same invoice, so
+ * the same milestone is never invoiced twice by accident. Sending never
+ * charges anything.
+ */
+export async function sendMilestoneEmail(client: Pick<ClientRef, 'name' | 'email'>, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number, confirmResend: () => boolean = () => true) {
+  if (milestone.status === 'paid') return false
+  if (milestone.status === 'invoiced' && !confirmResend()) return false
   try {
     await postJson('/api/invoices/send', {
       clientEmail: client.email, clientName: client.name, cc: MY_EMAIL,
-      invoiceNumber: invoiceNumber + ' (Milestone ' + (index + 1) + ' of ' + totalCount + ')',
+      invoiceNumber: invoiceNumber + ' (' + milestoneLabel(milestone, index, totalCount) + ')',
       invoiceType: 'milestone', totalFee: milestone.fee, depositAmount: milestone.fee, dueDate: milestone.due_date,
       serviceDesc: milestone.name + (milestone.deliverables ? '\n' + milestone.deliverables : ''),
     })
-  } catch (e) { console.error(e) }
+    await supabase.from('invoice_milestones').update({ status: 'invoiced' }).eq('id', milestone.id).eq('status', 'pending')
+    return true
+  } catch (e) { console.error(e); return false }
 }
 
 /** Project (deposit and balance) or revision (hourly) invoice. Returns false when required fields are missing. */
@@ -90,23 +101,61 @@ export async function createFixedFeeInvoice(client: ClientRef, f: FixedFeeForm, 
   return true
 }
 
-export async function createMilestoneInvoice(client: ClientRef, sow: Row | undefined, invoiceNumber: string) {
-  if (!sow?.line_items?.length || !invoiceNumber) return false
+/**
+ * Milestone schedule from a statement of work. Each SOW gets one schedule, so
+ * running this twice can't invoice the same milestones again. Projects on the
+ * current terms get their schedule (deposit and milestones) with the contract
+ * instead.
+ */
+export async function createMilestoneInvoice(client: ClientRef, sow: Row | undefined, invoiceNumber: string): Promise<true | string> {
+  if (!sow?.line_items?.length || !invoiceNumber) return 'Choose a statement of work and enter an invoice number.'
+  if (usesLatestTerms(sow)) return 'This project’s invoice schedule (deposit and milestones) is created with its contract. Send the contract from Documents instead.'
+  const existing = await supabase.from('invoices').select('id, invoice_number').eq('sow_id', sow.id).limit(1)
+  if (existing.data?.length) return `This statement of work already has invoice schedule ${existing.data[0].invoice_number}.`
   const totalFee = sow.line_items.reduce((sum: number, m: Row) => sum + parseFloat(m.fee || '0'), 0)
   const { data: invRows } = await insertStamped('invoices', [{
     client_id: client.id, invoice_number: invoiceNumber, invoice_type: 'milestone',
     total_fee: totalFee, deposit_amount: 0, amount: totalFee, sow_id: sow.id, status: 'pending', service_desc: sow.project_title,
   }])
   const inv = invRows?.[0]
-  if (!inv) return false
-  await insertStamped('invoice_milestones', sow.line_items.map((m: Row) => ({
+  if (!inv) return 'The invoice schedule couldn’t be saved.'
+  const now = Date.now()
+  await insertStamped('invoice_milestones', sow.line_items.map((m: Row, i: number) => ({
     invoice_id: inv.id, name: m.name, deliverables: m.deliverables || null, due_date: m.dueDate || null, fee: parseFloat(m.fee || '0'), status: 'pending',
+    created_at: new Date(now + i).toISOString(), // kept in schedule order
   })))
   return true
 }
 
-/** Project invoices step from awaiting deposit to deposit paid to paid; everything else goes straight to paid. */
+/**
+ * After a milestone payment: the schedule is paid when every milestone is,
+ * and "deposit paid" once its deposit row is (so Revenue counts it).
+ */
+export async function syncScheduleStatus(invoiceId: string) {
+  const [{ data: inv }, { data: rows }] = await Promise.all([
+    supabase.from('invoices').select('*').eq('id', invoiceId).single(),
+    supabase.from('invoice_milestones').select('*').eq('invoice_id', invoiceId),
+  ])
+  if (!inv || !rows?.length) return
+  const all = rows.every((m: InvoiceMilestone) => m.status === 'paid')
+  const deposit = rows.find((m: InvoiceMilestone) => m.name === 'Deposit (50%)')
+  if (all) await supabase.from('invoices').update({ status: 'paid', paid_date: today() }).eq('id', invoiceId)
+  else if (deposit?.status === 'paid' && ['awaiting_deposit', 'pending', 'awaiting_signature'].includes(inv.status)) {
+    await supabase.from('invoices').update({ status: 'deposit_paid', deposit_paid_date: deposit.paid_date || today() }).eq('id', invoiceId)
+  }
+}
+
+/**
+ * Project invoices step from awaiting deposit to deposit paid to paid;
+ * milestone schedules mark their next unpaid payment; everything else goes
+ * straight to paid. Recording a payment never charges the client.
+ */
 export async function markInvoicePaid(inv: Invoice) {
+  if (inv.invoice_type === 'milestone') {
+    const { data: rows } = await supabase.from('invoice_milestones').select('*').eq('invoice_id', inv.id).order('created_at', { ascending: true })
+    const next = (rows || []).find((m: InvoiceMilestone) => m.status !== 'paid')
+    if (next) { await markMilestonePaid(next); return }
+  }
   if (inv.invoice_type === 'project' && inv.status === 'awaiting_deposit') {
     await supabase.from('invoices').update({ status: 'deposit_paid', deposit_paid_date: today() }).eq('id', inv.id)
   } else {
@@ -114,8 +163,10 @@ export async function markInvoicePaid(inv: Invoice) {
   }
 }
 
+/** Records that one milestone was paid. It doesn't charge anything. */
 export async function markMilestonePaid(milestone: InvoiceMilestone) {
   await supabase.from('invoice_milestones').update({ status: 'paid', paid_date: today() }).eq('id', milestone.id)
+  await syncScheduleStatus(milestone.invoice_id)
 }
 
 export function invoicePreview(f: ClientInvoiceForm, client: Pick<ClientRef, 'name' | 'email'>, type: string, totalFee: number, depositAmount: number): PreviewDoc {
@@ -140,7 +191,7 @@ export function invoicePreview(f: ClientInvoiceForm, client: Pick<ClientRef, 'na
   }
 }
 
-export const INVOICE_STATUS_LABEL: Record<string, string> = { awaiting_deposit: 'Awaiting Deposit', deposit_paid: 'Deposit Paid', paid: 'Paid in Full' }
+export const INVOICE_STATUS_LABEL: Record<string, string> = { awaiting_signature: 'Awaiting Signature', awaiting_deposit: 'Awaiting Deposit', deposit_paid: 'Deposit Paid', paid: 'Paid in Full' }
 export const invoiceStatusLabel = (s: string) => INVOICE_STATUS_LABEL[s] || 'Pending'
 export const invoiceTypeLabel = (t: string) => (t === 'revision' ? 'Revision Invoice' : t === 'fixed_fee' ? 'Fixed Fee Invoice' : t === 'milestone' ? 'Milestone Schedule' : 'Project Invoice')
 
