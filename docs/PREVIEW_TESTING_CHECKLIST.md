@@ -4,16 +4,20 @@ Use real services on the **preview** deployment only. Use your own test inboxes,
 
 ## Status (October 29)
 
-| Check | Status | Evidence or next action |
-|---|---|---|
-| 0. Does preview share the production database? | **Blocked** | Vercel and Supabase can't be reached from my workspace. Next: compare `NEXT_PUBLIC_SUPABASE_URL` for Preview and Production in Vercel (section 0). |
-| 1. Preview configuration | **Blocked** | Waiting on 0. |
-| 2. Migrations on the preview database | **Blocked** on 0 | All five migrations **passed** on a local PostgreSQL 16 database, each run twice. |
-| 3. Access lockdown | **Passed locally**, preview blocked | Real PostgreSQL 16 + PostgREST 12 (the Supabase stack). The public key could read leads before; after the lockdown, all 12 private tables return permission denied. Trades and walks are still readable. The site, booking, and admin still work. |
-| Booking concurrency (database enforced) | **Passed locally**, preview blocked | Same real database. 5 rounds of 8 simultaneous requests: one booking and one Zoom meeting each time. The database itself rejects duplicate inserts. Failures leave no rows and no meetings. Next: run `scripts/booking-race-check.mjs` against the preview. |
-| Client document links | **Passed** | API responses carry only the client fields. Signer IP, signature image, signer name, response IP, decline reason, cover message, and internal ids stay on the server. Checked on the real database and the rendered pages. |
-| 4 to 8. Real inquiry, booking, email, Zoom, documents, devices | **Blocked** | Need the preview with real Resend and Zoom. Run sections 4 to 8. |
-| Admin redesign | **Passed** (automated) | 60 workflow checks, desktop and mobile. Automated accessibility scan: no violations. A hands-on pass on your own devices is still pending. |
+"Local" means my workspace: a real PostgreSQL 16 database with PostgREST 12 (the database layer Supabase runs) and local stand ins for Resend and Zoom. It proves the code and migrations behave correctly. It does **not** prove anything about your preview project, its data, its settings, or the real email and Zoom accounts. "Preview" means the Vercel preview deployment with its real Supabase project, Resend, and Zoom, which I can't reach from my workspace.
+
+| Check | Local result | Preview result | Next action |
+|---|---|---|---|
+| 0. Preview uses its own database | n/a | **Blocked** | You: in Vercel, compare `NEXT_PUBLIC_SUPABASE_URL` for Preview and Production. |
+| 1. Preview configuration | n/a | **Blocked** | You: section 1, after 0. |
+| 2. Migrations | **Passed**: all five applied cleanly, each run twice | **Blocked** | You: audit, then section 2 on the preview database only. |
+| 3. Access lockdown | **Passed**: before, the public key read leads; after, 12 private tables refused it, trades and walks still readable, site and admin working | **Blocked** | You: rerun the audit and the curl checks in section 3. |
+| Booking concurrency (database enforced) | **Passed**: duplicates rejected by the database itself; 5 rounds of 8 simultaneous requests, one booking and one Zoom meeting each; failures leave no row and no meeting | **Blocked** | You: `scripts/booking-race-check.mjs` against the preview, then clean up. |
+| Client document links | **Passed**: API responses and pages carry only client fields | **Blocked** | You: open one proposal and contract link, and view the response in the browser's network tab. |
+| Admin client context | **Passed**: proposals, emails, invoices, and meetings each reach only the person on screen (30 checks, desktop and phone) | **Blocked** | You: section 8, using your own addresses as clients. |
+| Admin redesign | **Passed**: 60 workflow checks; accessibility scan clean | **Blocked** | You: section 8 on your phone and laptop. |
+| 4 to 7. Inquiry, questionnaire, booking, documents with real services | **Passed** against the stand ins | **Blocked** | You: sections 4 to 7. |
+| Email rendering in Gmail and Outlook, real Zoom meeting | not testable locally | **Blocked** | You: sections 4, 6, 7. |
 
 ## 0. Before you start: which database does preview use?
 
@@ -109,6 +113,8 @@ Expect `PASS: exactly one booking`. Then cancel that booking, delete the test le
 - [ ] Sign in on a phone and a laptop. Wrong password, then right password.
 - [ ] Leave the dashboard open past the session, or clear the cookie, then click anything. The "session has ended" prompt appears.
 - [ ] Open a lead, a booking, a client. Create an invoice, schedule a meeting, email yourself, block a day, download each PDF.
+- [ ] Select one test client in Pipeline, then build a proposal in Docs for a different test address. The side panel shows only the proposal's recipient, and the proposal email arrives only at that address.
+- [ ] With an invoice form half filled for one client, click another client. The form closes; nothing is created for the second client.
 - [ ] Debt tracker loads and saves a payment.
 
 ## 9. Mobile, keyboard, motion

@@ -14,14 +14,14 @@ Before this change every admin screen used the earlier look (Playfair Display, D
 | Lead and intake details | Home, right panel | Old | Updated: progress chips, original note, questionnaire answers | Automated |
 | Booking details | Home, right panel | Old | Updated: time, countdown, host link, progress | Automated |
 | Pipeline | Pipeline | Old stage colors | Updated stage pills (readable on dark) | Automated |
-| Client panel | Pipeline, right panel | Old | Updated: stage actions, email, invoices, meetings, documents, notes | Automated: opens, email modal, invoice forms |
+| Client panel | Pipeline, right panel | Old | Updated: stage actions, email, invoices, meetings, documents, notes. Switching clients closes half filled forms; meeting form names the invitee | Automated: email, invoice, and meeting each reach only the selected client |
 | Invoice forms | client panel | Old | Updated: milestone, fixed fee, project, revision | Automated: fixed fee form reachable; PDF downloads |
 | Meeting scheduling | client panel | Old; fixed summer time offset | Updated; uses the real Eastern offset all year | Visual only |
 | Revenue | Revenue | Old | Updated: stats, chart, platform split, projects and invoices tables (scroll sideways on phones) | Automated |
 | Invoice detail modal | Revenue | Old | Updated dialog: focus, Escape | Automated: PDF download |
 | Project detail modal | Revenue | Old | Updated dialog | Automated |
 | Pricing cards | Docs | Old | Updated | Visual |
-| Proposal builder and preview | Docs | Old | Updated; preview dialog | Automated: preview, PDF, send |
+| Proposal builder and preview | Docs | Old | Updated; preview dialog. Side panel shows the document's recipient and hides other clients' actions | Automated: preview, PDF, send reaches only the recipient |
 | Contract builder | Docs | Old | Updated; 12 clause summary | Automated: PDF download |
 | Templates and uploads | Docs | Old | Updated | Visual (upload not automated) |
 | Schedule | Schedule | Old | Updated: calendar, day blocks, hours, blocked dates | Automated: block a day |

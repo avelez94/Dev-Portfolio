@@ -357,6 +357,21 @@ export default function AdminDashboard() {
     return () => mo.disconnect()
   }, [])
 
+  // Client actions in the side panel belong to the selected record. Picking a
+  // different record closes any half filled invoice, meeting, or email form so it
+  // can't be submitted for the newly selected person by mistake.
+  function selectRecord(next: {type:string,data:any}) {
+    const key = (r: {type:string,data:any}|null) => r ? r.type + ':' + (r.data?.id ?? '') : ''
+    if (key(next) !== key(focused)) {
+      setShowClientInvoice(false); setInvoiceType(null)
+      setFixedFeeForm({ invoice_number:'', total_fee:'', due_date:'', service_desc:'' })
+      setMilestoneInvoiceNumber(''); setSelectedSowId('')
+      setShowScheduleMeeting(false); setMeetingForm({ title:'Project Check-in', date:'', time:'' })
+      setShowEmailModal(false); setEmailForm({ subject:'', message:'' })
+    }
+    setFocused(next)
+  }
+
   // The admin cookie can expire while the page is open; any 401 shows a sign in prompt.
   const [sessionExpired, setSessionExpired] = useState(false)
   useEffect(() => {
@@ -1758,7 +1773,7 @@ export default function AdminDashboard() {
                     <div className="booking-cards">
                       {bookings.filter(b=>new Date(b.scheduled_at)>new Date()).map((b,i)=>(
                         <div key={b.id} className={'booking-card'+(focused?.type==='booking'&&focused.data.id===b.id?' selected':'')}
-                          style={{background:CARD_COLORS[i%CARD_COLORS.length]}} onClick={()=>setFocused({type:'booking',data:b})}>
+                          style={{background:CARD_COLORS[i%CARD_COLORS.length]}} onClick={()=>selectRecord({type:'booking',data:b})}>
                           <div className="bc-type" style={{color:d.text2}}>{b.intake_submissions?.project_type}</div>
                           <div className="bc-name" style={{color:d.text}}>{b.intake_submissions?.name}</div>
                           <div className="bc-date" style={{color:d.text2}}>{fmtShort(b.scheduled_at)} · {new Date(b.scheduled_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</div>
@@ -1778,7 +1793,7 @@ export default function AdminDashboard() {
                       {unbooked.map(s=>(
                         <div key={s.id} className="sub-item"
                           style={{background:focused?.type==='submission'&&focused.data.id===s.id?d.accentBg:d.white,borderColor:focused?.type==='submission'&&focused.data.id===s.id?d.accent:d.border}}
-                          onClick={()=>setFocused({type:'submission',data:s})}>
+                          onClick={()=>selectRecord({type:'submission',data:s})}>
                           <div className="si-dot" style={{background:d.accent}}/>
                           <div style={{flex:1}}>
                             <div className="si-name" style={{color:d.text}}>{s.name}</div>
@@ -1833,7 +1848,7 @@ export default function AdminDashboard() {
                       ? <div className="empty-note" style={{textAlign:'left',paddingLeft:0,paddingTop:4,color:d.text3}}>Empty</div>
                       : clientsByStage[stage].map(c=>(
                         <div key={c.id} className="client-row" style={{background:d.white,borderColor:d.border}}
-                          onClick={()=>{setFocused({type:'client',data:c});setClientNotes(c.notes||'');setEditingNotes(false);setShowClientInvoice(false);setInvoiceType(null)}}>
+                          onClick={()=>{selectRecord({type:'client',data:c});setClientNotes(c.notes||'');setEditingNotes(false);setShowClientInvoice(false);setInvoiceType(null)}}>
                           <div style={{flex:1}}>
                             <div className="cr-name" style={{color:d.text}}>{c.name}</div>
                             <div className="cr-meta" style={{color:d.text2}}>{c.email}{c.business?' · '+c.business:''}{c.platform&&c.platform!=='direct'?' · '+c.platform:''}</div>
@@ -2426,7 +2441,44 @@ export default function AdminDashboard() {
 
           <aside className="panel" aria-label="Details" style={{background:d.white,borderColor:d.border}}>
             <div className="panel-inner">
-              {!focused ? (
+              {view==='docs' ? (()=>{
+                const f = activeFillForm==='proposal' ? proposalForm : activeFillForm==='contract' ? contractForm : null
+                const kind = activeFillForm==='proposal' ? 'Proposal' : activeFillForm==='contract' ? 'Contract' : ''
+                const email = (f?.client_email || '').trim()
+                const match = email ? clients.find(c => (c.email||'').toLowerCase() === email.toLowerCase()) : undefined
+                const hidden = focusedClient && (!match || match.id !== focusedClient.id) ? focusedClient.name : null
+                return (
+                  <div data-testid="doc-context">
+                    <div className="rp-card" style={{background:d.sand}}>
+                      <div className="rp-eyebrow">{f ? kind + ' for' : 'Documents'}</div>
+                      {f ? (<>
+                        <div className="rp-name" style={{color:d.text}}>{f.client_name || 'No client yet'}</div>
+                        {f.client_business && <div className="rp-meta" style={{color:d.text2}}>{f.client_business}</div>}
+                        <div style={{marginTop:12,padding:'10px 12px',borderRadius:12,background:d.white,border:'1px solid '+d.border2}}>
+                          <div className="rf-label">Sends to</div>
+                          <div className="rf-val" style={{color:email?d.text:d.redText}}>{email || 'Add the client email in the form'}</div>
+                        </div>
+                      </>) : (
+                        <div className="rf-val" style={{color:d.text2}}>Choose a document to fill out. Its client appears here, and only that client receives it.</div>
+                      )}
+                    </div>
+                    {f && match && (
+                      <div style={{fontSize:13,color:d.text2,lineHeight:1.6,marginBottom:12}}>
+                        Matches <strong style={{color:d.text}}>{match.name}</strong> in your pipeline.{' '}
+                        <button className="cr-btn" style={{background:d.accentBg,color:d.text,border:'1px solid '+d.border2,marginLeft:4}} onClick={()=>{selectRecord({type:'client',data:match});setView('pipeline')}}>Open client</button>
+                      </div>
+                    )}
+                    {f && email && !match && (
+                      <div style={{fontSize:13,color:d.text2,lineHeight:1.6,marginBottom:12}}>Not in your pipeline yet.</div>
+                    )}
+                    {hidden && (
+                      <div role="note" style={{fontSize:13,color:d.text2,lineHeight:1.6,padding:'10px 12px',borderRadius:12,border:'1px dashed '+d.border2}}>
+                        {hidden}&rsquo;s client actions are hidden while you work on documents, so nothing here goes to the wrong person. They come back when you leave Docs.
+                      </div>
+                    )}
+                  </div>
+                )
+              })() : !focused ? (
                 <div className="rp-empty">
                   <div className="rp-empty-icon">✦</div>
                   <div className="rp-empty-text" style={{color:d.text3}}>Select a call or submission<br/>to see the details here</div>
@@ -2636,7 +2688,8 @@ export default function AdminDashboard() {
                   )}
                   {showScheduleMeeting && (
                     <div className="form-card" style={{background:d.surface,borderColor:d.border,marginBottom:16}}>
-                      <div className="form-title" style={{color:d.text}}>Schedule a meeting</div>
+                      <div className="form-title" style={{color:d.text}}>Schedule a meeting with {focusedClient.name}</div>
+                      <div style={{fontSize:13,color:d.text2,marginBottom:10}}>Invite goes to {focusedClient.email}</div>
                       <div className="form-group" style={{marginBottom:10}}>
                         <div className="form-label" style={{color:d.text3}}>Meeting title</div>
                         <input style={inputStyle} value={meetingForm.title} onChange={e=>setMeetingForm({...meetingForm,title:e.target.value})} placeholder="Project Check-in"/>
