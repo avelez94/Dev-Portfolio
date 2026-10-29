@@ -23,6 +23,7 @@ import { demoDeployment } from './mode'
 import { rest, storage } from './rest'
 
 const g = globalThis as typeof globalThis & { __demoIntercept?: boolean }
+type DemoFetch = typeof fetch & { __demo?: true }
 
 function note(scope: DemoScope, kind: DemoLogEntry['kind'], summary: string, detail?: Record<string, unknown>) {
   scope.log.push({ at: new Date().toISOString(), kind, summary, detail })
@@ -76,16 +77,21 @@ async function answer(scope: DemoScope, req: Request): Promise<Response> {
 }
 
 export function installDemoIntercept() {
-  if (g.__demoIntercept || !demoDeployment()) return
-  g.__demoIntercept = true
+  if (!demoDeployment()) return
 
-  const realFetch = globalThis.fetch
-  const demoFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const scope = demoScope.getStore()
-    if (!scope) return realFetch(input, init)
-    return answer(scope, new Request(input, init))
+  // Checked on every demo request: Next.js can put its own fetch back (development hot reload).
+  if (!(globalThis.fetch as DemoFetch).__demo) {
+    const realFetch = globalThis.fetch
+    const demoFetch: DemoFetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const scope = demoScope.getStore()
+      if (!scope) return realFetch(input, init)
+      return answer(scope, new Request(input, init))
+    }, { __demo: true as const })
+    globalThis.fetch = demoFetch
   }
-  globalThis.fetch = demoFetch as typeof fetch
+
+  if (g.__demoIntercept) return
+  g.__demoIntercept = true
 
   // Libraries that skip fetch (the Stripe SDK uses node:https) are refused outright.
   for (const mod of [http, https] as unknown as Record<string, (...a: unknown[]) => unknown>[]) {

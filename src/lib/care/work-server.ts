@@ -299,6 +299,7 @@ export async function reviewTerms(siteId: string, note: unknown, actor: string) 
 export async function workFlags() {
   const soon = new Date(Date.now() + 7 * 86400_000).toISOString()
   const open = (await db.from('care_estimates').select('id, site_id, title, status, reserved_minutes, cycle_id, care_cycles!inner(period_end)').eq('status', 'approved').lte('care_cycles.period_end', soon)).data || []
-  const oldTerms = (await db.from('care_sites').select('id, label, care_terms_version').neq('enrollment_status', 'ended')).data?.filter((s: Row) => s.care_terms_version !== CARE_TERMS_VERSION) || []
+  // New enrollments record their terms when the setup is confirmed, so only confirmed or paused sites are flagged.
+  const oldTerms = (await db.from('care_sites').select('id, label, care_terms_version').in('enrollment_status', ['confirmed', 'paused'])).data?.filter((s: Row) => s.care_terms_version !== CARE_TERMS_VERSION) || []
   return { unfinished: open, termsReview: oldTerms }
 }

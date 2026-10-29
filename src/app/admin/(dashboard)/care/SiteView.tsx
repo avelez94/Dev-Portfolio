@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import WorkPanel from './WorkPanel'
-import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus } from './ui'
+import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus } from './ui'
 import { SitesTable } from './CareApp'
+import { CARE_TERMS_VERSION } from '@/content/care-terms'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Go = (n: { view?: 'sites'; site?: string | null; cycle?: string | null }) => void
@@ -195,7 +196,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
   const { data, error, reload } = useLoad<Row>(`sites/${id}`)
   const settings = useLoad<Row>('settings')
   const [link, setLink] = useState<string | null>(null)
-  const [conf, setConf] = useState({ confirm_website: false, confirm_authorization: false, confirm_checklist: false, authorization_note: '' })
+  const [conf, setConf] = useState({ confirm_website: false, confirm_authorization: false, confirm_checklist: false, authorization_note: '', confirm_terms: false, terms_note: '' })
   const [period, setPeriod] = useState({ period_start: '', period_end: '', note: '', confirm_paid: false })
   const [billNote, setBillNote] = useState('')
   useEffect(() => { if (data?.site?.authorization_note) setConf((c) => ({ ...c, authorization_note: data.site.authorization_note })) }, [data?.site?.authorization_note]) // eslint-disable-line react-hooks/set-state-in-effect
@@ -215,9 +216,10 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         <div className="care-muted">Report recipient: {site.recipient_name || 'not set'} &lt;{site.recipient_email || 'no email'}&gt;</div>
         <div className="care-row" style={{ marginTop: 8 }}>
           <Badge tone={confirmed ? 'ok' : 'warn'}>{confirmed ? 'Setup confirmed' : ended ? 'Care ended' : site.enrollment_status === 'paused' ? 'Paused' : 'Needs confirmation'}</Badge>
-          <BillingBadge state={site.billing_state} />
+          <SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} />
           <span className="care-muted" style={{ textTransform: 'capitalize' }}>{site.plan} Care</span>
         </div>
+        <div className="care-muted" style={{ marginTop: 4 }}>Care terms: {site.care_terms_version === CARE_TERMS_VERSION ? `current (${site.care_terms_note || 'accepted'})` : site.care_terms_version ? `older terms (${site.care_terms_version}), review needed` : 'recorded when you confirm the setup'}</div>
       </div>
 
       {!confirmed && !ended && site.enrollment_status !== 'paused' && (
@@ -229,13 +231,17 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             <label className="care-row"><input type="checkbox" checked={conf.confirm_authorization} onChange={(e) => setConf({ ...conf, confirm_authorization: e.target.checked })} /> The client authorized these read only checks of their website.</label>
             <label className="care-row"><input type="checkbox" checked={conf.confirm_checklist} onChange={(e) => setConf({ ...conf, confirm_checklist: e.target.checked })} /> The manual checklist matches what we agreed.</label>
             <Field label="How the client authorized it" id="c-auth"><input id="c-auth" value={conf.authorization_note} onChange={(e) => setConf({ ...conf, authorization_note: e.target.value })} placeholder="Signed care agreement, Oct 28" /></Field>
+            {site.care_terms_version !== CARE_TERMS_VERSION && <>
+              <label className="care-row"><input type="checkbox" checked={conf.confirm_terms} onChange={(e) => setConf({ ...conf, confirm_terms: e.target.checked })} /> The client accepted the current care terms ({CARE_TERMS_VERSION}): flexible plan time, and additional work at $100 an hour with a one hour minimum or an agreed fixed quote.</label>
+              <Field label="How the client accepted the care terms" id="c-terms"><input id="c-terms" value={conf.terms_note} onChange={(e) => setConf({ ...conf, terms_note: e.target.value })} placeholder="Signed care agreement, Oct 28" /></Field>
+            </>}
             <div><Action tone="primary" label="Confirm setup and enable reviews" run={() => careApi(`sites/${id}/confirm`, { method: 'POST', json: conf })} done={reload} /></div>
           </div>
         </section>
       )}
 
       <section className="care-panel" aria-labelledby="bill-h">
-        <div className="care-between"><h2 id="bill-h">Subscription and billing</h2><BillingBadge state={site.billing_state} /></div>
+        <div className="care-between"><h2 id="bill-h">Subscription and billing</h2><SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} /></div>
         <p className="care-muted" style={{ margin: '4px 0 12px' }}>Billing status comes only from verified Stripe events. Paid doesn’t mean the review is done; work status is tracked separately below.</p>
         <div className="care-two">
           <div className="care-sub">
@@ -252,7 +258,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             {!site.stripe_subscription_id && !ended && <Action label="Create Stripe checkout link" run={() => careApi<Row>(`sites/${id}/checkout`, { method: 'POST', json: {} })} done={(r) => { setLink((r as Row).url); reload() }} />}
             {site.stripe_customer_id && <Action label="Create billing portal link" run={() => careApi<Row>(`sites/${id}/portal`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
             {site.stripe_subscription_id && <Action label="Refresh from Stripe" run={() => careApi(`sites/${id}/sync`, { method: 'POST', json: {} })} done={reload} />}
-            {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. Opening it doesn’t activate anything; only Stripe’s verified payment notice does.</small></div>}
+            {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. Opening it doesn’t activate anything; only Stripe’s verified payment notice does.</small>{link.startsWith('/admin/care/demo-checkout') && <div style={{ marginTop: 6 }}><a className="care-btn small" href={link}>Open the simulated checkout (play the client)</a></div>}</div>}
             {['attention', 'past_due', 'unpaid', 'refunded', 'disputed'].includes(site.billing_state) && (
               <div className="care-sub">
                 <Field label="Mark billing reviewed" id="b-note"><input id="b-note" value={billNote} onChange={(e) => setBillNote(e.target.value)} placeholder="What you did" /></Field>
@@ -289,7 +295,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
                 <tr key={c.id}>
                   <td>{fmt(c.period_start, tz, false)} to {fmt(c.period_end, tz, false)}<div className="care-muted">{c.source === 'manual' ? 'Added by hand' : 'Stripe'}{c.billing_flag ? ` · ${c.billing_flag.replace(/_/g, ' ')}` : ''}</div></td>
                   <td><Badge tone={tone}>{label}</Badge></td>
-                  <td style={{ textTransform: 'capitalize' }}>{r?.status || 'draft'} <span className="care-muted">v{r?.version}</span></td>
+                  <td><span style={{ textTransform: 'capitalize' }}>{r?.status || 'draft'}</span> <span className="care-muted">v{r?.version}</span></td>
                   <td>{fmt(c.review_due_at, tz)}</td>
                   <td><button className="care-btn small" onClick={() => go({ cycle: c.id })}>Open</button></td>
                 </tr>

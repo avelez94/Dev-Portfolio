@@ -8,6 +8,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { db, must, CareError, logActivity, type Row } from './db'
 import { isPlanId, type PlanId } from './plans'
 import { checkUrlShape, checkUrlResolves, normalizeDomain, hostInDomains } from './url-safety'
+import { CARE_TERMS_VERSION } from '@/content/care-terms'
 
 export const LIMIT_DEFAULTS = { maxPages: 15, maxLinks: 60, concurrency: 2, navTimeoutMs: 30000, runTimeoutMs: 360000 }
 export const LIMIT_CAPS = { maxPages: 25, maxLinks: 150, concurrency: 3, navTimeoutMs: 45000, runTimeoutMs: 480000 }
@@ -173,7 +174,7 @@ export async function assertClient(clientId: string) {
 }
 
 /** Confirmation gate. Checks DNS too, so a domain pointing at a private network is refused. */
-export async function confirmSite(siteId: string, body: { authorization_note?: string; confirm_website?: boolean; confirm_authorization?: boolean; confirm_checklist?: boolean }, actor: string) {
+export async function confirmSite(siteId: string, body: { authorization_note?: string; confirm_website?: boolean; confirm_authorization?: boolean; confirm_checklist?: boolean; confirm_terms?: boolean; terms_note?: string }, actor: string) {
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
   const problems: string[] = []
   if (!body.confirm_website) problems.push('Confirm the website address and pages are the agreed scope.')
@@ -181,6 +182,11 @@ export async function confirmSite(siteId: string, body: { authorization_note?: s
   if (!body.confirm_checklist) problems.push('Confirm the manual checklist.')
   const note = str(body.authorization_note, 1000)
   if (note.length < 5) problems.push('Describe how the client authorized the checks (for example, the signed care agreement and date).')
+  // The current care terms (flexible plan time, additional work rate) apply once the client accepts them.
+  const termsCurrent = site.care_terms_version === CARE_TERMS_VERSION
+  const termsNote = str(body.terms_note, 500)
+  if (!termsCurrent && !body.confirm_terms) problems.push('Confirm the client accepted the current care terms.')
+  if (!termsCurrent && termsNote.length < 5) problems.push('Describe how the client accepted the care terms (for example, the signed care agreement and date).')
   if (!site.recipient_email) problems.push('Add the report recipient email.')
   if (!site.manual_checklist?.length) problems.push('Add at least one manual checklist item.')
   if (site.enrollment_status === 'ended') problems.push('This website has ended care. Create a new enrollment instead.')
@@ -193,9 +199,13 @@ export async function confirmSite(siteId: string, body: { authorization_note?: s
   await assertClient(site.client_id)
   const hash = setupHash(site)
   const upd = await db.from('care_sites')
-    .update({ enrollment_status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_hash: hash, authorization_note: note, updated_at: new Date().toISOString() })
+    .update({
+      enrollment_status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_hash: hash, authorization_note: note, updated_at: new Date().toISOString(),
+      ...(termsCurrent ? {} : { care_terms_version: CARE_TERMS_VERSION, care_terms_note: termsNote, care_terms_reviewed_at: new Date().toISOString() }),
+    })
     .eq('id', siteId).select('*').single()
   const saved = must(upd, 'Website')
   await logActivity({ site_id: siteId, actor, action: 'enrollment_confirmed', detail: { hash: hash.slice(0, 12) } })
+  if (!termsCurrent) await logActivity({ site_id: siteId, actor, action: 'care_terms_accepted', detail: { version: CARE_TERMS_VERSION, note: termsNote } })
   return saved
 }

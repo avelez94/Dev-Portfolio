@@ -21,7 +21,6 @@ import { checkUrlResolves } from '@/lib/care/url-safety'
 import { validTimeZone, zonedToUtc, localDate } from '@/lib/care/schedule'
 import { isPlanId, plan as planInfo, priceIdFor, PLAN_IDS } from '@/lib/care/plans'
 import * as work from '@/lib/care/work-server'
-import { CARE_TERMS_VERSION } from '@/content/care-terms'
 import { inDemoScope } from '@/lib/demo/context'
 
 export const maxDuration = 60
@@ -157,8 +156,8 @@ async function createSite({ body }: Ctx) {
   if (errors.length) throw new CareError(errors.join(' '), 422)
   await assertClient(value.client_id)
   await assertSitePricing(value)
-  // New enrollments use the current care agreement terms (flexible plan time).
-  const ins = await db.from('care_sites').insert({ ...value, enrollment_status: 'draft', care_terms_version: CARE_TERMS_VERSION, care_terms_note: 'Enrolled under the current care terms', care_terms_reviewed_at: new Date().toISOString() }).select('*').single()
+  // The care terms are recorded as accepted when you confirm the setup (confirmSite), not on saving.
+  const ins = await db.from('care_sites').insert({ ...value, enrollment_status: 'draft' }).select('*').single()
   const site = must(ins, 'Website')
   await logActivity({ site_id: site.id, actor: ACTOR, action: 'enrollment_created', detail: { plan: value.plan } })
   return ok({ site }, 201)

@@ -117,17 +117,21 @@ export function careRows(): Rows {
     { id: 'phone', label: 'Phone layout looks right', category: 'Visual' },
     { id: 'form', label: 'Contact form sends a test message', category: 'Forms' },
   ]
-  const site = (o: Record<string, unknown>) => ({ enrollment_status: 'confirmed', manual_checklist: checklist, confirmed_at: at(-90), billing_state: 'active', subscription_status: 'active', ...o })
+  // Northside Physio and Harbor Street Bakery are billed by hand (paid periods added under
+  // "Billed outside Stripe?"); Lakeside Dental pays through a (simulated) Stripe subscription.
+  const site = (o: Record<string, unknown>) => ({ enrollment_status: 'confirmed', manual_checklist: checklist, confirmed_at: at(-90), authorization_note: 'Signed care agreement (demo)', billing_state: 'not_started', ...o })
   return {
     care_sites: [
-      site({ id: S.physio, client_id: C.physio, label: 'Northside Physio', site_url: 'https://physio.example.com/', approved_domains: ['physio.example.com'], plan: 'business', agreed_monthly_price: 129, pages: physioPages, destinations: physioDest, recipient_name: 'Sam Patel', recipient_email: 'frontdesk@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed the current care agreement (demo)', care_terms_reviewed_at: at(-30), created_at: at(-100) }),
-      site({ id: S.bakery, client_id: C.bakery, label: 'Harbor Street Bakery', site_url: 'https://bakery.example.com/', approved_domains: ['bakery.example.com'], plan: 'premium', agreed_monthly_price: 239, pages: [{ label: 'Home', url: 'https://bakery.example.com/' }, { label: 'Menu', url: 'https://bakery.example.com/menu' }], destinations: [{ label: 'Order online', url: 'https://orders.example.com/harbor', kind: 'checkout' }], recipient_name: 'Jordan Reyes', recipient_email: 'owner@example.com', created_at: at(-190) }),
-      site({ id: S.dental, client_id: C.dental, label: 'Lakeside Dental', site_url: 'https://dental.example.com/', approved_domains: ['dental.example.com'], plan: 'premium', agreed_monthly_price: 239, pages: dentalPages, destinations: [], recipient_name: 'Avery Kim', recipient_email: 'office@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed at launch (demo)', care_terms_reviewed_at: at(-55), created_at: at(-58) }),
+      site({ id: S.physio, client_id: C.physio, label: 'Northside Physio', site_url: 'https://physio.example.com/', approved_domains: ['physio.example.com'], plan: 'business', agreed_monthly_price: 129, pages: physioPages, destinations: physioDest, recipient_name: 'Sam Patel', recipient_email: 'frontdesk@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed the current care agreement (demo)', care_terms_reviewed_at: at(-30), next_review_due: at(3), created_at: at(-100) }),
+      site({ id: S.bakery, client_id: C.bakery, label: 'Harbor Street Bakery', site_url: 'https://bakery.example.com/', approved_domains: ['bakery.example.com'], plan: 'premium', agreed_monthly_price: 239, pages: [{ label: 'Home', url: 'https://bakery.example.com/' }, { label: 'Menu', url: 'https://bakery.example.com/menu' }], destinations: [{ label: 'Order online', url: 'https://orders.example.com/harbor', kind: 'checkout' }], recipient_name: 'Jordan Reyes', recipient_email: 'owner@example.com', care_terms_version: 'care-2026-06', care_terms_note: 'Original care agreement (demo)', next_review_due: at(-1), created_at: at(-190) }),
+      site({ id: S.dental, client_id: C.dental, label: 'Lakeside Dental', site_url: 'https://dental.example.com/', approved_domains: ['dental.example.com'], plan: 'premium', agreed_monthly_price: 249, pages: dentalPages, destinations: [], recipient_name: 'Avery Kim', recipient_email: 'office@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed at launch (demo)', care_terms_reviewed_at: at(-55), next_review_due: at(8), created_at: at(-58),
+        stripe_customer_id: 'cus_demo_000203', stripe_subscription_id: 'sub_demo_000203', subscription_status: 'active', billing_state: 'active', stripe_synced_at: at(-1),
+        current_period_start: startOfDay(-1), current_period_end: startOfDay(29), paid_through: startOfDay(29) }),
     ],
     care_cycles: [
       { id: Y.physio, site_id: S.physio, source: 'manual', period_start: startOfDay(-4), period_end: startOfDay(26), plan: 'business', review_due_at: at(3), included_minutes: 30, agreed_price: 129, paid_at: at(-4), scan_state: 'queued' },
       { id: Y.bakery, site_id: S.bakery, source: 'manual', period_start: startOfDay(-10), period_end: startOfDay(20), plan: 'premium', review_due_at: at(-1), included_minutes: 90, agreed_price: 239, paid_at: at(-10), scan_state: 'queued' },
-      { id: Y.dental, site_id: S.dental, source: 'manual', period_start: startOfDay(-1), period_end: startOfDay(29), plan: 'premium', review_due_at: at(8), included_minutes: 90, agreed_price: 239, paid_at: at(-1), scan_state: 'not_started' },
+      { id: Y.dental, site_id: S.dental, source: 'stripe', stripe_invoice_id: 'in_demo_000203_first', stripe_subscription_id: 'sub_demo_000203', amount_paid: 24900, currency: 'usd', period_start: startOfDay(-1), period_end: startOfDay(29), plan: 'premium', review_due_at: at(8), included_minutes: 90, agreed_price: 249, paid_at: at(-1), scan_state: 'not_started' },
     ],
     care_scan_runs: [
       { id: id(321), cycle_id: Y.physio, site_id: S.physio, trigger: 'scheduled', status: 'queued', config: { pages: physioPages, destinations: physioDest }, available_at: at(-1) },
@@ -157,9 +161,10 @@ export const UNCONFIRMED_PRESETS = ['link-change', 'price-update']
 export function simulatedFindings(config: { pages?: { url: string }[]; destinations?: { url: string; kind?: string }[] }) {
   const out: Record<string, unknown>[] = []
   const now = new Date().toISOString()
-  for (const p of config.pages || []) {
+  for (const [i, p] of (config.pages || []).entries()) {
     for (const k of ['page_load', 'https', 'images']) out.push({ check_key: k, code: 'ok', url: p.url, viewport: 'desktop', status: 'passed', observed: 'Simulated check: passed.', explanation: 'Simulated in the demo.', checked_at: now, evidence: { http_status: 200, load_ms: 900 } })
-    const wide = /\/team$/.test(p.url)
+    // The second agreed page is always reported too wide for phones, so every demo review has an issue to handle.
+    const wide = i === 1
     out.push(wide
       ? { check_key: 'overflow', code: 'overflow', url: p.url, viewport: 'mobile', status: 'failed', observed: 'The page is 212 pixels wider than a phone screen (simulated).', explanation: 'Part of the page is cut off on phones.', next_action: 'Rebuild the section so it fits phone screens.', checked_at: now, evidence: { overflow_px: 212 } }
       : { check_key: 'overflow', code: 'ok', url: p.url, viewport: 'mobile', status: 'passed', observed: 'Simulated check: fits the screen.', explanation: 'Simulated in the demo.', checked_at: now })

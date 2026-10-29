@@ -29,7 +29,8 @@ Vercel previews share the production database, so the admin on a preview runs as
   - Everything else is refused, including Stripe and any raw http(s) connection.
 - **Demo versions of some actions** (in `dispatch.ts`):
   - The check runner finishes queued checks with fictional results.
-  - Stripe checkout records a simulated first payment and creates the paid period with the real `createCycle`.
+  - **Create Stripe checkout link** returns a link to a simulated checkout page (what the client would see). **Pay (simulated)** there plays Stripe's payment notice. It charges the plan's Stripe price, as Stripe would, and creates the paid period with the real `createCycle`.
+  - Simulated checks report each site's second agreed page as too wide for phones, so every review has an issue to handle.
   - The Stripe portal and Stripe sync are acknowledged only.
 
 ## Direct links (fictional records, the same in every session)
@@ -41,7 +42,10 @@ Vercel previews share the production database, so the admin on a preview runs as
 | Quick add work | add `&work=add` to the review or website link |
 | New estimate | add `&work=estimate` to the review or website link |
 | Harbor Street Bakery (older terms, flagged) | `/admin/care?site=00000000-0000-4000-8000-000000000202` |
-| Lakeside Dental (try Stripe checkout) | `/admin/care?site=00000000-0000-4000-8000-000000000203` |
+| Lakeside Dental (simulated Stripe subscription) | `/admin/care?site=00000000-0000-4000-8000-000000000203` |
+| Owner's guide | `/admin/care/guide` |
+
+A new client to enroll: **Rivera Garden Design** (Casey Rivera) is in the client list without a care website.
 
 ## Still needs real verification
 

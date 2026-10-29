@@ -17,6 +17,7 @@ let state: State | null = null
 let loaded = false
 let queue: Promise<unknown> = Promise.resolve()
 let storageOk = true
+let generation = 0 // bumped by Reset demo, so answers to earlier requests can't bring old data back
 const listeners = new Set<() => void>()
 
 function sessionId() {
@@ -63,6 +64,7 @@ export function onDemoChange(f: () => void) {
 
 /** Throws away this session's demo changes. The next request starts from the original fictional data. */
 export function resetDemo() {
+  generation++
   save(null)
 }
 
@@ -83,6 +85,7 @@ const PASS_HEADERS = ['content-type', 'accept', 'prefer', 'range', 'x-upsert', '
 
 async function viaDemo(real: typeof fetch, req: Request): Promise<Response> {
   load()
+  const gen = generation
   const u = new URL(req.url)
   const headers: Record<string, string> = {}
   for (const h of PASS_HEADERS) { const v = req.headers.get(h); if (v) headers[h] = v }
@@ -93,7 +96,7 @@ async function viaDemo(real: typeof fetch, req: Request): Promise<Response> {
   })
   if (!res.ok) return new Response(await res.text(), { status: res.status, headers: { 'content-type': 'application/json' } })
   const out = await res.json()
-  save(out.state)
+  if (gen === generation) save(out.state)
   const r = out.response as { status: number; headers: Record<string, string>; body: string }
   const empty = req.method === 'HEAD' || [204, 205, 304].includes(r.status)
   return new Response(empty ? null : fromB64(r.body), { status: r.status, headers: r.headers })

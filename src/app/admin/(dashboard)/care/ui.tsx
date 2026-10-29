@@ -24,6 +24,7 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care .care-mark{text-decoration:none;color:var(--ink);width:34px;height:34px;border-radius:12px;background:var(--coral);color:var(--ink);display:grid;place-items:center;font-family:${ADMIN_FONTS.display};font-style:italic;font-weight:700;border:2px solid var(--ink)}
 .care-nav{display:flex;gap:4px;flex-wrap:wrap}
 .care-nav button{background:none;border:1px solid transparent;color:var(--text2);padding:7px 12px;border-radius:999px;font:inherit;cursor:pointer;min-height:36px}
+.care-nav .care-help{color:var(--accent);padding:7px 12px;border-radius:999px;border:1px dashed var(--border2);min-height:36px;display:inline-flex;align-items:center;font-weight:700}
 .care-nav button[aria-current=page]{background:var(--accentBg);color:var(--text);border-color:var(--border2)}
 .care-main{max-width:1180px;margin:0 auto;padding:20px}
 .care-banner{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
@@ -37,6 +38,7 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .care-between{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
 .care-btn{font:inherit;font-weight:700;border-radius:999px;padding:8px 16px;min-height:38px;cursor:pointer;border:1.5px solid var(--border2);background:var(--surface2);color:var(--text)}
+.care-btn{overflow-wrap:normal}
 .care-btn.primary{background:var(--coral);color:var(--ink);border-color:var(--ink)}
 .care-btn.danger{background:var(--red);color:var(--redText);border-color:var(--redText)}
 .care-btn.small{padding:4px 10px;min-height:30px;font-size:13px}
@@ -230,6 +232,17 @@ export const BILLING_TEXT: Record<string, [string, 'ok' | 'warn' | 'bad' | 'info
 export function BillingBadge({ state }: { state: string }) {
   const [label, tone] = BILLING_TEXT[state] || [state, 'info']
   return <Badge tone={tone}>{label}</Badge>
+}
+
+/**
+ * Billing for a website. A website billed by hand (paid periods added under
+ * "Billed outside Stripe?") has no Stripe subscription, so its Stripe state
+ * stays "No subscription yet"; show that it's billed outside Stripe instead.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function SiteBilling({ site, manual }: { site: Record<string, any>; manual: boolean }) {
+  if (!site.stripe_subscription_id && manual && site.billing_state === 'not_started') return <Badge tone="info">Billed outside Stripe</Badge>
+  return <BillingBadge state={site.billing_state} />
 }
 
 /** Work status, kept separate from billing on purpose: paid is not the same as reviewed. */

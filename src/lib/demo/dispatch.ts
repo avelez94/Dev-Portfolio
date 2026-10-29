@@ -72,20 +72,41 @@ export async function simulateRunner() {
   }
 }
 
-async function demoCheckout(siteId: string) {
+/** Step 1, like createCheckout: links a (simulated) Stripe customer and returns a checkout link. Nothing is paid yet. */
+async function demoCheckoutLink(siteId: string) {
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
+  if (site.enrollment_status === 'ended') return { error: 'Care for this website has ended.', status: 409 }
+  if (site.stripe_subscription_id) return { error: 'This website already has a subscription. Use the billing portal link instead.', status: 409 }
+  const customer = site.stripe_customer_id || `cus_demo_${siteId.slice(-6)}`
+  await db.from('care_sites').update({ stripe_customer_id: customer, updated_at: new Date().toISOString() }).eq('id', siteId)
+  await logActivity({ site_id: siteId, actor: 'admin', action: 'checkout_created', detail: { session: 'cs_demo', plan: site.plan, mode: 'demo' } })
+  note('note', `Simulated Stripe checkout link created for ${site.label}. Nothing was emailed; in real use you send the link yourself.`)
+  return { url: `/admin/care/demo-checkout?site=${siteId}`, simulated: true }
+}
+
+/**
+ * Step 2, the client paying: what Stripe's verified payment notices would do
+ * (handleInvoicePaid and syncSubscription). Stripe charges the plan's Stripe
+ * Price, which can differ from the agreed monthly price recorded for reports.
+ */
+async function demoPayment(siteId: string) {
+  const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
+  if (!site.stripe_customer_id) return { error: 'Create the checkout link first.', status: 409 }
+  if (site.stripe_subscription_id) return { error: 'This website already has a subscription.', status: 409 }
   const tag = siteId.slice(-6)
   const now = new Date()
   const end = new Date(now.getTime() + 30 * 86_400_000)
+  const charged = planInfo(site.plan).monthly
   await db.from('care_sites').update({
-    stripe_customer_id: `cus_demo_${tag}`, stripe_subscription_id: `sub_demo_${tag}`, subscription_status: 'active', billing_state: 'active',
+    stripe_subscription_id: `sub_demo_${tag}`, subscription_status: 'active', billing_state: 'active', stripe_synced_at: now.toISOString(),
     current_period_start: now.toISOString(), current_period_end: end.toISOString(), paid_through: end.toISOString(), updated_at: now.toISOString(),
   }).eq('id', siteId)
-  const price = typeof site.agreed_monthly_price === 'number' ? site.agreed_monthly_price : planInfo(site.plan).monthly
-  const r = await createCycle({ siteId, source: 'stripe', invoiceId: `in_demo_${tag}_${now.getTime()}`, subscriptionId: `sub_demo_${tag}`, periodStart: now, periodEnd: end, plan: site.plan, paidAt: now, amountPaid: price * 100, currency: 'usd', actor: 'demo' })
-  await logActivity({ site_id: siteId, cycle_id: r.cycle.id, actor: 'demo', action: 'demo_payment_simulated', detail: { amount: price } })
-  note('payment', `Simulated Stripe checkout and first payment of $${price} for ${site.label}. No Stripe call was made.`)
-  return { url: `/admin/care?cycle=${r.cycle.id}`, simulated: true }
+  await logActivity({ site_id: siteId, actor: 'stripe', action: 'subscription_linked', detail: { subscription: `sub_demo_${tag}`, simulated: true } })
+  const r = await createCycle({ siteId, source: 'stripe', invoiceId: `in_demo_${tag}_${now.getTime()}`, subscriptionId: `sub_demo_${tag}`, periodStart: now, periodEnd: end, plan: site.plan, paidAt: now, amountPaid: charged * 100, currency: 'usd', actor: 'stripe' })
+  const differs = typeof site.agreed_monthly_price === 'number' && site.agreed_monthly_price !== charged
+  note('payment', `Simulated first payment of $${charged} for ${site.label} (the ${planInfo(site.plan).name} Stripe price).${differs ? ` The agreed price recorded for reports is $${site.agreed_monthly_price}; Stripe would still charge $${charged}.` : ''} No Stripe call was made.`)
+  await simulateRunner()
+  return { cycle_id: r.cycle.id, held: !!r.cycle.hold_reason, charged }
 }
 
 async function careOverride(method: string, seg: string[]): Promise<DemoResponse | null> {
@@ -100,7 +121,8 @@ async function careOverride(method: string, seg: string[]): Promise<DemoResponse
       policyApproved: false,
     })
   }
-  if (key === 'POST sites/:id/checkout') return reply(200, await demoCheckout(seg[1]))
+  if (key === 'POST sites/:id/checkout') { const r = await demoCheckoutLink(seg[1]); return reply('status' in r ? r.status as number : 200, r) }
+  if (key === 'POST sites/:id/demo-pay') { const r = await demoPayment(seg[1]); return reply('status' in r ? r.status as number : 200, r) }
   if (key === 'POST sites/:id/portal') { note('note', 'Simulated Stripe billing portal link. No Stripe call was made.'); return reply(200, { url: `/admin/care?site=${seg[1]}`, simulated: true }) }
   if (key === 'POST sites/:id/sync') { note('note', 'Simulated Stripe sync. Nothing was fetched from Stripe.'); return reply(200, { ok: true, simulated: true }) }
   return null
@@ -139,6 +161,12 @@ export async function dispatchDemo(r: DemoRequest, origin: string, cookie: strin
     if (!handler) return reply(405, { error: 'Method not allowed' })
     const res = await fromResponse(await handler(new NextRequest(url, init), { params: Promise.resolve({ path: seg }) }))
     if (r.method !== 'GET') await simulateRunner()
+    // Checkout is simulated in the demo, so every plan counts as having its Stripe price.
+    if (r.method === 'GET' && seg.join('/') === 'template' && res.status === 200) {
+      const t = JSON.parse(Buffer.from(res.body, 'base64').toString('utf8'))
+      t.plans = (t.plans || []).map((p: Row) => ({ ...p, priceConfigured: true }))
+      return reply(200, t)
+    }
     return res
   }
 

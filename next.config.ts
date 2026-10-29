@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite"],
   outputFileTracingIncludes: {
     "/api/demo": ["./supabase/pending/website-care/*.sql", "./node_modules/@electric-sql/pglite/dist/**/*"],
+    // The Website Care owner's guide is read from docs at run time.
+    "/admin/care/guide": ["./docs/WEBSITE_CARE_GUIDE.md"],
+    "/admin/care/guide/img/*": ["./docs/website-care-guide/*.png"],
   },
   async redirects() {
     // The admin Docs page moved to its own address when the dashboard was split into pages.

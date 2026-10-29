@@ -7,27 +7,30 @@
  * browser makes, including redirects and page subrequests.
  */
 import { BlockList, isIP } from 'node:net'
-import { lookup } from 'node:dns/promises'
+import dns from 'node:dns'
 import { testHostMap } from './config'
 
-const blocked = new BlockList()
+// Separate lists: Node's BlockList matches IPv4 addresses against IPv4-mapped
+// IPv6 rules too, so "::ffff:0:0/96" in a shared list would block every IPv4 address.
+const blocked4 = new BlockList()
 for (const [net, bits] of [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
   ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.88.99.0', 24], ['192.168.0.0', 16],
   ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
-] as [string, number][]) blocked.addSubnet(net, bits, 'ipv4')
+] as [string, number][]) blocked4.addSubnet(net, bits, 'ipv4')
+const blocked6 = new BlockList()
 for (const [net, bits] of [
   ['::', 128], ['::1', 128], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['100::', 64], ['2001::', 23], ['2001:db8::', 32],
   ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
-] as [string, number][]) blocked.addSubnet(net, bits, 'ipv6')
+] as [string, number][]) blocked6.addSubnet(net, bits, 'ipv6')
 
 export function isBlockedAddress(ip: string): boolean {
   const v = isIP(ip)
-  if (v === 4) return blocked.check(ip, 'ipv4')
+  if (v === 4) return blocked4.check(ip, 'ipv4')
   if (v === 6) {
     const mapped = ip.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-    if (mapped) return blocked.check(mapped[1], 'ipv4')
-    return blocked.check(ip, 'ipv6')
+    if (mapped) return blocked4.check(mapped[1], 'ipv4')
+    return blocked6.check(ip, 'ipv6')
   }
   return true
 }
@@ -76,7 +79,8 @@ export async function checkUrlResolves(raw: string, approvedDomains?: string[]):
   const test = testHostMap()
   if (Object.prototype.hasOwnProperty.call(test, host)) return shape
   try {
-    const addrs = await lookup(host, { all: true, verbatim: true })
+    // Looked up through the module at call time, so the preview demo can answer it (src/lib/demo/intercept.ts).
+    const addrs = await dns.promises.lookup(host, { all: true, verbatim: true })
     if (!addrs.length) return { ok: false, reason: `${host} does not resolve.` }
     if (addrs.some((a) => isBlockedAddress(a.address))) return { ok: false, reason: `${host} points to a private or reserved network address.` }
     return shape

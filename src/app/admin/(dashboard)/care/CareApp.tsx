@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import { CARE_CSS, useLoad, Badge, BillingBadge, workStatus, fmt, Loading, ErrorBox, Empty, Action, careApi } from './ui'
+import { CARE_CSS, useLoad, Badge, SiteBilling, workStatus, fmt, Loading, ErrorBox, Empty, Action, careApi } from './ui'
 import SiteView from './SiteView'
 import CycleView from './CycleView'
 import SettingsView from './SettingsView'
@@ -67,6 +67,7 @@ export default function CareApp() {
           {nav.map(([v, label]) => (
             <button key={v} aria-current={!cycle && view === v ? 'page' : undefined} onClick={() => go({ view: v })}>{label}</button>
           ))}
+          <a href="/admin/care/guide" className="care-help">Help / Owner’s guide</a>
         </nav>
       </header>
       <main id="admin-main" tabIndex={-1} className="care-main">
@@ -231,17 +232,20 @@ export function SitesTable({ data, go }: { data: Row; go: (n: { site?: string | 
   if (!data.sites.length) return <Empty>No websites enrolled yet. Choose Enroll a website to add the first one.</Empty>
   return (
     <div className="care-scroll" tabIndex={0}><table className="care-table">
-      <thead><tr><th>Client and website</th><th>Plan</th><th>Subscription</th><th>Setup</th><th className="care-hide-sm">Next review due</th><th className="care-hide-sm">Last sent report</th></tr></thead>
+      <thead><tr><th>Client and website</th><th>Plan</th><th>Billing</th><th>Setup</th><th className="care-hide-sm">Next review due</th><th className="care-hide-sm">Last sent report</th></tr></thead>
       <tbody>
         {data.sites.map((s: Row) => {
           const c = data.clients.find((x: Row) => x.id === s.client_id)
+          // The earliest open review, the same one the review queue lists (the stored date goes stale once a report is sent).
+          const mine = (data.cycles as Row[]).filter((y) => y.site_id === s.id)
+          const next = mine.filter((y) => !y.completed_at).sort((a, b) => String(a.review_due_at).localeCompare(String(b.review_due_at)))[0]
           return (
             <tr key={s.id} className="click" onClick={() => go({ site: s.id })}>
               <td><button className="care-btn small" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textAlign: 'left', minHeight: 0 }} onClick={(e) => { e.stopPropagation(); go({ site: s.id }) }}><b>{c?.business || c?.name || 'Unknown client'}</b></button><div className="care-muted">{s.label} · {s.site_url}</div></td>
               <td style={{ textTransform: 'capitalize' }}>{s.plan}</td>
-              <td><BillingBadge state={s.billing_state} />{s.paid_through && <div className="care-muted">Paid through {fmt(s.paid_through, tz, false)}</div>}</td>
+              <td><SiteBilling site={s} manual={mine.some((y) => y.source === 'manual')} />{s.paid_through && <div className="care-muted">Paid through {fmt(s.paid_through, tz, false)}</div>}</td>
               <td><Badge tone={s.enrollment_status === 'confirmed' ? 'ok' : s.enrollment_status === 'draft' ? 'warn' : 'info'}>{s.enrollment_status === 'confirmed' ? 'Confirmed' : s.enrollment_status === 'draft' ? 'Needs confirmation' : s.enrollment_status === 'ended' ? 'Care ended' : 'Paused'}</Badge></td>
-              <td className="care-hide-sm">{fmt(s.next_review_due, tz)}</td>
+              <td className="care-hide-sm">{next ? fmt(next.review_due_at, tz) : <span className="care-muted">{s.enrollment_status === 'draft' ? 'After setup and first payment' : 'Waits for the next paid period'}</span>}</td>
               <td className="care-hide-sm">{s.last_completed_review_at ? fmt(s.last_completed_review_at, tz, false) : <span className="care-muted">None yet</span>}</td>
             </tr>
           )
