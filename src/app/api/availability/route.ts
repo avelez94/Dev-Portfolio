@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { nyTime } from '@/lib/time'
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,18 +12,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'start and end required' }, { status: 400 })
     }
 
-    const [{ data: availability }, { data: blockedDates }, { data: blockedSlots }, { data: bookings }] = await Promise.all([
+    // Bookings on the last day of the range, in Eastern Time, end before 06:00 UTC the next day.
+    const rangeEnd = new Date(Date.parse(`${endDate}T23:59:59Z`) + 6 * 3600000).toISOString()
+
+    const [{ data: availability, error: availErr }, { data: blockedDates, error: blockedErr }, { data: blockedSlots, error: slotsErr }, { data: bookings, error: bookingsErr }] = await Promise.all([
       supabaseAdmin.from('availability').select('*').eq('is_active', true),
       supabaseAdmin.from('blocked_dates').select('*').gte('blocked_date', startDate).lte('blocked_date', endDate),
       supabaseAdmin.from('blocked_slots').select('*').gte('blocked_date', startDate).lte('blocked_date', endDate),
-      supabaseAdmin.from('bookings').select('scheduled_at').gte('scheduled_at', new Date(startDate).toISOString()).lte('scheduled_at', new Date(endDate).toISOString()).eq('status', 'scheduled'),
+      supabaseAdmin.from('bookings').select('scheduled_at').gte('scheduled_at', new Date(startDate).toISOString()).lte('scheduled_at', rangeEnd).eq('status', 'scheduled'),
     ])
 
+    // A failed read must not look like "no times" (or show a booked time as open).
+    const readErr = availErr || blockedErr || slotsErr || bookingsErr
+    if (readErr) throw readErr
+
     const blockedDaySet = new Set((blockedDates || []).map((b: any) => b.blocked_date))
-    const bookedSet = new Set((bookings || []).map((b: any) => {
-      const d = new Date(b.scheduled_at)
-      return `${d.toISOString().split('T')[0]}-${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-    }))
+    // Compare exact instants. The original key used the server's local hour (UTC on
+    // Vercel) against Eastern hours, so booked times were never hidden.
+    const bookedSet = new Set((bookings || []).map((b: { scheduled_at: string }) => new Date(b.scheduled_at).toISOString()))
     const availMap = new Map((availability || []).map((a: any) => [a.day_of_week, a]))
 
     const slots: string[] = []
@@ -33,7 +40,8 @@ export async function GET(req: NextRequest) {
 
     while (current <= end) {
       const dateStr = current.toISOString().split('T')[0]
-      const dayOfWeek = current.getDay()
+      // UTC calendar math, so the result doesn't depend on the server's time zone.
+      const dayOfWeek = current.getUTCDay()
 
       if (!blockedDaySet.has(dateStr) && availMap.has(dayOfWeek)) {
         const avail = availMap.get(dayOfWeek)
@@ -44,8 +52,8 @@ export async function GET(req: NextRequest) {
 
         for (let hour = startHour; hour < endHour; hour++) {
           for (const minute of [0, 30]) {
-            const slotTime = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00-04:00`)
-            const slotKey = `${dateStr}-${hour}:${String(minute).padStart(2, '0')}`
+            // Real New York offset for this date (EDT or EST), instead of a fixed -04:00.
+            const slotTime = nyTime(dateStr, hour, minute)
 
             const isBlockedSlot = dayBlockedSlots.some((s: any) => {
               const [bStartH, bStartM] = s.start_time.split(':').map(Number)
@@ -56,13 +64,13 @@ export async function GET(req: NextRequest) {
               return slotMinutes >= blockStart && slotMinutes < blockEnd
             })
 
-            if (slotTime >= minBookingTime && !bookedSet.has(slotKey) && !isBlockedSlot) {
+            if (slotTime >= minBookingTime && !bookedSet.has(slotTime.toISOString()) && !isBlockedSlot) {
               slots.push(slotTime.toISOString())
             }
           }
         }
       }
-      current.setDate(current.getDate() + 1)
+      current.setUTCDate(current.getUTCDate() + 1)
     }
 
     return NextResponse.json({ slots })

@@ -1,24 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
-import { SITE_URL } from '@/content/site'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { SITE_URL, interestLabel, parseInterest } from '@/content/site'
 import { clientIp, hit } from '@/lib/rate-limit'
+import { BRAND } from '@/lib/brand'
+import * as mail from '@/lib/email/templates'
+import {
+  INTAKE_FLOW_COLUMNS,
+  detailsAsText,
+  hashToken,
+  isMissingColumn,
+  looksLikeToken,
+  newContinueToken,
+  readDetails,
+  shortDate,
+} from '@/lib/intake'
+
+/**
+ * Two entry points, one lead:
+ *  source "homepage"      short note. Saved as stage "inquiry" with a private
+ *                          continue link. No booking link yet.
+ *  source "questionnaire" detailed intake. With a valid continue token it
+ *                          completes the same lead (no second lead, no second
+ *                          "new inquiry" email). Otherwise it's a new lead.
+ * A saved submission always returns success, even if email fails.
+ */
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 function str(v: unknown, max = 5000): string {
   return typeof v === 'string' ? v.trim().slice(0, max) : ''
-}
-
-function esc(v: unknown): string {
-  return String(v ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 /** Submissions per IP per window (per server instance). */
@@ -29,6 +41,47 @@ const EMAIL_LIMIT = 3
 const EMAIL_WINDOW_MS = 60 * 60 * 1000
 /** Faster than any person can fill in the homepage form. */
 const MIN_FILL_MS = 2500
+/** A short note and a questionnaire from the same email this close together are one lead. */
+const RELATED_WINDOW_MS = 30 * 86400000
+
+type Row = Record<string, unknown> & { id: string }
+
+async function send(email: mail.Email, to: string | string[], replyTo?: string) {
+  const { error } = await resend.emails.send({
+    from: BRAND.from,
+    to,
+    ...(replyTo ? { replyTo } : {}),
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+  })
+  if (error) throw error
+}
+
+/** Sends and reports success without ever failing the request. */
+async function trySend(label: string, fn: () => Promise<void>) {
+  try {
+    await fn()
+    return true
+  } catch (err) {
+    console.error(`Intake ${label} email failed:`, err)
+    return false
+  }
+}
+
+/** Insert with the intake flow columns; if the migration hasn't run, save the lead the original way. */
+async function insertLead(row: Record<string, unknown>, legacyNotesExtra = '') {
+  const first = await supabaseAdmin.from('intake_submissions').insert(row).select().single()
+  if (!first.error) return { data: first.data as Row, migrated: true }
+  if (!isMissingColumn(first.error)) throw first.error
+  console.warn('intake_submissions is missing the intake flow columns; saving without them. Run supabase/migrations/20261028_intake_flow.sql.')
+  const legacy = { ...row }
+  INTAKE_FLOW_COLUMNS.forEach((c) => delete legacy[c])
+  if (legacyNotesExtra) legacy.notes = [legacy.notes, legacyNotesExtra].filter(Boolean).join('\n\n')
+  const second = await supabaseAdmin.from('intake_submissions').insert(legacy).select().single()
+  if (second.error) throw second.error
+  return { data: second.data as Row, migrated: false }
+}
 
 export async function POST(req: NextRequest) {
   let raw: unknown
@@ -41,12 +94,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
   const body = raw as Record<string, unknown>
+  const source = body.source === 'homepage' ? 'homepage' : 'questionnaire'
 
   // Spam signals: a filled hidden field, or a form completed impossibly fast.
   // Answer like a success so bots learn nothing, but store and send nothing.
   const honeypot = str(body.company_fax, 200)
   const elapsed = typeof body.elapsed_ms === 'number' ? body.elapsed_ms : null
-  if (honeypot || (elapsed !== null && elapsed < MIN_FILL_MS)) {
+  // Someone finishing from their private link may breeze through prefilled steps, so the
+  // timing check only applies without one.
+  const hasLink = source === 'questionnaire' && looksLikeToken(body.continueToken)
+  if (honeypot || (!hasLink && elapsed !== null && elapsed < MIN_FILL_MS)) {
     console.warn('Intake dropped as likely spam', { honeypot: Boolean(honeypot), elapsed })
     return NextResponse.json({ success: true, id: null, emailed: false })
   }
@@ -62,11 +119,12 @@ export async function POST(req: NextRequest) {
   const name = str(body.name, 200)
   const email = str(body.email, 320)
   const business = str(body.business, 200)
-  const type = str(body.type, 200)
+  const interest = parseInterest(str(body.interest, 40))
+  const type = str(body.type, 200) || (interest ? interestLabel(interest) ?? '' : '')
   const description = str(body.description)
   const budget = str(body.budget, 100)
   const timeline = str(body.timeline, 100)
-  const heard = str(body.heard, 100)
+  const heard = str(body.heard, 100) || (source === 'homepage' ? 'Portfolio site' : '')
   const priority = str(body.priority, 100)
   const anything = str(body.anything)
 
@@ -74,179 +132,146 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Please fill in the required fields.' }, { status: 400 })
   }
 
-  // Shared limit per email address. If the count itself fails, let the
-  // submission through rather than turning a real inquiry away.
-  try {
-    const since = new Date(Date.now() - EMAIL_WINDOW_MS).toISOString()
-    const { count, error: countError } = await supabaseAdmin
-      .from('intake_submissions')
-      .select('id', { count: 'exact', head: true })
-      .ilike('email', email)
-      .gte('submitted_at', since)
-    if (countError) throw countError
-    if ((count ?? 0) >= EMAIL_LIMIT) {
-      return NextResponse.json({ error: 'Too many submissions. Please try again later.' }, { status: 429 })
+  const continueToken = source === 'questionnaire' && looksLikeToken(body.continueToken) ? body.continueToken : null
+
+  // Shared limit per email address. Completing an existing note doesn't add a row,
+  // so it never counts against the person. If the count fails, let it through.
+  if (!continueToken) {
+    try {
+      const since = new Date(Date.now() - EMAIL_WINDOW_MS).toISOString()
+      const { count, error: countError } = await supabaseAdmin
+        .from('intake_submissions')
+        .select('id', { count: 'exact', head: true })
+        .ilike('email', email)
+        .gte('submitted_at', since)
+      if (countError) throw countError
+      if ((count ?? 0) >= EMAIL_LIMIT) {
+        return NextResponse.json({ error: 'Too many submissions. Please try again later.' }, { status: 429 })
+      }
+    } catch (limitErr) {
+      console.error('Intake email rate check failed:', limitErr)
     }
-  } catch (limitErr) {
-    console.error('Intake email rate check failed:', limitErr)
+  }
+
+  const adminUrl = `${SITE_URL}/admin`
+  const base = {
+    name,
+    email,
+    business: business || null,
+    project_type: type,
+    description,
+    budget: budget || null,
+    timeline: timeline || null,
+    heard_from: heard,
+    priority: priority || null,
+    notes: anything || null,
+    status: 'pending',
   }
 
   try {
-    const { data: submission, error } = await supabaseAdmin
-      .from('intake_submissions')
-      .insert({
-        name,
-        email,
-        business: business || null,
-        project_type: type,
-        description,
-        budget: budget || null,
-        timeline: timeline || null,
-        heard_from: heard,
-        priority: priority || null,
-        notes: anything || null,
-        status: 'pending',
+    /* ---------------- Short homepage note ---------------- */
+    if (source === 'homepage') {
+      const website = str(body.website, 300) || (anything.match(/Existing website:\s*(\S+)/i)?.[1] ?? '')
+      const tok = newContinueToken()
+      const { data: saved, migrated } = await insertLead({
+        ...base,
+        stage: 'inquiry',
+        source: 'homepage',
+        interest,
+        inquiry_note: description,
+        details: website ? { website } : null,
+        continue_token_hash: tok.hash,
+        continue_token_expires_at: tok.expiresAt,
       })
-      .select()
-      .single()
-
-    if (error) throw error
-    if (!submission?.id) throw new Error('Insert returned no id')
-
-    // The submission is saved at this point. Email problems are logged and
-    // reported back (emailed: false) instead of telling the visitor it failed.
-    const bookingUrl = `${SITE_URL}/book?ref=${encodeURIComponent(String(submission.id))}`
-    let emailed = false
-
-    try {
-      const { error: clientErr } = await resend.emails.send({
-        from: 'Alante Velez <alante@alantevelez.com>',
-        to: email,
-        subject: 'Got your project details. Here is your next step.',
-        html: getClientEmailHtml({ name: esc(name), bookingUrl }),
-      })
-      if (clientErr) throw clientErr
-      emailed = true
-    } catch (mailErr) {
-      console.error('Intake client email failed:', mailErr)
+      // Without the migration there's no saved token, so the plain questionnaire link is used.
+      const next = migrated ? `/intake?continue=${tok.token}` : '/intake'
+      const emailed = await trySend('client', () => send(mail.inquiryReceived({ name, continueUrl: `${SITE_URL}${next}` }), email))
+      await trySend('admin', () => send(mail.inquiryAdmin({ ...base, type, website, adminUrl }), BRAND.email, email))
+      return NextResponse.json({ success: true, id: saved.id, emailed, next })
     }
 
-    try {
-      const { error: adminErr } = await resend.emails.send({
-        from: 'Alante Velez <alante@alantevelez.com>',
-        to: 'alante@alantevelez.com',
-        replyTo: email,
-        subject: `New intake submission from ${name.replace(/[\r\n]+/g, ' ')}`,
-        html: getAdminEmailHtml({
-          name: esc(name), email: esc(email), business: esc(business), type: esc(type),
-          description: esc(description), budget: esc(budget), timeline: esc(timeline),
-          heard: esc(heard), priority: esc(priority), anything: esc(anything),
-        }),
-      })
-      if (adminErr) throw adminErr
-    } catch (mailErr) {
-      console.error('Intake admin email failed:', mailErr)
+    /* ---------------- Detailed questionnaire ---------------- */
+    const details = readDetails(body)
+    if (interest) (details as Record<string, unknown>).interest = interestLabel(interest)
+    const completedAt = new Date().toISOString()
+    let saved: Row | null = null
+    let continuedFrom: { note: string; sentAt: string } | null = null
+    let relatedNote: { note: string; sentAt: string } | null = null
+
+    if (continueToken) {
+      const { data: match, error: findErr } = await supabaseAdmin
+        .from('intake_submissions')
+        .select('id, stage, inquiry_note, description, submitted_at, continue_token_expires_at')
+        .eq('continue_token_hash', hashToken(continueToken))
+        .maybeSingle()
+      if (findErr && !isMissingColumn(findErr)) throw findErr
+      const valid = match && match.stage === 'inquiry' && new Date(match.continue_token_expires_at as string).getTime() > Date.now()
+      if (valid) {
+        const { data, error } = await supabaseAdmin
+          .from('intake_submissions')
+          .update({
+            ...base,
+            stage: 'details',
+            interest,
+            details,
+            details_completed_at: completedAt,
+            continue_token_hash: null,
+            continue_token_expires_at: null,
+          })
+          .eq('id', match.id)
+          .eq('stage', 'inquiry') // only once, even if submitted twice at the same moment
+          .select()
+          .single()
+        if (error) throw error
+        saved = data as Row
+        continuedFrom = { note: String(match.inquiry_note || match.description || ''), sentAt: shortDate(match.submitted_at as string) }
+      }
     }
 
-    return NextResponse.json({ success: true, id: submission.id, emailed })
+    if (!saved) {
+      // Same email sent a short note recently but didn't use their link: link the two.
+      let related: Row | null = null
+      const since = new Date(Date.now() - RELATED_WINDOW_MS).toISOString()
+      const rel = await supabaseAdmin
+        .from('intake_submissions')
+        .select('id, inquiry_note, description, submitted_at')
+        .ilike('email', email)
+        .eq('stage', 'inquiry')
+        .gte('submitted_at', since)
+        .order('submitted_at', { ascending: false })
+        .limit(1)
+      if (!rel.error && rel.data?.length) related = rel.data[0] as Row
+
+      const { data, migrated } = await insertLead(
+        {
+          ...base,
+          stage: 'details',
+          source: 'questionnaire',
+          interest,
+          details,
+          details_completed_at: completedAt,
+          linked_submission_id: related?.id ?? null,
+        },
+        detailsAsText(details)
+      )
+      saved = data
+      if (migrated && related) {
+        await supabaseAdmin
+          .from('intake_submissions')
+          .update({ stage: 'merged', linked_submission_id: saved.id, continue_token_hash: null, continue_token_expires_at: null })
+          .eq('id', related.id)
+        relatedNote = { note: String(related.inquiry_note || related.description || ''), sentAt: shortDate(related.submitted_at as string) }
+      }
+    }
+
+    const bookingPath = `/book?ref=${encodeURIComponent(saved.id)}`
+    const emailed = await trySend('client', () => send(mail.detailsReceived({ name, bookingUrl: `${SITE_URL}${bookingPath}` }), email))
+    await trySend('admin', () =>
+      send(mail.detailsAdmin({ ...base, type, heard, details, adminUrl, continuedFrom, relatedNote }), BRAND.email, email)
+    )
+    return NextResponse.json({ success: true, id: saved.id, emailed, next: bookingPath })
   } catch (err) {
     console.error('Intake error:', err)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
-}
-
-function getClientEmailHtml({ name, bookingUrl }: { name: string; bookingUrl: string }) {
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #FAF3E8; font-family: Georgia, serif; }
-  .wrap { max-width: 600px; margin: 0 auto; padding: 48px 24px; }
-  .logo { font-family: Georgia, serif; font-size: 18px; font-weight: 700; color: #2A2420; margin-bottom: 4px; }
-  .logo-sub { font-family: monospace; font-size: 11px; color: #8B7D73; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 40px; }
-  .divider { height: 1px; background: rgba(169,104,96,0.2); margin: 32px 0; }
-  .heading { font-family: Georgia, serif; font-size: 32px; font-weight: 700; color: #2A2420; line-height: 1.1; margin-bottom: 20px; }
-  .heading em { font-style: italic; color: #A96860; }
-  p { font-size: 15px; line-height: 1.75; color: #3D3630; margin-bottom: 16px; font-family: Georgia, serif; }
-  p strong { color: #2A2420; font-weight: 600; }
-  .cta { display: inline-block; background: #A96860; color: #FAF3E8; text-decoration: none; padding: 14px 32px; font-family: monospace; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 2px; }
-  .note { font-size: 13px; color: #8B7D73; margin-top: 8px; font-family: monospace; }
-  .footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid rgba(169,104,96,0.15); }
-  .footer p { font-size: 12px; color: #8B7D73; margin: 0; font-family: monospace; letter-spacing: 0.06em; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Website Design and Care</div>
-  <div class="divider"></div>
-  <h1 class="heading">Got your<br><em>details.</em></h1>
-  <p>Hi ${name}, your project submission came through and I have everything I need to prepare for our conversation.</p>
-  <p>Your next step is to <strong>schedule your discovery call</strong>. It is a focused 20 minute conversation where we will confirm scope, timeline, and fit. I will have already reviewed your submission before we get on the call.</p>
-  <div style="margin: 36px 0;">
-    <a href="${bookingUrl}" class="cta">Schedule Your Discovery Call</a>
-    <p class="note">Takes about 60 seconds. Pick a time that works for you.</p>
-  </div>
-  <p>If you have any questions before the call, just reply to this email.</p>
-  <div class="footer">
-    <p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p>
-  </div>
-</div>
-</body>
-</html>`
-}
-
-function getAdminEmailHtml({ name, email, business, type, description, budget, timeline, heard, priority, anything }: Record<string, string>) {
-  const adminUrl = `${SITE_URL}/admin`
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #FAF3E8; font-family: Georgia, serif; }
-  .wrap { max-width: 600px; margin: 0 auto; padding: 40px 24px; }
-  .logo { font-family: Georgia, serif; font-size: 18px; font-weight: 700; color: #2A2420; margin-bottom: 4px; }
-  .logo-sub { font-family: monospace; font-size: 11px; color: #8B7D73; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 28px; }
-  .divider { height: 1px; background: rgba(169,104,96,0.2); margin: 24px 0; }
-  .heading { font-family: Georgia, serif; font-size: 22px; font-weight: 700; color: #2A2420; margin-bottom: 4px; }
-  .heading span { color: #A96860; font-style: italic; }
-  .sub { font-size: 12px; color: #8B7D73; margin-bottom: 28px; font-family: monospace; letter-spacing: 0.06em; }
-  .label { font-family: monospace; font-size: 11px; color: #A96860; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px; }
-  .value { font-size: 14px; color: #2A2420; line-height: 1.6; margin-bottom: 16px; font-family: Georgia, serif; }
-  .cta { display: inline-block; background: #A96860; color: #FAF3E8; text-decoration: none; padding: 12px 24px; font-family: monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 2px; }
-  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(169,104,96,0.15); }
-  .footer p { font-size: 12px; color: #8B7D73; font-family: monospace; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Admin Notification</div>
-  <div class="divider"></div>
-  <p class="heading">New submission from <span>${name}</span></p>
-  <p class="sub">No call booked yet. Review when they schedule.</p>
-  <div class="label">Name</div><div class="value">${name}</div>
-  <div class="label">Email</div><div class="value">${email}</div>
-  <div class="label">Business</div><div class="value">${business || 'Not provided'}</div>
-  <div class="divider"></div>
-  <div class="label">Project type</div><div class="value">${type}</div>
-  <div class="label">Description</div><div class="value">${description}</div>
-  <div class="label">Budget</div><div class="value">${budget || 'Not provided'}</div>
-  <div class="label">Timeline</div><div class="value">${timeline || 'Not provided'}</div>
-  <div class="divider"></div>
-  <div class="label">How they found you</div><div class="value">${heard}</div>
-  <div class="label">Top priority</div><div class="value">${priority || 'Not provided'}</div>
-  <div class="label">Additional notes</div><div class="value">${anything || 'None'}</div>
-  <div class="divider"></div>
-  <a href="${adminUrl}" class="cta">View in Admin Dashboard</a>
-  <div class="footer">
-    <p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p>
-  </div>
-</div>
-</body>
-</html>`
 }

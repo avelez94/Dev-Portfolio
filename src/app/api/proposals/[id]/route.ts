@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { proposalPaymentLines, usesCurrentTerms } from '@/lib/terms'
 import { Resend } from 'resend'
+import { BRAND } from '@/lib/brand'
+import * as mail from '@/lib/email/templates'
+import { SITE_URL } from '@/content/site'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -43,32 +46,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (action === 'accepted') {
-      await resend.emails.send({
-        from: 'Alante Velez <alante@alantevelez.com>',
-        to: 'alante@alantevelez.com',
-        subject: `Proposal accepted — ${proposal.client_name}`,
-        html: getAdminNotifHtml({ proposal, action: 'accepted' }),
+      const adminNote = mail.responseAdmin({ kind: 'Proposal', action: 'accepted', clientName: proposal.client_name, clientEmail: proposal.client_email, projectTitle: proposal.project_title, total: proposal.total, adminUrl: `${SITE_URL}/admin` })
+      const { error: mailErr_adminNote } = await resend.emails.send({ from: BRAND.adminFrom, to: BRAND.email, subject: adminNote.subject, html: adminNote.html, text: adminNote.text })
+      if (mailErr_adminNote) console.error('Email failed:', mailErr_adminNote)
+      const thanks = mail.proposalAcceptedClient({ proposal })
+      const { error: mailErr_thanks } = await resend.emails.send({ from: BRAND.from, to: proposal.client_email, subject: thanks.subject, html: thanks.html, text: thanks.text })
+      if (mailErr_thanks) console.error('Email failed:', mailErr_thanks)
+      // Full proposal copy to both. Payment wording follows the proposal's own terms version.
+      const accepted = { ...proposal, responded_at: proposal.responded_at || new Date().toISOString() }
+      const copy = mail.proposalCopy({
+        proposal: accepted,
+        paymentTitle: usesCurrentTerms(proposal) ? 'Payment schedule' : `Deposit (${proposal.deposit_pct}%)`,
+        paymentLines: usesCurrentTerms(proposal)
+          ? proposalPaymentLines(proposal, Number(proposal.total))
+          : [`$${(proposal.total * proposal.deposit_pct / 100).toLocaleString()} due at project start`],
       })
-      await resend.emails.send({
-        from: 'Alante Velez <alante@alantevelez.com>',
-        to: proposal.client_email,
-        subject: `Proposal accepted — next steps for ${proposal.project_title}`,
-        html: getClientConfirmHtml({ proposal }),
-      })
-      // Send full proposal copy to both
-      await resend.emails.send({
-        from: 'Alante Velez <alante@alantevelez.com>',
-        to: [proposal.client_email, 'alante@alantevelez.com'],
-        subject: `Your proposal — ${proposal.project_title}`,
-        html: getProposalCopyHtml({ proposal }),
-      })
+      const { error: mailErr_copy } = await resend.emails.send({ from: BRAND.from, to: [proposal.client_email, BRAND.email], subject: copy.subject, html: copy.html, text: copy.text })
+      if (mailErr_copy) console.error('Email failed:', mailErr_copy)
     } else {
-      await resend.emails.send({
-        from: 'Alante Velez <alante@alantevelez.com>',
-        to: 'alante@alantevelez.com',
-        subject: `Proposal declined — ${proposal.client_name}`,
-        html: getAdminNotifHtml({ proposal, action: 'declined', declineReason }),
-      })
+      const declined = mail.responseAdmin({ kind: 'Proposal', action: 'declined', clientName: proposal.client_name, clientEmail: proposal.client_email, projectTitle: proposal.project_title, total: proposal.total, declineReason, adminUrl: `${SITE_URL}/admin` })
+      const { error: mailErr_declined } = await resend.emails.send({ from: BRAND.adminFrom, to: BRAND.email, subject: declined.subject, html: declined.html, text: declined.text })
+      if (mailErr_declined) console.error('Email failed:', mailErr_declined)
     }
 
     return NextResponse.json({ success: true })
@@ -76,94 +74,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.error('Proposal respond error:', err)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
-}
-
-function getAdminNotifHtml({ proposal, action, declineReason }: any) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#FAF3E8;font-family:Georgia,serif}.wrap{max-width:600px;margin:0 auto;padding:40px 24px}.logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}.logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:28px}.divider{height:1px;background:rgba(169,104,96,0.2);margin:24px 0}.heading{font-size:22px;font-weight:700;color:#2A2420;margin-bottom:4px}.label{font-family:monospace;font-size:11px;color:#A96860;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;margin-top:12px}.value{font-size:14px;color:#2A2420;line-height:1.6;margin-bottom:4px}.footer{margin-top:40px;padding-top:20px;border-top:1px solid rgba(169,104,96,0.15)}.footer p{font-size:12px;color:#8B7D73;font-family:monospace}</style>
-</head><body><div class="wrap">
-  <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Admin Notification</div>
-  <div class="divider"></div>
-  <p class="heading">Proposal ${action} — ${proposal.client_name}</p>
-  <div class="label">Client</div><div class="value">${proposal.client_name} · ${proposal.client_email}</div>
-  <div class="label">Project</div><div class="value">${proposal.project_title}</div>
-  <div class="label">Total</div><div class="value">$${proposal.total.toLocaleString()}</div>
-  ${declineReason ? `<div class="label">Decline reason</div><div class="value">${declineReason}</div>` : ''}
-  ${action === 'accepted' ? '<div style="margin-top:20px;padding:14px 20px;background:#A96860;border-radius:6px;color:#FAF3E8;font-family:monospace;font-size:12px;letter-spacing:0.08em;">Send the contract next</div>' : ''}
-  <div class="footer"><p>alante@alantevelez.com · alantevelez.com</p></div>
-</div></body></html>`
-}
-
-function getClientConfirmHtml({ proposal }: any) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#FAF3E8;font-family:Georgia,serif}.wrap{max-width:600px;margin:0 auto;padding:48px 24px}.logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}.logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:40px}.divider{height:1px;background:rgba(169,104,96,0.2);margin:32px 0}.heading{font-size:32px;font-weight:700;color:#2A2420;line-height:1.1;margin-bottom:20px}.heading em{font-style:italic;color:#A96860}p{font-size:15px;line-height:1.75;color:#3D3630;margin-bottom:16px}.footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.15)}.footer p{font-size:12px;color:#8B7D73;font-family:monospace;letter-spacing:0.06em}</style>
-</head><body><div class="wrap">
-  <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Full Stack Web Developer</div>
-  <div class="divider"></div>
-  <h1 class="heading">Proposal<br><em>accepted.</em></h1>
-  <p>Hi ${proposal.client_name}, thank you for accepting the proposal for <strong>${proposal.project_title}</strong>.</p>
-  <p>Your contract will arrive shortly for your review and signature. Once signed, your deposit invoice will follow to officially kick off the project.</p>
-  <p>A full copy of your accepted proposal has been sent in a separate email for your records.</p>
-  <div class="footer"><p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p></div>
-</div></body></html>`
-}
-
-function getProposalCopyHtml({ proposal }: any) {
-  const lineItems: { description: string; price: string }[] = proposal.line_items || []
-  const lineItemRows = lineItems.map(item => `
-    <tr>
-      <td style="padding:12px 0;border-bottom:1px solid rgba(169,104,96,0.12);font-size:14px;color:#2A2420;">${item.description}</td>
-      <td style="padding:12px 0;border-bottom:1px solid rgba(169,104,96,0.12);font-size:14px;color:#2A2420;text-align:right;">$${Number(item.price).toLocaleString()}</td>
-    </tr>`).join('')
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#FAF3E8;font-family:Georgia,serif}.wrap{max-width:600px;margin:0 auto;padding:48px 24px}.logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}.logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:32px}.divider{height:1px;background:rgba(169,104,96,0.2);margin:28px 0}.section-label{font-family:monospace;font-size:11px;color:#A96860;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px;margin-top:24px}.value{font-size:14px;color:#2A2420;line-height:1.7}table{width:100%;border-collapse:collapse;margin-top:8px}.total-row td{padding:14px 0;font-size:15px;font-weight:700;color:#2A2420;border-top:2px solid rgba(169,104,96,0.3)}.scope-box{background:#fff8f0;border:1px solid rgba(169,104,96,0.2);padding:16px;margin-top:8px;font-size:13px;color:#3D3630;line-height:1.7}.footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.15)}.footer p{font-size:12px;color:#8B7D73;font-family:monospace;letter-spacing:0.06em}</style>
-</head><body><div class="wrap">
-  <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Proposal — Accepted Copy</div>
-  <div class="divider"></div>
-
-  <div class="section-label">Client</div>
-  <div class="value">${proposal.client_name}<br>${proposal.client_email}<br>${proposal.client_business}</div>
-
-  <div class="section-label">Project</div>
-  <div class="value">${proposal.project_title} · ${proposal.project_type}</div>
-
-  <div class="section-label">Project Understanding</div>
-  <div class="value">${proposal.understood}</div>
-
-  <div class="section-label">Scope of Work</div>
-  <table>
-    ${lineItemRows}
-    <tr class="total-row">
-      <td>Total</td>
-      <td style="text-align:right;">$${Number(proposal.total).toLocaleString()}</td>
-    </tr>
-  </table>
-
-  ${usesCurrentTerms(proposal)
-    ? `<div class="section-label">Payment schedule</div>
-  <div class="value">${proposalPaymentLines(proposal, Number(proposal.total)).join('<br>')}</div>`
-    : `<div class="section-label">Deposit (${proposal.deposit_pct}%)</div>
-  <div class="value">$${(proposal.total * proposal.deposit_pct / 100).toLocaleString()} due at project start</div>`}
-
-  <div class="section-label">Timeline</div>
-  <div class="value">${proposal.timeline}</div>
-
-  <div class="section-label">Out of Scope</div>
-  <div class="scope-box">${proposal.out_of_scope}</div>
-
-  <div class="section-label">Payment</div>
-  <div class="value">${proposal.payment_method}</div>
-
-  <div class="section-label">Next Steps</div>
-  <div class="value">${proposal.next_steps}</div>
-
-  <div class="section-label">Accepted</div>
-  <div class="value">${new Date(proposal.responded_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
-
-  <div class="footer"><p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p></div>
-</div></body></html>`
 }

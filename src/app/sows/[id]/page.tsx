@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { sowRevisionsText } from '@/lib/terms'
+import { DocShell } from '@/components/docs/DocShell'
+import { sowRevisionsText, usesCurrentTerms } from '@/lib/terms'
 
 type Milestone = { name: string; deliverables: string; dueDate: string; fee: string }
 type SOW = {
@@ -72,15 +73,8 @@ const STYLES = `
   .error-msg { font-family: 'DM Mono', monospace; font-size: 11px; color: #b04a4a; margin-top: 8px; text-align: right; }
 `
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <style>{STYLES}</style>
-      <div style={{background:'#FAF3E8', minHeight:'100vh'}}>
-        <div className="shell">{children}</div>
-      </div>
-    </>
-  )
+function Shell({ branded = true, children }: { branded?: boolean; children: React.ReactNode }) {
+  return <DocShell legacyStyles={STYLES} branded={branded}>{children}</DocShell>
 }
 
 export default function SOWPage() {
@@ -88,6 +82,8 @@ export default function SOWPage() {
   const id = params.id as string
   const [sow, setSOW] = useState<SOW | null>(null)
   const [loading, setLoading] = useState(true)
+  // Older documents keep the look they were issued with.
+  const branded = !sow || usesCurrentTerms(sow)
   const [error, setError] = useState('')
   const [responding, setResponding] = useState(false)
   const [done, setDone] = useState<'accepted' | 'declined' | null>(null)
@@ -127,12 +123,12 @@ export default function SOWPage() {
     return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   }
 
-  if (loading) return <Shell><div className="loading">Loading your statement of work...</div></Shell>
-  if (error) return <Shell><div className="error-state">{error}</div></Shell>
+  if (loading) return <Shell branded={branded}><div className="loading">Loading your statement of work...</div></Shell>
+  if (error) return <Shell branded={branded}><div className="error-state">{error}</div></Shell>
   if (!sow) return null
 
   if (sow.status === 'accepted' || done === 'accepted') return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="done-state">
         <div className="done-mark">✦</div>
         <h1 className="done-title">Statement of Work accepted.</h1>
@@ -142,7 +138,7 @@ export default function SOWPage() {
   )
 
   if (sow.status === 'declined' || done === 'declined') return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="done-state">
         <div className="done-mark" style={{color:'#8B7D73'}}>✦</div>
         <h1 className="done-title" style={{color:'#8B7D73'}}>Statement of Work declined.</h1>
@@ -152,7 +148,7 @@ export default function SOWPage() {
   )
 
   return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="top-bar">
         <div className="logo">Alante Velez</div>
         <div className="logo-sub">Statement of Work</div>

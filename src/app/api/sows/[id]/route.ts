@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
+import { BRAND } from '@/lib/brand'
+import * as mail from '@/lib/email/templates'
+import { SITE_URL } from '@/content/site'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -28,36 +31,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       decline_reason: declineReason || null,
     }).eq('id', id)
 
-    await resend.emails.send({
-      from: 'Alante Velez <alante@alantevelez.com>',
-      to: 'alante@alantevelez.com',
-      subject: `SOW ${action} — ${sow.client_name}`,
-      html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{background:#FAF3E8;font-family:Georgia,serif;padding:40px 24px}h2{color:#2A2420;margin-bottom:12px}.label{font-family:monospace;font-size:11px;color:#A96860;letter-spacing:0.1em;text-transform:uppercase;margin-top:12px;margin-bottom:4px}.value{font-size:14px;color:#2A2420}.next{margin-top:20px;padding:14px 20px;background:#A96860;color:#FAF3E8;font-family:monospace;font-size:12px;border-radius:4px;letter-spacing:0.08em}</style></head>
-<body>
-<h2>SOW ${action} — ${sow.client_name}</h2>
-<div class="label">Project</div><div class="value">${sow.project_title}</div>
-<div class="label">Total</div><div class="value">$${sow.total.toLocaleString()}</div>
-${declineReason ? `<div class="label">Decline reason</div><div class="value">${declineReason}</div>` : ''}
-${action === 'accepted' ? '<div class="next">Send the contract next</div>' : ''}
-</body></html>`,
-    })
+    const sowNote = mail.responseAdmin({ kind: 'SOW', action, clientName: sow.client_name, clientEmail: sow.client_email, projectTitle: sow.project_title, total: sow.total, declineReason, adminUrl: `${SITE_URL}/admin` })
+    const { error: mailErr_sowNote } = await resend.emails.send({ from: BRAND.adminFrom, to: BRAND.email, subject: sowNote.subject, html: sowNote.html, text: sowNote.text })
+    if (mailErr_sowNote) console.error('Email failed:', mailErr_sowNote)
 
     if (action === 'accepted') {
-      await resend.emails.send({
-        from: 'Alante Velez <alante@alantevelez.com>',
-        to: sow.client_email,
-        subject: `Statement of Work accepted — ${sow.project_title}`,
-        html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{background:#FAF3E8;font-family:Georgia,serif;padding:48px 24px}.logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}.logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:40px}.divider{height:1px;background:rgba(169,104,96,0.2);margin:32px 0}h1{font-size:32px;font-weight:700;color:#2A2420;margin-bottom:20px}h1 em{font-style:italic;color:#A96860}p{font-size:15px;line-height:1.75;color:#3D3630;margin-bottom:16px}.footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.2);font-family:monospace;font-size:12px;color:#8B7D73}</style></head>
-<body>
-<div class="logo">Alante Velez</div>
-<div class="logo-sub">Full Stack Web Developer</div>
-<div class="divider"></div>
-<h1>SOW<br><em>accepted.</em></h1>
-<p>Hi ${sow.client_name}, thank you for accepting the Statement of Work for <strong>${sow.project_title}</strong>.</p>
-<p>Your contract will arrive shortly for your review and signature. Once signed, your deposit invoice will follow to officially kick off the project.</p>
-<div class="footer">alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</div>
-</body></html>`,
-      })
+      const sowThanks = mail.sowAcceptedClient({ clientName: sow.client_name, projectTitle: sow.project_title })
+      const { error: mailErr_sowThanks } = await resend.emails.send({ from: BRAND.from, to: sow.client_email, subject: sowThanks.subject, html: sowThanks.html, text: sowThanks.text })
+      if (mailErr_sowThanks) console.error('Email failed:', mailErr_sowThanks)
     }
 
     return NextResponse.json({ success: true })

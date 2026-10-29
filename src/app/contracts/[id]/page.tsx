@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { balanceLabel, contractPaymentClausePage, contractRevisionsClausePage, contractServicesClause, contractWarrantyClausePage, depositLabel } from '@/lib/terms'
+import { DocShell } from '@/components/docs/DocShell'
+import { balanceLabel, contractPaymentClausePage, contractRevisionsClausePage, contractServicesClause, contractWarrantyClausePage, depositLabel, usesCurrentTerms } from '@/lib/terms'
 
 type Contract = {
   id: string
@@ -71,15 +72,8 @@ const STYLES = `
   .error-msg { font-family: 'DM Mono', monospace; font-size: 11px; color: #b04a4a; margin-top: 8px; text-align: right; }
 `
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <style>{STYLES}</style>
-      <div style={{background:'#FAF3E8', minHeight:'100vh'}}>
-        <div className="shell">{children}</div>
-      </div>
-    </>
-  )
+function Shell({ branded = true, children }: { branded?: boolean; children: React.ReactNode }) {
+  return <DocShell legacyStyles={STYLES} branded={branded}>{children}</DocShell>
 }
 
 export default function ContractPage() {
@@ -87,6 +81,8 @@ export default function ContractPage() {
   const id = params.id as string
   const [contract, setContract] = useState<Contract | null>(null)
   const [loading, setLoading] = useState(true)
+  // Older documents keep the look they were issued with.
+  const branded = !contract || usesCurrentTerms(contract)
   const [error, setError] = useState('')
   const [signing, setSigning] = useState(false)
   const [done, setDone] = useState(false)
@@ -185,12 +181,12 @@ export default function ContractPage() {
     return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   }
 
-  if (loading) return <Shell><div className="loading">Loading your contract...</div></Shell>
-  if (error && !contract) return <Shell><div className="error-state">{error}</div></Shell>
+  if (loading) return <Shell branded={branded}><div className="loading">Loading your contract...</div></Shell>
+  if (error && !contract) return <Shell branded={branded}><div className="error-state">{error}</div></Shell>
   if (!contract) return null
 
   if (contract.status === 'signed' || done) return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="done-state">
         <div className="done-mark">✦</div>
         <h1 className="done-title">Contract signed.</h1>
@@ -215,7 +211,7 @@ export default function ContractPage() {
   ]
 
   return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="top-bar">
         <div className="logo">Alante Velez</div>
         <div className="logo-sub">Freelance Web Development Agreement</div>

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import jsPDF from 'jspdf'
+import { createBrandedPdf } from '@/lib/pdf/writer'
 import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, additionalWorkSentence, contractPaymentClausePdf, contractRevisionsClausePdf, contractServicesClause, contractWarrantyClausePdf, formatRate, proposalPaymentLines, type PaymentPlan } from '@/lib/terms'
 
 const CURRENT_TERMS = { terms_version: TERMS_VERSION, hourly_rate: STANDARD_HOURLY_RATE }
@@ -24,6 +25,49 @@ type Submission = {
   project_type: string; description: string; budget: string | null
   timeline: string | null; heard_from: string; priority: string | null
   notes: string | null; status: string; submitted_at: string
+  // Intake flow (20261028_intake_flow.sql). Absent on rows saved before the migration.
+  stage?: 'inquiry' | 'details' | 'merged' | null; source?: string | null; interest?: string | null
+  inquiry_note?: string | null; details?: Record<string, string | string[]> | null
+  details_completed_at?: string | null; linked_submission_id?: string | null
+}
+
+/** Where a lead is: short note, details completed, call booked. Rows saved before the intake flow count as details completed. */
+function leadSteps(s: Submission | null | undefined, booked: boolean) {
+  const hasDetails = s?.stage ? s.stage === 'details' : true
+  return [
+    { label: 'Short note', done: Boolean(s && (s.source === 'homepage' || s.inquiry_note || s.linked_submission_id || s.stage === 'inquiry')), optional: true },
+    { label: 'Details completed', done: hasDetails },
+    { label: 'Call booked', done: booked },
+  ]
+}
+function leadStageLabel(s: Submission, booked = false) {
+  if (booked) return 'Call booked'
+  if (s.stage === 'inquiry') return 'Short note only'
+  return 'Details completed'
+}
+const DETAIL_LABELS: Record<string, string> = {
+  interest: 'Interested in', existing: 'Has a website now', website: 'Current website', platform: 'Site platform',
+  assets: 'Assets ready', integrations: 'Integrations', references: 'Sites they like',
+}
+function detailFields(s: Submission | null | undefined) {
+  const out: { label: string; val: string }[] = []
+  if (s?.inquiry_note && s.inquiry_note !== s.description) out.push({ label: 'Original short note', val: s.inquiry_note })
+  Object.entries(s?.details || {}).forEach(([k, v]) => {
+    const val = Array.isArray(v) ? v.join(', ') : String(v ?? '')
+    if (val) out.push({ label: DETAIL_LABELS[k] || k, val })
+  })
+  return out
+}
+function LeadProgress({ s, booked, d }: { s: Submission | null | undefined; booked: boolean; d: Record<string, string> }) {
+  return (
+    <ol aria-label="Lead progress" style={{display:'flex',gap:6,flexWrap:'wrap',listStyle:'none',padding:0,margin:'12px 0 0'}}>
+      {leadSteps(s, booked).map(step => (
+        <li key={step.label} style={{fontSize:10,letterSpacing:'0.04em',padding:'3px 8px',borderRadius:999,background:step.done?d.accent:d.white,color:step.done?'#fff':d.text3,border:'1px solid '+(step.done?d.accent:d.border)}}>
+          {step.done ? '\u2713 ' : ''}{step.label}{!step.done && step.optional ? ' (skipped)' : ''}
+        </li>
+      ))}
+    </ol>
+  )
 }
 type Booking = {
   id: string; intake_id: string; scheduled_at: string
@@ -265,7 +309,8 @@ export default function AdminDashboard() {
   }
   async function fetchUnbooked() {
     const { data } = await supabase.from('intake_submissions').select('*').eq('status','pending').order('submitted_at',{ascending:false})
-    setUnbooked(data || [])
+    // A short note that was later completed through the questionnaire is shown once, on the completed lead.
+    setUnbooked((data || []).filter((s: Submission) => s.stage !== 'merged'))
   }
   async function fetchClients() {
     const { data } = await supabase.from('clients').select('*').order('created_at',{ascending:false})
@@ -528,7 +573,7 @@ export default function AdminDashboard() {
   }
 
   function generateFixedFeePDF(clientName: string, fee: number) {
-    const { addLine, addSpace, addDivider, save } = makePDF()
+    const { addLine, addSpace, addDivider, save } = makePDF({ docType: 'Invoice', title: 'Invoice #' + fixedFeeForm.invoice_number, subtitle: 'Prepared for ' + clientName })
     addLine('INVOICE', 16, true, true)
     addLine('Alante Velez | Full Stack Web Developer', 10)
     addDivider(); addSpace()
@@ -550,7 +595,8 @@ export default function AdminDashboard() {
   }
 
   function generateMilestonePDF(clientName: string, clientEmail: string, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
-    const { addLine, addSpace, addDivider, save } = makePDF()
+    // Existing milestone records: original layout unless created after the styling cutoff.
+    const { addLine, addSpace, addDivider, save } = makePDF(brandedRecord(milestone.created_at) ? { docType: 'Invoice', title: 'Invoice #' + invoiceNumber, subtitle: 'Milestone ' + (index+1) + ' of ' + totalCount + ' for ' + clientName } : undefined)
     addLine('INVOICE', 16, true, true)
     addLine('Alante Velez | Full Stack Web Developer', 10)
     addDivider(); addSpace()
@@ -671,7 +717,41 @@ export default function AdminDashboard() {
     await fetchDocuments()
   }
 
-  function makePDF() {
+  /**
+   * PDF builder. With `brand`, the document uses the studio layout (header band,
+   * page numbers, headings that stay with their text). Without it, the original
+   * layout is used, which is kept for downloading records created before the
+   * new styling so they match what the client originally received.
+   */
+  /** The document was saved but the email didn't send: say so, with the link to share by hand. */
+  async function emailFailed(res: Response, kind: 'proposal' | 'sow' | 'contract') {
+    const data = await res.json().catch(() => ({}))
+    if (data?.emailed !== false) return false
+    const name = kind === 'sow' ? 'Statement of work' : kind === 'proposal' ? 'Proposal' : 'Contract'
+    const message = `${name} saved, but the email didn't send. Share this link with the client yourself: ${data.url || 'open it from the documents list'}`
+    setDocError({ kind, message })
+    if (kind === 'sow') alert(message) // the SOW form has no inline error area
+    return true
+  }
+
+  function makePDF(brand?: { docType: string; title: string; subtitle?: string }) {
+    if (brand) {
+      const pdf = createBrandedPdf(brand)
+      const clean = (s: string) => s.replace(/\s+[\u2013\u2014]\s+/g, ': ')
+      const addLine = (text: string, size=11, bold=false, accent=false) => {
+        if (accent && size >= 14) return // the document title lives in the header band
+        if (/^Alante Velez\s*\|/.test(text) || /^alante@alantevelez\.com/.test(text)) return // already in the header and footer
+        if (/^Prepared: /.test(text)) return // the date is in the subtitle
+        if (accent && bold) {
+          if (/^SIGNATURES$/.test(text)) pdf.ensure(70) // keep the signature lines with their heading
+          pdf.heading(clean(text)); return
+        }
+        pdf.text(clean(text), { size: size === 11 ? 10.5 : size, bold, color: bold ? 'ink' : 'inkSoft', gap: 0.9 })
+      }
+      const addSpace = (n=1) => pdf.space(n * 3.4)
+      const addDivider = () => pdf.divider()
+      return { doc: pdf.doc, addLine, addSpace, addDivider, save: (name: string) => { pdf.finish(); pdf.doc.save(name) } }
+    }
     const doc = new jsPDF()
     const lm = 20, rm = 190, lineH = 7
     let y = 20
@@ -691,6 +771,12 @@ export default function AdminDashboard() {
       doc.line(lm, y, rm, y); y += lineH
     }
     return { doc, addLine, addSpace, addDivider, save: (name: string) => doc.save(name) }
+  }
+
+  /** Records created on or after NEXT_PUBLIC_DOC_BRAND_SINCE (ISO date) download in the studio layout. Older ones keep the original. */
+  function brandedRecord(createdAt?: string | null) {
+    const since = process.env.NEXT_PUBLIC_DOC_BRAND_SINCE
+    return Boolean(since && createdAt && createdAt >= since)
   }
 
   function openPreview(doc: PreviewDoc, action: 'download'|'send', onConfirm: () => void) {
@@ -786,7 +872,7 @@ export default function AdminDashboard() {
     const f = proposalForm
     const validItems = lineItems.filter(i => i.description && i.price)
     const total = validItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0)
-    const { addLine, addSpace, addDivider, save } = makePDF()
+    const { addLine, addSpace, addDivider, save } = makePDF({ docType: 'Project proposal', title: f.project_title || 'Project proposal', subtitle: 'Prepared for ' + (f.client_business || f.client_name) + ' on ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) })
     addLine('PROJECT PROPOSAL', 16, true, true)
     addLine('Alante Velez  |  Full Stack Web Developer', 10)
     addLine('alante@alantevelez.com  |  alantevelez.com', 10)
@@ -895,6 +981,8 @@ export default function AdminDashboard() {
       })
       if (!res.ok) {
         setDocError({ kind: 'proposal', message: await apiError(res) })
+      } else if (await emailFailed(res, 'proposal')) {
+        // Saved, but the email didn't go out. The message in docError has the link to share.
       } else {
         setProposalSent(true)
         setTimeout(() => setProposalSent(false), 3000)
@@ -947,6 +1035,8 @@ export default function AdminDashboard() {
         const message = await apiError(res)
         setDocError({ kind: 'sow', message })
         alert(message)
+      } else if (await emailFailed(res, 'sow')) {
+        // Saved, but not emailed. See docError.
       } else {
         setSOWSent(true)
         setTimeout(() => setSOWSent(false), 3000)
@@ -957,7 +1047,7 @@ export default function AdminDashboard() {
 
   function generateSOWDoc() {
     const f = sowForm
-    const { addLine, addSpace, addDivider, save } = makePDF()
+    const { addLine, addSpace, addDivider, save } = makePDF({ docType: 'Statement of work', title: f.project_title || 'Statement of work', subtitle: 'Prepared for ' + f.client_name })
     addLine('STATEMENT OF WORK', 16, true, true)
     addLine('Alante Velez | Full Stack Web Developer', 10)
     addDivider(); addSpace()
@@ -995,9 +1085,12 @@ export default function AdminDashboard() {
     save('SOW_' + f.client_name.replace(/\s+/g,'_') + '.pdf')
   }
 
-  function generateClientInvoicePDF(clientName: string, clientEmail: string, type: string, totalFee: number, depositAmount: number) {
-    const f = clientInvoiceForm
-    const { addLine, addSpace, addDivider, save } = makePDF()
+  function generateClientInvoicePDF(clientName: string, clientEmail: string, type: string, totalFee: number, depositAmount: number, branded = true, inv?: Invoice) {
+    // Re-downloading a saved invoice uses that invoice's own details, not whatever is in the form.
+    const f = inv
+      ? { invoice_number: inv.invoice_number, due_date: inv.due_date || '', service_desc: inv.service_desc || '', hours: String(inv.hours ?? ''), hourly_rate: String(inv.hourly_rate ?? '') }
+      : clientInvoiceForm
+    const { addLine, addSpace, addDivider, save } = makePDF(branded ? { docType: 'Invoice', title: 'Invoice #' + f.invoice_number, subtitle: 'Prepared for ' + clientName } : undefined)
     addLine('INVOICE', 16, true, true)
     addLine('Alante Velez | Full Stack Web Developer', 10)
     addDivider(); addSpace()
@@ -1081,6 +1174,8 @@ export default function AdminDashboard() {
       })
       if (!res.ok) {
         setDocError({ kind: 'contract', message: await apiError(res) })
+      } else if (await emailFailed(res, 'contract')) {
+        // Saved, but not emailed. See docError.
       } else {
         setContractSent(true)
         setTimeout(() => setContractSent(false), 3000)
@@ -1094,7 +1189,7 @@ export default function AdminDashboard() {
 
   function generateContractDoc() {
     const f = contractForm
-    const { addLine, addSpace, addDivider, save } = makePDF()
+    const { addLine, addSpace, addDivider, save } = makePDF({ docType: 'Agreement', title: 'Freelance Web Development Agreement', subtitle: (f.project_title ? f.project_title + ' for ' : 'Prepared for ') + (f.client_business || f.client_name) })
     addLine('FREELANCE WEB DEVELOPMENT AGREEMENT', 16, true, true)
     addLine('Alante Velez | Full Stack Web Developer', 10)
     addLine('Effective Date: ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}), 10)
@@ -1523,6 +1618,7 @@ export default function AdminDashboard() {
                           <div style={{flex:1}}>
                             <div className="si-name" style={{color:d.text}}>{s.name}</div>
                             <div className="si-type" style={{color:d.text2}}>{s.project_type}</div>
+                            <div className="si-type" style={{color:s.stage==='inquiry'?d.text3:d.accent,fontWeight:600}}>{leadStageLabel(s)}</div>
                           </div>
                           <div className="si-meta" style={{color:d.text3}}>{fmtRelative(s.submitted_at)}</div>
                           <div className="si-meta" style={{color:d.accent}}>{s.budget||'TBD'}</div>
@@ -1987,7 +2083,7 @@ export default function AdminDashboard() {
                     <div className="form-grid">
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Invoice number</div><input style={inputStyle} value={contractForm.invoice_number} onChange={e=>setContractForm({...contractForm,invoice_number:e.target.value})} placeholder="INV-2026-001"/></div>
                       <div className="form-group"><div className="form-label" style={{color:d.text3}}>Due date</div><input style={inputStyle} type="date" value={contractForm.invoice_due_date} onChange={e=>setContractForm({...contractForm,invoice_due_date:e.target.value})}/></div>
-                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Service description</div><input style={inputStyle} value={contractForm.invoice_service_desc} onChange={e=>setContractForm({...contractForm,invoice_service_desc:e.target.value})} placeholder="Project name — Deposit to begin"/></div>
+                      <div className="form-group" style={{gridColumn:'1/-1'}}><div className="form-label" style={{color:d.text3}}>Service description</div><input style={inputStyle} value={contractForm.invoice_service_desc} onChange={e=>setContractForm({...contractForm,invoice_service_desc:e.target.value})} placeholder="Project name: deposit to begin"/></div>
                     </div>
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>
@@ -2180,6 +2276,7 @@ export default function AdminDashboard() {
                       </div>
                       <div className="rtb-cd">{countdown(focusedBooking.scheduled_at)}</div>
                     </div>
+                    <LeadProgress s={focusedBooking.intake_submissions} booked d={d}/>
                   </div>
                   <div className="rp-fields">
                     {[
@@ -2190,6 +2287,7 @@ export default function AdminDashboard() {
                       ...(focusedBooking.intake_submissions?.priority?[{label:'Priority',val:focusedBooking.intake_submissions.priority}]:[]),
                       ...(focusedBooking.intake_submissions?.notes?[{label:'Notes',val:focusedBooking.intake_submissions.notes}]:[]),
                       {label:'Found via',val:focusedBooking.intake_submissions?.heard_from},
+                      ...detailFields(focusedBooking.intake_submissions),
                     ].map((f,i)=>(
                       <div key={i}><div className="rf-label">{f.label}</div><div className="rf-val" style={{color:d.text}}>{f.val}</div></div>
                     ))}
@@ -2202,11 +2300,12 @@ export default function AdminDashboard() {
               ) : focusedSub ? (
                 <>
                   <div className="rp-card" style={{background:d.linen}}>
-                    <div className="rp-eyebrow">No Call Booked</div>
+                    <div className="rp-eyebrow">{focusedSub.stage==='inquiry'?'Short Note, No Details Yet':'Details Completed, No Call Yet'}</div>
                     <div className="rp-name" style={{color:d.text}}>{focusedSub.name}</div>
                     <div className="rp-meta" style={{color:d.text2}}>{focusedSub.email}</div>
                     {focusedSub.business&&<div className="rp-meta" style={{color:d.text2}}>{focusedSub.business}</div>}
-                    <div style={{marginTop:10,fontSize:11,color:d.text3}}>Submitted {fmtRelative(focusedSub.submitted_at)}</div>
+                    <div style={{marginTop:10,fontSize:11,color:d.text3}}>Submitted {fmtRelative(focusedSub.submitted_at)}{focusedSub.details_completed_at?' · Details '+fmtRelative(focusedSub.details_completed_at):''}</div>
+                    <LeadProgress s={focusedSub} booked={false} d={d}/>
                   </div>
                   <div className="rp-fields">
                     {[
@@ -2217,6 +2316,7 @@ export default function AdminDashboard() {
                       ...(focusedSub.priority?[{label:'Priority',val:focusedSub.priority}]:[]),
                       ...(focusedSub.notes?[{label:'Notes',val:focusedSub.notes}]:[]),
                       {label:'Found via',val:focusedSub.heard_from},
+                      ...detailFields(focusedSub),
                     ].map((f,i)=>(
                       <div key={i}><div className="rf-label">{f.label}</div><div className="rf-val" style={{color:d.text}}>{f.val}</div></div>
                     ))}
@@ -2571,7 +2671,7 @@ export default function AdminDashboard() {
               ))}
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button className="btn-save" style={{flex:1,background:d.surface2,color:d.text}} onClick={()=>{generateClientInvoicePDF('Client','',viewingInvoice.invoice_type,viewingInvoice.total_fee||viewingInvoice.amount,viewingInvoice.deposit_amount||0)}}>Download PDF</button>
+              <button className="btn-save" style={{flex:1,background:d.surface2,color:d.text}} onClick={()=>{const c=clients.find(x=>x.id===viewingInvoice.client_id);generateClientInvoicePDF(c?.name||'Client',c?.email||'',viewingInvoice.invoice_type,viewingInvoice.total_fee||viewingInvoice.amount,viewingInvoice.deposit_amount||0,brandedRecord(viewingInvoice.created_at),viewingInvoice)}}>Download PDF</button>
               <button className="btn-cancel" style={{flex:1,borderColor:d.border,color:d.text2}} onClick={()=>setViewingInvoice(null)}>Close</button>
             </div>
           </div>

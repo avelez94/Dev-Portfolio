@@ -2367,6 +2367,527 @@ details[open] > summary .summaryIcon {
   font-size: 0.97rem;
 }
 
+/* Homepage next step and questionnaire callout */
+.nextStep {
+  margin-top: 22px;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  background: var(--teal-soft);
+  border: 2px solid var(--ink);
+}
+
+.nextStepTitle {
+  font: 600 1.25rem/1.2 var(--display);
+  font-variation-settings: 'SOFT' 100;
+  color: var(--ink);
+  margin-bottom: 4px !important;
+}
+
+.questionnaireCallout {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--teal);
+  color: var(--ink-soft);
+  max-width: 46ch;
+}
+
+.questionnaireCallout a {
+  font-weight: 700;
+  color: var(--coral-deep);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------------
+   Questionnaire and booking flow
+   --------------------------------------------------------------------- */
+
+.flowShell {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 56px) var(--gutter) clamp(56px, 8vw, 96px);
+}
+
+.flowHead {
+  margin-bottom: 26px;
+}
+
+.flowTitle {
+  font-family: var(--display);
+  font-weight: 650;
+  font-variation-settings: 'SOFT' 100;
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.flowTitle em {
+  font-style: italic;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  color: var(--coral-deep);
+}
+
+.flowLede {
+  margin-top: 14px;
+  max-width: 60ch;
+  color: var(--ink-soft);
+  font-size: 1.08rem;
+}
+
+.flowLede a,
+.flowAside a,
+.flowNotice a,
+.calNote a {
+  font-weight: 700;
+  color: var(--coral-deep);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.flowNotice {
+  margin: 0 0 22px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: var(--teal-soft);
+  border: 1.5px solid var(--teal);
+  color: var(--ink);
+}
+
+.flowCard {
+  padding: clamp(22px, 3.6vw, 38px);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 10px 10px 0 var(--coral);
+}
+
+.flowNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1.5px dashed var(--line);
+}
+
+.flowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.flowAside {
+  margin-top: 24px;
+  color: var(--ink-soft);
+  font-size: 0.97rem;
+}
+
+.stepper {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.stepper li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  min-width: 0;
+}
+
+.stepDot {
+  flex: 0 0 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--line);
+  background: var(--paper);
+  font: 700 0.9rem/1 var(--sans);
+}
+
+.stepLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepCurrent {
+  color: var(--ink) !important;
+}
+
+.stepCurrent .stepDot {
+  border-color: var(--ink);
+  background: var(--coral);
+}
+
+.stepDone .stepDot {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-deep);
+}
+
+.progressBar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--rose-soft);
+  margin-bottom: 26px;
+  overflow: hidden;
+}
+
+.progressBar span {
+  display: block;
+  height: 100%;
+  background: var(--coral);
+  border-radius: inherit;
+  transition: width 0.35s ease;
+}
+
+.stepCount {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--teal);
+}
+
+.stepTitle {
+  font: 600 clamp(1.6rem, 3vw, 2.1rem) / 1.15 var(--display);
+  font-variation-settings: 'SOFT' 100;
+  margin: 4px 0 22px;
+}
+
+.stepTitle:focus {
+  outline: none;
+}
+
+.qGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.hint {
+  margin: -2px 0 2px;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.choiceSet {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.choiceSet legend {
+  font-weight: 700;
+  font-size: 0.98rem;
+  margin-bottom: 10px;
+  padding: 0;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.choice {
+  position: relative;
+  display: inline-flex;
+}
+
+.choice input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.choice span {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1.5px solid #8f7e75;
+  background: #fff;
+  font-weight: 600;
+  font-size: 0.97rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.choice input:hover + span {
+  border-color: var(--ink);
+}
+
+.choice input:checked + span {
+  background: var(--coral-soft);
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.choice input:checked + span::before {
+  content: '✓ ';
+  color: var(--coral-deep);
+}
+
+.choice input:focus-visible + span {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.choice input[aria-invalid='true'] + span {
+  border-color: var(--coral-deep);
+}
+
+.originalNote {
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: var(--cream);
+  border: 1.5px dashed var(--rose);
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.originalNoteLabel {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--teal);
+  margin-bottom: 4px !important;
+  white-space: normal;
+}
+
+.callInfo {
+  padding: 18px 22px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  margin-bottom: 22px;
+}
+
+.callInfoTitle {
+  font: 600 1.25rem/1.2 var(--display);
+  font-variation-settings: 'SOFT' 100;
+  margin-bottom: 10px;
+}
+
+.callMeta {
+  margin-top: 12px;
+  font-size: 0.93rem;
+  font-weight: 600;
+  color: var(--teal-deep);
+}
+
+.calendarCard {
+  padding: clamp(18px, 3vw, 28px);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 8px 8px 0 var(--teal);
+}
+
+.calHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.calMonth {
+  font: 600 1.4rem/1.2 var(--display);
+  font-variation-settings: 'SOFT' 100;
+}
+
+.calNav {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  font: 700 1.4rem/1 var(--sans);
+  cursor: pointer;
+}
+
+.calNav:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.calWeek,
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calWeek span {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  padding-bottom: 6px;
+}
+
+.calDay {
+  aspect-ratio: 1;
+  min-height: 40px;
+  border-radius: 14px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  font: 600 1rem/1 var(--sans);
+  color: #a3958d;
+}
+
+.calDayOpen {
+  background: var(--teal-soft);
+  border-color: var(--teal);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.calDayOpen:hover {
+  border-color: var(--ink);
+}
+
+.calDaySelected {
+  background: var(--coral) !important;
+  border-color: var(--ink) !important;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.calNote {
+  margin-top: 12px;
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+}
+
+.calError {
+  padding: 10px 2px;
+}
+
+.timeSet {
+  border: 0;
+  padding: 0;
+  margin: 24px 0 0;
+}
+
+.timeSet legend {
+  font: 600 1.25rem/1.2 var(--display);
+  font-variation-settings: 'SOFT' 100;
+  margin-bottom: 12px;
+}
+
+.timeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+}
+
+.timeChoice {
+  position: relative;
+  display: block;
+}
+
+.timeChoice input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.timeChoice span {
+  display: block;
+  text-align: center;
+  padding: 12px 8px;
+  border-radius: 14px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  font-weight: 700;
+}
+
+.timeChoice input:checked + span {
+  background: var(--coral);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.timeChoice input:focus-visible + span {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.bookedSummary {
+  margin: 22px 0 6px;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  background: var(--cream);
+  border: 1.5px solid var(--line);
+  border-left: 5px solid var(--coral);
+}
+
+.bookedLabel {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--teal);
+}
+
+.bookedWhen {
+  font: 600 1.5rem/1.2 var(--display);
+  font-variation-settings: 'SOFT' 100;
+  margin: 4px 0 !important;
+}
+
+@media (max-width: 640px) {
+  .qGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stepLabel {
+    display: none;
+  }
+
+  .stepCurrent .stepLabel {
+    display: inline;
+  }
+
+  .stepper {
+    grid-auto-columns: auto;
+    grid-auto-flow: column;
+    justify-content: start;
+  }
+
+  .flowCard {
+    box-shadow: 6px 6px 0 var(--coral);
+  }
+
+  .calendarCard {
+    box-shadow: 5px 5px 0 var(--teal);
+  }
+
+  .calDay {
+    border-radius: 10px;
+    min-height: 38px;
+  }
+
+  .flowNav .btn,
+  .flowActions .btn {
+    width: 100%;
+  }
+}
+
 /* ---------------------------------------------------------------------
    Responsive
    --------------------------------------------------------------------- */

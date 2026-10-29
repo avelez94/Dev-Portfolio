@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import { DocShell } from '@/components/docs/DocShell'
 import { proposalChangeOrderLine, proposalPaymentLines, usesCurrentTerms } from '@/lib/terms'
 
 type LineItem = { description: string; price: number }
@@ -66,17 +67,16 @@ const STYLES = `
   .loading { text-align: center; padding: 80px 0; font-family: 'DM Mono', monospace; font-size: 12px; color: #8B7D73; letter-spacing: 0.1em; text-transform: uppercase; }
   .error-state { text-align: center; padding: 80px 0; font-size: 14px; color: #8B7D73; }
   .error-msg { font-family: 'DM Mono', monospace; font-size: 11px; color: #b04a4a; margin-top: 8px; text-align: right; }
+  .ms { padding-bottom: 16px; margin-bottom: 16px; }
+  .ms-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .ms-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: #2A2420; }
+  .ms-fee { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600; color: #A96860; }
+  .ms-due { font-family: 'DM Mono', monospace; font-size: 10px; color: #8B7D73; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .ms-deliverables { font-size: 13px; line-height: 1.65; color: #3D3630; white-space: pre-wrap; }
 `
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <style>{STYLES}</style>
-      <div style={{background:'#FAF3E8', minHeight:'100vh'}}>
-        <div className="shell">{children}</div>
-      </div>
-    </>
-  )
+function Shell({ branded = true, children }: { branded?: boolean; children: React.ReactNode }) {
+  return <DocShell legacyStyles={STYLES} branded={branded}>{children}</DocShell>
 }
 
 export default function ProposalPage() {
@@ -84,6 +84,8 @@ export default function ProposalPage() {
   const id = params.id as string
   const [proposal, setProposal] = useState<Proposal | null>(null)
   const [loading, setLoading] = useState(true)
+  // Older documents keep the look they were issued with.
+  const branded = !proposal || usesCurrentTerms(proposal)
   const [error, setError] = useState('')
   const [responding, setResponding] = useState(false)
   const [done, setDone] = useState<'accepted' | 'declined' | null>(null)
@@ -120,12 +122,12 @@ export default function ProposalPage() {
 
   const deposit = proposal ? proposal.total * (proposal.deposit_pct / 100) : 0
 
-  if (loading) return <Shell><div className="loading">Loading your proposal...</div></Shell>
-  if (error) return <Shell><div className="error-state">{error}</div></Shell>
+  if (loading) return <Shell branded={branded}><div className="loading">Loading your proposal...</div></Shell>
+  if (error) return <Shell branded={branded}><div className="error-state">{error}</div></Shell>
   if (!proposal) return null
 
   if (proposal.status === 'accepted' || done === 'accepted') return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="done-state">
         <div className="done-mark">✦</div>
         <h1 className="done-title">Proposal accepted.</h1>
@@ -135,7 +137,7 @@ export default function ProposalPage() {
   )
 
   if (proposal.status === 'declined' || done === 'declined') return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="done-state">
         <div className="done-mark" style={{color:'#8B7D73'}}>✦</div>
         <h1 className="done-title" style={{color:'#8B7D73'}}>Proposal declined.</h1>
@@ -145,7 +147,7 @@ export default function ProposalPage() {
   )
 
   return (
-    <Shell>
+    <Shell branded={branded}>
       <div className="top-bar">
         <div className="logo">Alante Velez</div>
         <div className="logo-sub">Project Proposal</div>
@@ -217,13 +219,13 @@ export default function ProposalPage() {
         <div className="card">
           <div className="eyebrow">Milestone schedule</div>
           {proposal.milestones.map((m: any, i: number) => (
-            <div key={i} style={{borderBottom: i < proposal.milestones.length - 1 ? '1px solid rgba(169,104,96,0.1)' : 'none', paddingBottom: 16, marginBottom: 16}}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
-                <div style={{fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:'#2A2420'}}>{m.name}</div>
-                <div style={{fontFamily:"'DM Mono', monospace", fontSize:13, fontWeight:600, color:'#A96860'}}>${Number(m.fee).toLocaleString()}</div>
+            <div key={i} className="ms" style={{borderBottom: i < proposal.milestones.length - 1 ? '1px solid rgba(169,104,96,0.1)' : 'none'}}>
+              <div className="ms-head">
+                <div className="ms-name">{m.name}</div>
+                <div className="ms-fee">${Number(m.fee).toLocaleString()}</div>
               </div>
-              {m.dueDate && <div style={{fontFamily:"'DM Mono', monospace", fontSize:10, color:'#8B7D73', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6}}>Due: {new Date(m.dueDate + 'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>}
-              {m.deliverables && <div style={{fontSize:13, lineHeight:1.65, color:'#3D3630', whiteSpace:'pre-wrap'}}>{m.deliverables}</div>}
+              {m.dueDate && <div className="ms-due">Due: {new Date(m.dueDate + 'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>}
+              {m.deliverables && <div className="ms-deliverables">{m.deliverables}</div>}
             </div>
           ))}
         </div>

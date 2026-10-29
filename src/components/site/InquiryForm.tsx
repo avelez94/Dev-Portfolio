@@ -38,7 +38,7 @@ function validate(f: Fields): Errors {
 
 const order: (keyof Fields)[] = ['name', 'email', 'business', 'website', 'interest', 'description', 'budget', 'timeline']
 
-type Result = { id: string; emailed: boolean; firstName: string; email: string }
+type Result = { next: string; emailed: boolean; firstName: string; email: string }
 
 /** Reads ?interest= from the URL. Wrap in <Suspense> with <InquiryForm interestParam={null} /> as fallback. */
 export default function InquiryFormFromUrl() {
@@ -116,6 +116,8 @@ export function InquiryForm({ interestParam }: { interestParam: InterestKey | nu
           heard: 'Portfolio site',
           anything: website ? `Existing website: ${website}` : '',
           source: 'homepage',
+          interest: f.interest,
+          website,
           company_fax: honeypot,
           elapsed_ms: startedAt.current ? Date.now() - startedAt.current : undefined,
         }),
@@ -125,10 +127,10 @@ export function InquiryForm({ interestParam }: { interestParam: InterestKey | nu
         setStatus('limited')
         return
       }
-      if (!res.ok || !data?.id) throw new Error('Request failed')
+      if (!res.ok || !data?.id || typeof data.next !== 'string') throw new Error('Request failed')
 
       setResult({
-        id: String(data.id),
+        next: data.next,
         emailed: data.emailed === true,
         firstName: f.name.trim().split(/\s+/)[0],
         email: f.email.trim(),
@@ -149,23 +151,28 @@ export function InquiryForm({ interestParam }: { interestParam: InterestKey | nu
           </svg>
         </div>
         <h3 ref={successRef} tabIndex={-1} className={s.successTitle}>
-          Thanks, {result.firstName}! Your note is in.
+          Thanks, {result.firstName}! Your note is saved.
         </h3>
         <p className={s.successText}>
-          {result.emailed
-            ? `I sent a confirmation to ${result.email}.`
-            : 'Your details were saved. The confirmation email didn’t go out, so don’t worry if you don’t see one.'}{' '}
-          If you’d like, grab a time for a short intro call now.
+          I’ll read it and reply by email{result.emailed ? `, and I sent a confirmation to ${result.email}` : ''}. If that’s all you need, you’re all set.
         </p>
-        <div className={s.successActions}>
-          <a className={`${s.btn} ${s.btnPrimary}`} href={`/book?ref=${encodeURIComponent(result.id)}`}>
-            Pick a Time to Chat
-          </a>
+        {!result.emailed && <p className={s.formFine}>The confirmation email didn’t go out, so don’t worry if you don’t see one. Your note is still saved.</p>}
+        <div className={s.nextStep}>
+          <p className={s.nextStepTitle}>Want to move faster?</p>
+          <p className={s.successText}>
+            Share your project details in about five minutes. What you just sent is already filled in, and when you finish you can book a 20 minute
+            discovery call.
+          </p>
+          <div className={s.successActions}>
+            <a className={`${s.btn} ${s.btnPrimary}`} href={result.next}>
+              Complete My Project Details
+            </a>
+          </div>
         </div>
-        <p className={s.formFine}>Not ready to book? No problem. I’ll read your note and reply by email.</p>
       </div>
     )
   }
+
 
   const fieldProps = (k: keyof Fields) => ({
     id: `inq-${k}`,

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { requireAdmin } from '@/lib/admin-auth'
 
 export async function PATCH(request: NextRequest) {
+  const denied = requireAdmin(request)
+  if (denied) return denied
   try {
     const body = await request.json();
 

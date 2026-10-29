@@ -163,12 +163,16 @@ export default function Home() {
           <p className={s.sectionLede}>
             A few quick details is all I need to start. You’ll get the chance to book a short intro call right after, and you’ll work directly with me.
           </p>
+          <div className={s.questionnaireCallout}>
+            <p className={s.nextStepTitle}>Already know what you need?</p>
+            <p>
+              Skip ahead and <Link href="/intake">complete the project questionnaire</Link>. It takes about five minutes and leads straight to booking a
+              discovery call.
+            </p>
+          </div>
           <ul className={s.contactAlt}>
             <li>
               Prefer email? <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-            </li>
-            <li>
-              Planning something bigger? Use the <a href="/intake">detailed project questionnaire</a>.
             </li>
             <li>
               Curious who you’d be working with? <Link href="/about">Read about me</Link>.

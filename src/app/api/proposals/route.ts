@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
+import { requireAdmin } from '@/lib/admin-auth'
+import { BRAND } from '@/lib/brand'
+import * as mail from '@/lib/email/templates'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, parsePaymentPlan } from '@/lib/terms'
 import { MigrationRequiredError, assertTermsSchema, migrationResponse, throwIfMissingColumn } from '@/lib/terms-schema'
@@ -7,6 +10,8 @@ import { MigrationRequiredError, assertTermsSchema, migrationResponse, throwIfMi
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(req: NextRequest) {
+  const denied = requireAdmin(req)
+  if (denied) return denied
   try {
     const body = await req.json()
     const {
@@ -98,47 +103,12 @@ export async function POST(req: NextRequest) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
     const proposalUrl = `${siteUrl}/proposals/${proposal.id}`
 
-    await resend.emails.send({
-      from: 'Alante Velez <alante@alantevelez.com>',
-      to: clientEmail,
-      cc: 'alante@alantevelez.com',
-      subject: `Project Proposal — ${projectTitle}`,
-      html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#FAF3E8;font-family:Georgia,serif}
-  .wrap{max-width:600px;margin:0 auto;padding:48px 24px}
-  .logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}
-  .logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:40px}
-  .divider{height:1px;background:rgba(169,104,96,0.2);margin:32px 0}
-  p{font-size:15px;line-height:1.75;color:#3D3630;margin-bottom:16px;white-space:pre-wrap}
-  .cta-wrap{background:white;border:1px solid rgba(169,104,96,0.2);border-radius:8px;padding:28px 24px;text-align:center;margin:32px 0}
-  .cta{display:inline-block;background:#A96860;color:#FAF3E8 !important;text-decoration:none;padding:16px 40px;font-family:monospace;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;border-radius:4px;font-weight:500}
-  .cta-url{font-family:monospace;font-size:11px;color:#8B7D73;margin-top:12px;word-break:break-all}
-  .footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.15)}
-  .footer p{font-size:12px;color:#8B7D73;font-family:monospace;letter-spacing:0.06em}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Full Stack Web Developer</div>
-  <div class="divider"></div>
-  <p>${message || `Hi ${clientName}, your project proposal for ${projectTitle} is ready for your review.`}</p>
-  <div class="cta-wrap">
-    <a href="${proposalUrl}" class="cta">Review Your Proposal</a>
-    <p class="cta-url">Or copy this link: ${proposalUrl}</p>
-  </div>
-  <p style="font-size:13px;color:#8B7D73;white-space:normal;">If the button does not work, copy and paste the link above into your browser.</p>
-  <div class="footer">
-    <p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p>
-  </div>
-</div>
-</body></html>`
-    })
+    const m = mail.proposalSent({ clientName, projectTitle, message, url: proposalUrl })
+    const { error: mailErr } = await resend.emails.send({ from: BRAND.from, to: clientEmail, cc: BRAND.email, subject: m.subject, html: m.html, text: m.text })
+    // The document is saved. If the email fails, say so instead of failing, so it isn't issued twice.
+    if (mailErr) console.error('Document email failed:', mailErr)
 
-    return NextResponse.json({ success: true, id: proposal.id })
+    return NextResponse.json({ success: true, id: proposal.id, emailed: !mailErr, url: proposalUrl })
   } catch (err) {
     if (err instanceof MigrationRequiredError) return migrationResponse(err)
     console.error('Create proposal error:', err)

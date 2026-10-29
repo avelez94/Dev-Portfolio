@@ -3,10 +3,16 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { balanceLabel, contractPaymentClausePdf, contractRevisionsClausePdf, contractServicesClause, contractWarrantyClausePdf, depositLabel, usesCurrentTerms } from '@/lib/terms'
 import { Resend } from 'resend'
 import jsPDF from 'jspdf'
+import { requireAdmin } from '@/lib/admin-auth'
+import { BRAND } from '@/lib/brand'
+import * as mail from '@/lib/email/templates'
+import { createBrandedPdf } from '@/lib/pdf/writer'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(req: NextRequest) {
+  const denied = requireAdmin(req)
+  if (denied) return denied
   try {
     const { contractId } = await req.json()
 
@@ -23,6 +29,37 @@ export async function POST(req: NextRequest) {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
     })
 
+    // Contracts issued before the current terms keep their original PDF layout and wording.
+    const pdfBase64 = usesCurrentTerms(contract) ? brandedContractPdf(contract, signedDate) : legacyContractPdf(contract, signedDate)
+
+    // Send to client
+    const m = mail.signedContractCopy({ clientName: contract.client_name, projectTitle: contract.project_title, signerName: contract.signer_name, signedDate })
+    const { error: mailErr } = await resend.emails.send({
+      from: BRAND.from,
+      to: contract.client_email,
+      cc: BRAND.email,
+      subject: m.subject,
+      html: m.html,
+      text: m.text,
+      attachments: [{
+        filename: `Signed_Contract_${contract.project_title.replace(/\s+/g, '_')}.pdf`,
+        content: pdfBase64,
+      }]
+    })
+    if (mailErr) throw mailErr
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('Send signed contract error:', err)
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SignedContract = any
+
+/** Original signed contract PDF, unchanged, for contracts issued before the current terms. */
+function legacyContractPdf(contract: SignedContract, signedDate: string): string {
     // Generate PDF
     const doc = new jsPDF()
     const lm = 20, rm = 190, lineH = 7
@@ -119,33 +156,79 @@ export async function POST(req: NextRequest) {
       } catch (e) {}
     }
 
-    const pdfBase64 = doc.output('datauristring').split(',')[1]
+    return doc.output('datauristring').split(',')[1]
+}
 
-    // Send to client
-    await resend.emails.send({
-      from: 'Alante Velez <alante@alantevelez.com>',
-      to: contract.client_email,
-      cc: 'alante@alantevelez.com',
-      subject: `Signed Contract — ${contract.project_title}`,
-      html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{background:#FAF3E8;font-family:Georgia,serif;padding:48px 24px}.logo{font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}.logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:40px}.divider{height:1px;background:rgba(169,104,96,0.2);margin:32px 0}h1{font-size:32px;font-weight:700;color:#2A2420;margin-bottom:20px}h1 em{font-style:italic;color:#A96860}p{font-size:15px;line-height:1.75;color:#3D3630;margin-bottom:16px}.footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.2);font-family:monospace;font-size:12px;color:#8B7D73}</style></head>
-<body>
-<div class="logo">Alante Velez</div>
-<div class="logo-sub">Full Stack Web Developer</div>
-<div class="divider"></div>
-<h1>Signed contract<br><em>attached.</em></h1>
-<p>Hi ${contract.client_name}, please find your signed contract for <strong>${contract.project_title}</strong> attached to this email. Keep this for your records.</p>
-<p>Signed by: ${contract.signer_name}<br>Date: ${signedDate}</p>
-<div class="footer">alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</div>
-</body></html>`,
-      attachments: [{
-        filename: `Signed_Contract_${contract.project_title.replace(/\s+/g, '_')}.pdf`,
-        content: pdfBase64,
-      }]
-    })
-
-    return NextResponse.json({ success: true })
-  } catch (err) {
-    console.error('Send signed contract error:', err)
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+/** Clause text is identical to the signing page; only the layout is branded. */
+function brandedContractPdf(contract: SignedContract, signedDate: string): string {
+  const pdf = createBrandedPdf({
+    docType: 'Signed agreement',
+    title: 'Freelance Web Development Agreement',
+    subtitle: `${contract.project_title}  \u2022  Signed ${signedDate}`,
+  })
+  pdf.heading('Parties')
+  pdf.rows([
+    ['Freelancer', 'Alante Velez'],
+    ['Client', contract.client_name + (contract.client_business ? ' (' + contract.client_business + ')' : '')],
+    ['Client email', contract.client_email],
+  ])
+  pdf.heading('Project')
+  pdf.rows([
+    ['Title', contract.project_title],
+    ['Type', contract.project_type],
+    ...(contract.start_date ? ([['Start date', contract.start_date]] as [string, string][]) : []),
+    ...(contract.delivery_date ? ([['Estimated delivery', contract.delivery_date]] as [string, string][]) : []),
+  ])
+  pdf.heading('Payment')
+  pdf.amounts(
+    [
+      [depositLabel(contract), '$' + Number(contract.deposit).toLocaleString()],
+      [balanceLabel(contract), '$' + Number(contract.balance).toLocaleString()],
+    ],
+    ['Total fee', '$' + Number(contract.total_fee).toLocaleString()]
+  )
+  pdf.rows([
+    ['Payment method', contract.payment_method],
+    ['Kill fee', contract.kill_fee_pct + '% of total if cancelled after work begins'],
+  ])
+  pdf.heading('Terms and conditions')
+  contractClausesPdf(contract).forEach(([title, body]) => pdf.clause(title, body))
+  // Keep the heading, signature rows, and signature image together on one page.
+  pdf.ensure(contract.signature_image ? 110 : 80)
+  pdf.heading('Signatures')
+  pdf.rows([
+    ['Freelancer', 'Alante Velez'],
+    ['Date', signedDate],
+    ['Client', contract.signer_name],
+    ['Date', signedDate],
+    ['IP address', contract.signer_ip],
+  ])
+  pdf.text('Electronically signed under the ESIGN Act. This electronic signature is legally binding.', { size: 9, color: 'muted' })
+  if (contract.signature_image && String(contract.signature_image).startsWith('data:image')) {
+    pdf.ensure(40)
+    pdf.text('Client signature', { size: 9.5, bold: true, color: 'ink', gap: 1 })
+    try {
+      pdf.doc.addImage(contract.signature_image, 'PNG', 20, pdf.y, 80, 25)
+      pdf.space(30)
+    } catch {}
   }
+  pdf.finish()
+  return pdf.doc.output('datauristring').split(',')[1]
+}
+
+function contractClausesPdf(contract: SignedContract): [string, string][] {
+  return [
+    ['1. SERVICES', contractServicesClause(contract)],
+    ['2. PAYMENT', contractPaymentClausePdf(contract)],
+    ['3. KILL FEE', 'If Client cancels after work has begun, a kill fee of ' + contract.kill_fee_pct + '% of the total project fee ($' + Math.round(contract.total_fee * contract.kill_fee_pct / 100).toLocaleString() + ') is due immediately, in addition to payment for all work completed to date.'],
+    ['4. INTELLECTUAL PROPERTY', 'Full ownership of all deliverables transfers to Client upon receipt of final payment. Until then, all work remains the property of Alante Velez. Alante Velez retains the right to display completed work in portfolio.'],
+    ['5. REVISIONS', contractRevisionsClausePdf(contract)],
+    ['6. CLIENT RESPONSIBILITIES', 'Client agrees to provide all required content, assets, and feedback in a timely manner. Delays caused by Client may result in timeline adjustments.'],
+    ['7. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
+    ['8. WARRANTIES', contractWarrantyClausePdf(contract)],
+    ['9. LIMITATION OF LIABILITY', 'Alante Velez liability is limited to the total amount paid by Client.'],
+    ['10. DISPUTE RESOLUTION', 'Disputes will be resolved through informal negotiation first, then binding arbitration in the State of Maryland.'],
+    ['11. GOVERNING LAW', 'This agreement is governed by the laws of the State of Maryland.'],
+    ['12. ENTIRE AGREEMENT', 'This contract, together with the accepted Proposal and Statement of Work, constitutes the entire agreement between the parties.'],
+  ]
 }

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
+import { requireAdmin } from '@/lib/admin-auth'
+import { BRAND } from '@/lib/brand'
+import * as mail from '@/lib/email/templates'
+import { formatCallDate, formatCallTime } from '@/lib/time'
+
+const ZOOM_OAUTH = process.env.ZOOM_OAUTH_BASE || 'https://zoom.us'
+const ZOOM_API = process.env.ZOOM_API_BASE || 'https://api.zoom.us'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -9,7 +16,7 @@ async function getZoomToken() {
     `${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`
   ).toString('base64')
   const res = await fetch(
-    `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`,
+    `${ZOOM_OAUTH}/oauth/token?grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`,
     { method: 'POST', headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
   )
   const data = await res.json()
@@ -17,6 +24,8 @@ async function getZoomToken() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = requireAdmin(req)
+  if (denied) return denied
   try {
     const { clientId, clientName, clientEmail, scheduledAt, title, cc } = await req.json()
 
@@ -25,11 +34,11 @@ export async function POST(req: NextRequest) {
     }
 
     const token = await getZoomToken()
-    const res = await fetch('https://api.zoom.us/v2/users/me/meetings', {
+    const res = await fetch(`${ZOOM_API}/v2/users/me/meetings`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        topic: title || 'Project Check-in — ' + clientName,
+        topic: title || 'Project check in: ' + clientName,
         type: 2,
         start_time: new Date(scheduledAt).toISOString(),
         duration: 30,
@@ -50,63 +59,23 @@ export async function POST(req: NextRequest) {
       status: 'scheduled',
     })
 
-    const formattedDate = new Date(scheduledAt).toLocaleDateString('en-US', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    })
-    const formattedTime = new Date(scheduledAt).toLocaleTimeString('en-US', {
-      hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short'
-    })
 
-    await resend.emails.send({
-      from: 'Alante Velez <alante@alantevelez.com>',
-      to: clientEmail,
-      cc: cc || 'alante@alantevelez.com',
-      subject: `Meeting scheduled — ${formattedDate}`,
-      html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#FAF3E8;font-family:Georgia,serif}
-  .wrap{max-width:600px;margin:0 auto;padding:48px 24px}
-  .logo{font-family:Georgia,serif;font-size:18px;font-weight:700;color:#2A2420;margin-bottom:4px}
-  .logo-sub{font-family:monospace;font-size:11px;color:#8B7D73;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:40px}
-  .divider{height:1px;background:rgba(169,104,96,0.2);margin:32px 0}
-  .heading{font-family:Georgia,serif;font-size:32px;font-weight:700;color:#2A2420;line-height:1.1;margin-bottom:20px}
-  .heading em{font-style:italic;color:#A96860}
-  p{font-size:15px;line-height:1.75;color:#3D3630;margin-bottom:16px;font-family:Georgia,serif}
-  .detail-box{background:#FFFFFF;border:1px solid rgba(169,104,96,0.2);border-left:3px solid #A96860;padding:20px 24px;margin:28px 0;border-radius:4px}
-  .detail-label{font-family:monospace;font-size:11px;color:#A96860;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;margin-top:12px}
-  .detail-label:first-child{margin-top:0}
-  .detail-value{font-size:15px;color:#2A2420;margin-bottom:4px;font-family:Georgia,serif}
-  .cta{display:inline-block;background:#A96860;color:#FAF3E8;text-decoration:none;padding:14px 32px;font-family:monospace;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;margin:8px 0;border-radius:2px}
-  .footer{margin-top:48px;padding-top:24px;border-top:1px solid rgba(169,104,96,0.15)}
-  .footer p{font-size:12px;color:#8B7D73;margin:0;font-family:monospace;letter-spacing:0.06em}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="logo">Alante Velez</div>
-  <div class="logo-sub">Full Stack Web Developer</div>
-  <div class="divider"></div>
-  <h1 class="heading">Meeting<br><em>scheduled.</em></h1>
-  <p>Hi ${clientName}, a project meeting has been scheduled. See the details below and use the Zoom link to join.</p>
-  <div class="detail-box">
-    <div class="detail-label">Meeting</div>
-    <div class="detail-value">${title || 'Project Check-in'}</div>
-    <div class="detail-label">Date</div>
-    <div class="detail-value">${formattedDate}</div>
-    <div class="detail-label">Time</div>
-    <div class="detail-value">${formattedTime}</div>
-    <div class="detail-label">Duration</div>
-    <div class="detail-value">30 minutes</div>
-  </div>
-  <a href="${zoom.join_url}" class="cta">Join Zoom Meeting</a>
-  <div class="footer">
-    <p>alante@alantevelez.com &nbsp;·&nbsp; alantevelez.com</p>
-  </div>
-</div>
-</body></html>`
+    const m = mail.meetingScheduled({
+      name: clientName,
+      title: title || 'Project Check-in',
+      date: formatCallDate(scheduledAt),
+      time: formatCallTime(scheduledAt),
+      joinUrl: zoom.join_url,
     })
+    const { error: mailErr } = await resend.emails.send({
+      from: BRAND.from,
+      to: clientEmail,
+      cc: cc || BRAND.email,
+      subject: m.subject,
+      html: m.html,
+      text: m.text,
+    })
+    if (mailErr) console.error('Meeting email failed:', mailErr)
 
     return NextResponse.json({ success: true, joinUrl: zoom.join_url, hostUrl: zoom.start_url })
   } catch (err) {

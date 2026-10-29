@@ -301,6 +301,8 @@ export const projectFaqs: Faq[] = [
   },
   {
     q: 'Who owns the website when it’s finished?',
-    a: proposed('APPROVAL NEEDED: ownership and licensing of the design, code, and accounts after final payment.'),
+    a: approved(
+      'Ownership of the completed website and custom work created for your project transfers to you once final payment is received and handoff is complete. Until then, that work remains my property. Third party software, fonts, images, and services remain subject to their respective licenses and terms.'
+    ),
   },
 ]
