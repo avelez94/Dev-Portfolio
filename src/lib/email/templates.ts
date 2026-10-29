@@ -128,7 +128,7 @@ export function detailsAdmin(
     adminUrl: string
     /** Set when this questionnaire completed an earlier short note. */
     continuedFrom?: { note: string; sentAt: string } | null
-    /** Set when the same email sent a note earlier without using their link. */
+    /** Set when the same address sent a note earlier but this questionnaire didn't use its link. Unverified, admin only. */
     relatedNote?: { note: string; sentAt: string } | null
   }
 ): Email {
@@ -146,8 +146,10 @@ export function detailsAdmin(
     blocks.push({
       type: 'callout',
       tone: 'coral',
-      title: continued ? `Their original note, ${earlier.sentAt}` : `They also sent a short note, ${earlier.sentAt}`,
-      html: escLines(earlier.note),
+      title: continued ? `Their original note, ${earlier.sentAt}` : `Same email sent a short note, ${earlier.sentAt}`,
+      html: continued
+        ? escLines(earlier.note)
+        : `${escLines(earlier.note)}<br><br><em>Not verified: this questionnaire didn’t use their private link, so both are kept as separate leads. Confirm with them before treating these as the same person.</em>`,
     })
   }
   blocks.push({ type: 'details', title: 'Project details', rows: leadRows(p, p.details) })

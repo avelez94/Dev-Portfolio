@@ -73,6 +73,28 @@ function validate(step: StepId, a: Answers, isCare: boolean): Errors {
 
 const ORDER: (keyof Answers)[] = ['name', 'email', 'business', 'existing', 'website', 'interest', 'description', 'platform', 'priority', 'assets', 'integrations', 'references', 'timeline', 'budget', 'heard', 'anything']
 
+/** Per tab storage for the private link token only. Answers are never stored. */
+const TOKEN_KEY = 'intake-continue'
+const tokenStore = {
+  get(): string | null {
+    try {
+      return window.sessionStorage.getItem(TOKEN_KEY)
+    } catch {
+      return null
+    }
+  },
+  set(v: string) {
+    try {
+      window.sessionStorage.setItem(TOKEN_KEY, v)
+    } catch {}
+  },
+  clear() {
+    try {
+      window.sessionStorage.removeItem(TOKEN_KEY)
+    } catch {}
+  },
+}
+
 type Prefill = { name: string; email: string; business: string; interest: string; type: string; note: string; website: string; budget: string; timeline: string }
 
 export default function IntakeWizard() {
@@ -81,7 +103,10 @@ export default function IntakeWizard() {
   const [answers, setAnswers] = useState<Answers>(() => ({ ...EMPTY, interest: parseInterest(params.get('interest')) ?? '' }))
   const [errors, setErrors] = useState<Errors>({})
   const [stepIdx, setStepIdx] = useState(0)
-  const [continueToken] = useState<string | null>(() => params.get('continue'))
+  const [linkToken] = useState<string | null>(() => params.get('continue'))
+  // The private link token (never the answers) is kept for this tab only, so a
+  // refresh can reload the prefill. It's cleared once the details are saved.
+  const continueToken = useRef<string | null>(linkToken)
   const [prefill, setPrefill] = useState<Prefill | null>(null)
   const [linkState, setLinkState] = useState<'none' | 'loading' | 'ok' | 'expired' | 'invalid' | 'error'>(() => (params.get('continue') ? 'loading' : 'none'))
   const [status, setStatus] = useState<'idle' | 'sending' | 'error' | 'limited'>('idle')
@@ -99,15 +124,25 @@ export default function IntakeWizard() {
   // Load what they already sent, using the private token from their link.
   // The token is moved out of the address bar right away.
   useEffect(() => {
-    const token = continueToken
+    let token = linkToken
+    if (token) {
+      window.history.replaceState(null, '', '/intake')
+      tokenStore.set(token)
+    } else {
+      token = tokenStore.get()
+    }
     if (!token) return
-    window.history.replaceState(null, '', '/intake')
+    continueToken.current = token
     let cancelled = false
     fetch('/api/intake/continue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
       .then(async (res) => {
         if (cancelled) return
-        if (res.status === 410) return setLinkState('expired')
-        if (!res.ok) return setLinkState(res.status === 404 ? 'invalid' : 'error')
+        if (res.status === 410 || res.status === 404) {
+          tokenStore.clear()
+          continueToken.current = null
+          return setLinkState(res.status === 410 ? 'expired' : 'invalid')
+        }
+        if (!res.ok) return setLinkState('error')
         const data = await res.json()
         const p = data.prefill as Prefill
         setPrefill(p)
@@ -130,7 +165,7 @@ export default function IntakeWizard() {
     return () => {
       cancelled = true
     }
-  }, [continueToken])
+  }, [linkToken])
 
   // Move focus to the step heading when the step changes (not on first load).
   useEffect(() => {
@@ -189,7 +224,7 @@ export default function IntakeWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source: 'questionnaire',
-          continueToken,
+          continueToken: continueToken.current,
           name: answers.name.trim(),
           email: answers.email.trim(),
           business: answers.business.trim(),
@@ -216,6 +251,7 @@ export default function IntakeWizard() {
       const data = await res.json().catch(() => ({}))
       if (res.status === 429) return setStatus('limited')
       if (!res.ok || !data?.next) throw new Error('failed')
+      tokenStore.clear()
       setDone({ next: data.next, firstName: answers.name.trim().split(/\s+/)[0], emailed: data.emailed === true })
       setStatus('idle')
       // Go straight to booking. The panel below stays as a fallback link.
@@ -289,7 +325,7 @@ export default function IntakeWizard() {
           {linkState === 'expired'
             ? 'That link has expired, so I couldn’t fill in your earlier note.'
             : linkState === 'invalid'
-              ? 'That link has already been used or isn’t valid, so I couldn’t fill in your earlier note.'
+              ? 'That link has already been used or isn’t valid, so I couldn’t fill in your earlier note. If you already finished the questionnaire, the link to book your call is in your “Project details received” email.'
               : 'I couldn’t load your earlier note just now.'}{' '}
           No problem: your note is still saved, and you can fill this in fresh.
         </div>

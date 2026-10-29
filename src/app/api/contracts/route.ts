@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { DOC_BRAND_VERSION, missingBrandColumn } from '@/lib/brand-version'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { Resend } from 'resend'
 import { requireAdmin } from '@/lib/admin-auth'
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     if (error || !contract) throw error
 
     // Store invoice data in a separate record so it's ready when they sign
-    await supabaseAdmin.from('invoices').insert({
+    const depositInvoice = {
       client_id: null,
       invoice_number: invoiceNumber,
       invoice_type: 'project',
@@ -74,7 +75,10 @@ export async function POST(req: NextRequest) {
       hourly_rate: STANDARD_HOURLY_RATE,
       status: 'awaiting_signature',
       notes: `contract_id:${contract.id}`,
-    })
+    }
+    // Stamped with the current document look; unstamped if the column doesn't exist yet.
+    const stamped = await supabaseAdmin.from('invoices').insert({ ...depositInvoice, brand_version: DOC_BRAND_VERSION })
+    if (stamped.error && missingBrandColumn(stamped.error)) await supabaseAdmin.from('invoices').insert(depositInvoice)
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
     const contractUrl = `${siteUrl}/contracts/${contract.id}`

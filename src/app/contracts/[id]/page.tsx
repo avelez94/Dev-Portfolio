@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { DocShell } from '@/components/docs/DocShell'
-import { balanceLabel, contractPaymentClausePage, contractRevisionsClausePage, contractServicesClause, contractWarrantyClausePage, depositLabel, usesCurrentTerms } from '@/lib/terms'
+import { contractClauses } from '@/lib/contract-document'
+import { balanceLabel, depositLabel, usesCurrentTerms } from '@/lib/terms'
 
 type Contract = {
   id: string
@@ -195,20 +196,8 @@ export default function ContractPage() {
     </Shell>
   )
 
-  const clauses = [
-    { title: '1. Services', body: contractServicesClause(contract) },
-    { title: '2. Payment', body: contractPaymentClausePage(contract) },
-    { title: '3. Kill fee', body: `If Client cancels after work has begun, a kill fee of ${contract.kill_fee_pct}% of the total project fee ($${Math.round(contract.total_fee * contract.kill_fee_pct / 100).toLocaleString()}) is due immediately, in addition to payment for all work completed to date.` },
-    { title: '4. Intellectual property', body: `Full ownership of all deliverables transfers to Client upon receipt of final payment in full. Until final payment is received, all work remains the property of Alante Velez. Alante Velez retains the right to display completed work in portfolio and case studies.` },
-    { title: '5. Revisions', body: contractRevisionsClausePage(contract) },
-    { title: '6. Client responsibilities', body: `Client agrees to provide all required content, assets, credentials, and feedback in a timely manner. Delays caused by Client may result in timeline adjustments. Alante Velez is not responsible for delays caused by third-party services or Client inaction.` },
-    { title: '7. Confidentiality', body: `Both parties agree to keep each other's proprietary information, business processes, and client data confidential during and after the project. This obligation survives termination of this agreement.` },
-    { title: '8. Warranties', body: contractWarrantyClausePage(contract) },
-    { title: '9. Limitation of liability', body: `Alante Velez's total liability under this agreement is limited to the total amount paid by Client. Alante Velez is not liable for indirect, incidental, or consequential damages including loss of revenue, data, or business opportunity.` },
-    { title: '10. Dispute resolution', body: `The parties agree to attempt to resolve any disputes informally before pursuing legal action. If informal resolution fails, disputes will be resolved through binding arbitration in the State of Maryland.` },
-    { title: '11. Governing law', body: `This agreement is governed by the laws of the State of Maryland. Any legal action must be brought in courts located in Maryland.` },
-    { title: '12. Entire agreement', body: `This contract, together with the accepted Proposal and Statement of Work, constitutes the entire agreement between the parties and supersedes all prior discussions, representations, or agreements.` },
-  ]
+  // Same source as the signed PDF and the admin download.
+  const clauses = contractClauses(contract).map(([title, body]) => ({ title, body }))
 
   return (
     <Shell branded={branded}>

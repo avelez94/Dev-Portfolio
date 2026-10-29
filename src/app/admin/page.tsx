@@ -1,9 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase-admin-browser'
 import jsPDF from 'jspdf'
 import { createBrandedPdf } from '@/lib/pdf/writer'
-import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, additionalWorkSentence, contractPaymentClausePdf, contractRevisionsClausePdf, contractServicesClause, contractWarrantyClausePdf, formatRate, proposalPaymentLines, type PaymentPlan } from '@/lib/terms'
+import { contractPdf } from '@/lib/pdf/contract'
+import { DOC_BRAND_VERSION, missingBrandColumn, usesStudioBrand } from '@/lib/brand-version'
+import { STANDARD_DEPOSIT_PCT, STANDARD_HOURLY_RATE, TERMS_VERSION, additionalWorkSentence, contractPaymentClausePdf, contractWarrantyClausePdf, formatRate, proposalPaymentLines, type PaymentPlan } from '@/lib/terms'
 
 const CURRENT_TERMS = { terms_version: TERMS_VERSION, hourly_rate: STANDARD_HOURLY_RATE }
 const currentTerms = (plan: string) => ({ ...CURRENT_TERMS, payment_plan: plan })
@@ -97,6 +99,7 @@ type Invoice = {
   deposit_paid_date: string | null; hours: number; hourly_rate: number
   service_desc: string | null
   due_date: string | null; paid_date: string | null; notes: string | null; created_at: string
+  brand_version?: string | null
 }
 type Pricing = {
   id: string; name: string; price: string; description: string; updated_at: string
@@ -119,6 +122,7 @@ type InvoiceMilestone = {
   id: string; invoice_id: string; name: string
   deliverables: string | null; due_date: string | null
   fee: number; status: string; paid_date: string | null; created_at: string
+  brand_version?: string | null
 }
 
 const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa']
@@ -487,7 +491,7 @@ export default function AdminDashboard() {
     const depositAmount = isProject
       ? parseFloat(clientInvoiceForm.deposit_amount || String(totalFee * 0.5))
       : 0
-    const { data: insertedInv } = await supabase.from('invoices').insert({
+    const { data: insertedRows } = await insertStamped('invoices', [{
       client_id: clientId,
       invoice_number: clientInvoiceForm.invoice_number,
       invoice_type: invoiceType || 'project',
@@ -499,7 +503,8 @@ export default function AdminDashboard() {
       hours: isRevision ? parseFloat(clientInvoiceForm.hours) : 0,
       hourly_rate: isRevision ? parseFloat(clientInvoiceForm.hourly_rate) : STANDARD_HOURLY_RATE,
       status: isProject ? 'awaiting_deposit' : 'pending',
-    }).select().single()
+    }])
+    const insertedInv = insertedRows?.[0]
     if (action === 'download') {
       generateClientInvoicePDF(clientName, clientEmail, invoiceType || 'project', totalFee, depositAmount)
     } else if (action === 'send' && insertedInv) {
@@ -510,12 +515,25 @@ export default function AdminDashboard() {
     await fetchInvoices()
   }
 
+  /**
+   * Saves new invoice rows stamped with the current document look. If the
+   * brand_version column doesn't exist yet, saves them unstamped (they then
+   * download in the original layout) rather than failing.
+   */
+  async function insertStamped(table: 'invoices' | 'invoice_milestones', rows: Record<string, unknown>[]) {
+    const stamped = rows.map(r => ({ ...r, brand_version: DOC_BRAND_VERSION }))
+    const first = await supabase.from(table).insert(stamped).select()
+    if (!first.error || !missingBrandColumn(first.error)) return first
+    console.warn('brand_version column missing; run supabase/migrations/20261029_document_brand_version.sql')
+    return supabase.from(table).insert(rows).select()
+  }
+
   async function createMilestoneInvoice(clientId: string, clientName: string, clientEmail: string) {
     if (!selectedSowId || !milestoneInvoiceNumber) return
     const sow = sows.find((s: any) => s.id === selectedSowId)
     if (!sow?.line_items?.length) return
     const totalFee = sow.line_items.reduce((sum: number, m: any) => sum + parseFloat(m.fee || '0'), 0)
-    const { data: inv } = await supabase.from('invoices').insert({
+    const { data: invRows } = await insertStamped('invoices', [{
       client_id: clientId,
       invoice_number: milestoneInvoiceNumber,
       invoice_type: 'milestone',
@@ -525,9 +543,10 @@ export default function AdminDashboard() {
       sow_id: selectedSowId,
       status: 'pending',
       service_desc: sow.project_title,
-    }).select().single()
+    }])
+    const inv = invRows?.[0]
     if (!inv) return
-    await supabase.from('invoice_milestones').insert(
+    await insertStamped('invoice_milestones',
       sow.line_items.map((m: any) => ({
         invoice_id: inv.id,
         name: m.name,
@@ -545,7 +564,7 @@ export default function AdminDashboard() {
   async function createFixedFeeInvoice(clientId: string, clientName: string, clientEmail: string, action: 'download'|'send') {
     if (!fixedFeeForm.invoice_number || !fixedFeeForm.total_fee) return
     const fee = parseFloat(fixedFeeForm.total_fee)
-    const { data: inv } = await supabase.from('invoices').insert({
+    const { data: invRows } = await insertStamped('invoices', [{
       client_id: clientId,
       invoice_number: fixedFeeForm.invoice_number,
       invoice_type: 'fixed_fee',
@@ -555,7 +574,8 @@ export default function AdminDashboard() {
       due_date: fixedFeeForm.due_date || null,
       service_desc: fixedFeeForm.service_desc || null,
       status: 'pending',
-    }).select().single()
+    }])
+    const inv = invRows?.[0]
     if (action === 'download') {
       generateFixedFeePDF(clientName, fee)
     } else if (action === 'send' && inv) {
@@ -596,7 +616,7 @@ export default function AdminDashboard() {
 
   function generateMilestonePDF(clientName: string, clientEmail: string, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
     // Existing milestone records: original layout unless created after the styling cutoff.
-    const { addLine, addSpace, addDivider, save } = makePDF(brandedRecord(milestone.created_at) ? { docType: 'Invoice', title: 'Invoice #' + invoiceNumber, subtitle: 'Milestone ' + (index+1) + ' of ' + totalCount + ' for ' + clientName } : undefined)
+    const { addLine, addSpace, addDivider, save } = makePDF(brandedRecord(milestone) ? { docType: 'Invoice', title: 'Invoice #' + invoiceNumber, subtitle: 'Milestone ' + (index+1) + ' of ' + totalCount + ' for ' + clientName } : undefined)
     addLine('INVOICE', 16, true, true)
     addLine('Alante Velez | Full Stack Web Developer', 10)
     addDivider(); addSpace()
@@ -773,11 +793,8 @@ export default function AdminDashboard() {
     return { doc, addLine, addSpace, addDivider, save: (name: string) => doc.save(name) }
   }
 
-  /** Records created on or after NEXT_PUBLIC_DOC_BRAND_SINCE (ISO date) download in the studio layout. Older ones keep the original. */
-  function brandedRecord(createdAt?: string | null) {
-    const since = process.env.NEXT_PUBLIC_DOC_BRAND_SINCE
-    return Boolean(since && createdAt && createdAt >= since)
-  }
+  /** Stored per record (see src/lib/brand-version.ts); never inferred from dates. */
+  const brandedRecord = usesStudioBrand
 
   function openPreview(doc: PreviewDoc, action: 'download'|'send', onConfirm: () => void) {
     setPreviewDoc(doc)
@@ -1045,6 +1062,13 @@ export default function AdminDashboard() {
     setSendingSOW(false)
   }
 
+  /**
+   * Not used: nothing in the dashboard calls this, and its form (sowForm) is never
+   * filled in. It also doesn't match an issued SOW: it has no milestone schedule,
+   * and issued SOWs are saved as records (with milestone proposals or /api/sows) and reviewed at
+   * /sows/[id]. Kept out of the workflow on purpose; don't wire it to a button
+   * without rebuilding it from the stored SOW record.
+   */
   function generateSOWDoc() {
     const f = sowForm
     const { addLine, addSpace, addDivider, save } = makePDF({ docType: 'Statement of work', title: f.project_title || 'Statement of work', subtitle: 'Prepared for ' + f.client_name })
@@ -1188,46 +1212,23 @@ export default function AdminDashboard() {
   }
 
   function generateContractDoc() {
+    // Same builder, clauses, terms version, and payment schedule as the contract the
+    // client signs online (src/lib/contract-document.ts). Nothing is shortened for the PDF.
     const f = contractForm
-    const { addLine, addSpace, addDivider, save } = makePDF({ docType: 'Agreement', title: 'Freelance Web Development Agreement', subtitle: (f.project_title ? f.project_title + ' for ' : 'Prepared for ') + (f.client_business || f.client_name) })
-    addLine('FREELANCE WEB DEVELOPMENT AGREEMENT', 16, true, true)
-    addLine('Alante Velez | Full Stack Web Developer', 10)
-    addLine('Effective Date: ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}), 10)
-    addDivider(); addSpace()
-    addLine('PARTIES', 10, true, true); addSpace(0.5)
-    addLine('Freelancer: Alante Velez')
-    addLine('Client: ' + f.client_name + (f.client_business ? ' (' + f.client_business + ')' : ''))
-    addLine('Client Email: ' + f.client_email)
-    addSpace(); addDivider()
-    addLine('PROJECT', 10, true, true); addSpace(0.5)
-    addLine('Title: ' + f.project_title)
-    addLine('Type: ' + f.project_type)
-    addLine('Start Date: ' + f.start_date)
-    addLine('Estimated Delivery: ' + f.delivery_date)
-    addSpace(); addDivider()
-    const clauses: [string,string][] = [
-      ['1. SERVICES', contractServicesClause(CURRENT_TERMS)],
-      ['2. PAYMENT', contractPaymentClausePdf(contractTermsDoc(f))],
-      ['3. KILL FEE', 'If Client cancels after work has begun, a kill fee of ' + f.kill_fee_pct + '% of the total fee is due immediately, plus payment for all work completed to date.'],
-      ['4. INTELLECTUAL PROPERTY', 'Full ownership of all deliverables transfers to Client upon receipt of final payment. Freelancer retains the right to display work in portfolio.'],
-      ['5. REVISIONS', contractRevisionsClausePdf(CURRENT_TERMS)],
-      ['6. CONFIDENTIALITY', 'Both parties agree to keep proprietary information confidential during and after the project.'],
-      ['7. WARRANTIES', contractWarrantyClausePdf(CURRENT_TERMS)],
-      ['8. LIMITATION OF LIABILITY', 'Freelancer liability is limited to the total amount paid under this agreement.'],
-      ['9. GOVERNING LAW', 'This agreement is governed by the laws of the State of Maryland.'],
-    ]
-    clauses.forEach(([title, body]) => {
-      addLine(title, 10, true, true); addSpace(0.3)
-      addLine(body); addSpace()
+    const doc = contractPdf({
+      client_name: f.client_name,
+      client_email: f.client_email,
+      client_business: f.client_business || null,
+      project_title: f.project_title,
+      project_type: f.project_type,
+      start_date: f.start_date || null,
+      delivery_date: f.delivery_date || null,
+      kill_fee_pct: parseFloat(f.kill_fee_pct) || 25,
+      ...contractTermsDoc(f),
     })
-    addDivider()
-    addLine('SIGNATURES', 10, true, true); addSpace()
-    addLine('Freelancer: Alante Velez'); addSpace()
-    addLine('Date: ___________'); addSpace()
-    addLine('Client: ' + f.client_name); addSpace()
-    addLine('Date: ___________')
-    save('Contract_' + f.client_name.replace(/\s+/g,'_') + '.pdf')
+    doc.save('Contract_' + f.client_name.replace(/\s+/g,'_') + '.pdf')
   }
+
 
   function fmtDate(iso: string) { return new Date(iso).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) }
   function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'}) }
@@ -2088,15 +2089,19 @@ export default function AdminDashboard() {
                     <div className="section-divider" style={{background:d.border}}/>
                     <div className="section-mini-label" style={{color:d.text3}}>Legal terms included</div>
                     <div style={{background:d.white,border:'1px solid '+d.border,borderRadius:8,padding:16,fontSize:11,color:d.text2,lineHeight:1.8}}>
-                      <div style={{marginBottom:6}}>1. Services — Scope and change order rate ({formatRate(STANDARD_HOURLY_RATE)}, one hour minimum, estimate approved first)</div>
-                      <div style={{marginBottom:6}}>2. Payment — {contractForm.payment_plan === 'milestones' ? 'Deposit, then milestones defined in the proposal' : '50% upfront, 50% at delivery before launch or handoff'}, late payment interest (1.5%/month)</div>
-                      <div style={{marginBottom:6}}>3. Kill fee — {contractForm.kill_fee_pct}% of total if cancelled after work begins</div>
-                      <div style={{marginBottom:6}}>4. Intellectual property — Full ownership transfers on final payment</div>
-                      <div style={{marginBottom:6}}>5. Revisions — 2 rounds included, additional at {formatRate(STANDARD_HOURLY_RATE)} with an approved estimate</div>
-                      <div style={{marginBottom:6}}>6. Confidentiality — Both parties keep proprietary info confidential</div>
-                      <div style={{marginBottom:6}}>7. Warranties — Original work; defects reported within 30 days of launch are fixed without using care time</div>
-                      <div style={{marginBottom:6}}>8. Limitation of liability — Capped at total amount paid</div>
-                      <div>9. Governing law — State of Maryland</div>
+                      <div style={{marginBottom:6}}>Same 12 clauses as the contract the client signs online (terms version {TERMS_VERSION}):</div>
+                      <div style={{marginBottom:6}}>1. Services: scope and change order rate ({formatRate(STANDARD_HOURLY_RATE)}, one hour minimum, estimate approved first)</div>
+                      <div style={{marginBottom:6}}>2. Payment: {contractForm.payment_plan === 'milestones' ? 'Deposit, then milestones defined in the proposal' : '50% upfront, 50% at delivery before launch or handoff'}, late payment interest (1.5%/month)</div>
+                      <div style={{marginBottom:6}}>3. Kill fee: {contractForm.kill_fee_pct}% of total if cancelled after work begins</div>
+                      <div style={{marginBottom:6}}>4. Intellectual property: full ownership transfers on final payment</div>
+                      <div style={{marginBottom:6}}>5. Revisions: 2 rounds included, additional at {formatRate(STANDARD_HOURLY_RATE)} with an approved estimate</div>
+                      <div style={{marginBottom:6}}>6. Client responsibilities: content, assets, credentials, and feedback on time</div>
+                      <div style={{marginBottom:6}}>7. Confidentiality: both parties keep proprietary info confidential</div>
+                      <div style={{marginBottom:6}}>8. Warranties: original work; defects reported within 30 days of launch are fixed without using care time</div>
+                      <div style={{marginBottom:6}}>9. Limitation of liability: capped at total amount paid</div>
+                      <div style={{marginBottom:6}}>10. Dispute resolution: informal first, then arbitration in Maryland</div>
+                      <div style={{marginBottom:6}}>11. Governing law: State of Maryland</div>
+                      <div>12. Entire agreement: with the accepted proposal and SOW</div>
                     </div>
                     {docError?.kind === 'contract' && (
                       <div role="alert" style={{background:'#FDECEA',color:'#8A2A1B',border:'1px solid #E8B4AA',borderRadius:8,padding:'10px 14px',fontSize:12,marginTop:12,lineHeight:1.5}}>
@@ -2671,7 +2676,7 @@ export default function AdminDashboard() {
               ))}
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button className="btn-save" style={{flex:1,background:d.surface2,color:d.text}} onClick={()=>{const c=clients.find(x=>x.id===viewingInvoice.client_id);generateClientInvoicePDF(c?.name||'Client',c?.email||'',viewingInvoice.invoice_type,viewingInvoice.total_fee||viewingInvoice.amount,viewingInvoice.deposit_amount||0,brandedRecord(viewingInvoice.created_at),viewingInvoice)}}>Download PDF</button>
+              <button className="btn-save" style={{flex:1,background:d.surface2,color:d.text}} onClick={()=>{const c=clients.find(x=>x.id===viewingInvoice.client_id);generateClientInvoicePDF(c?.name||'Client',c?.email||'',viewingInvoice.invoice_type,viewingInvoice.total_fee||viewingInvoice.amount,viewingInvoice.deposit_amount||0,brandedRecord(viewingInvoice),viewingInvoice)}}>Download PDF</button>
               <button className="btn-cancel" style={{flex:1,borderColor:d.border,color:d.text2}} onClick={()=>setViewingInvoice(null)}>Close</button>
             </div>
           </div>

@@ -24,6 +24,10 @@ import {
  *                          completes the same lead (no second lead, no second
  *                          "new inquiry" email). Otherwise it's a new lead.
  * A saved submission always returns success, even if email fails.
+ *
+ * An existing lead is only ever read or changed through its private continue
+ * token. A matching email address alone never links, merges, reveals, or edits
+ * anything; it only adds an "unverified, same email" note to the admin email.
  */
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -41,8 +45,10 @@ const EMAIL_LIMIT = 3
 const EMAIL_WINDOW_MS = 60 * 60 * 1000
 /** Faster than any person can fill in the homepage form. */
 const MIN_FILL_MS = 2500
-/** A short note and a questionnaire from the same email this close together are one lead. */
+/** How far back to look for an earlier note from the same address (admin hint only). */
 const RELATED_WINDOW_MS = 30 * 86400000
+/** A retry with an already used link within this window returns the same result instead of a new lead. */
+const RETRY_WINDOW_MS = 24 * 3600000
 
 type Row = Record<string, unknown> & { id: string }
 
@@ -201,67 +207,59 @@ export async function POST(req: NextRequest) {
     if (continueToken) {
       const { data: match, error: findErr } = await supabaseAdmin
         .from('intake_submissions')
-        .select('id, stage, inquiry_note, description, submitted_at, continue_token_expires_at')
+        .select('id, stage, inquiry_note, description, submitted_at, details_completed_at, continue_token_expires_at')
         .eq('continue_token_hash', hashToken(continueToken))
         .maybeSingle()
       if (findErr && !isMissingColumn(findErr)) throw findErr
+
+      // Retry after the details were already saved with this link (for example the
+      // response was lost to a dropped connection): same lead, same next step, no new emails.
+      if (match && match.stage === 'details' && match.details_completed_at && Date.now() - new Date(match.details_completed_at as string).getTime() < RETRY_WINDOW_MS) {
+        return NextResponse.json({ success: true, id: match.id, emailed: false, alreadySaved: true, next: `/book?ref=${encodeURIComponent(match.id as string)}` })
+      }
+
       const valid = match && match.stage === 'inquiry' && new Date(match.continue_token_expires_at as string).getTime() > Date.now()
       if (valid) {
+        // The link stays attached to the lead (it can no longer prefill, because the
+        // stage has moved on) so that a retry is recognized above.
         const { data, error } = await supabaseAdmin
           .from('intake_submissions')
-          .update({
-            ...base,
-            stage: 'details',
-            interest,
-            details,
-            details_completed_at: completedAt,
-            continue_token_hash: null,
-            continue_token_expires_at: null,
-          })
+          .update({ ...base, stage: 'details', interest, details, details_completed_at: completedAt })
           .eq('id', match.id)
           .eq('stage', 'inquiry') // only once, even if submitted twice at the same moment
           .select()
-          .single()
         if (error) throw error
-        saved = data as Row
+        if (!data?.length) {
+          // The other copy of a double submit won. Point this one at the same lead.
+          return NextResponse.json({ success: true, id: match.id, emailed: false, alreadySaved: true, next: `/book?ref=${encodeURIComponent(match.id as string)}` })
+        }
+        saved = data[0] as Row
         continuedFrom = { note: String(match.inquiry_note || match.description || ''), sentAt: shortDate(match.submitted_at as string) }
       }
     }
 
     if (!saved) {
-      // Same email sent a short note recently but didn't use their link: link the two.
-      let related: Row | null = null
+      // No valid link: always a new, separate lead. An earlier note from the same
+      // address is mentioned to the admin as unverified, and is never changed.
       const since = new Date(Date.now() - RELATED_WINDOW_MS).toISOString()
       const rel = await supabaseAdmin
         .from('intake_submissions')
-        .select('id, inquiry_note, description, submitted_at')
+        .select('inquiry_note, description, submitted_at')
         .ilike('email', email)
         .eq('stage', 'inquiry')
         .gte('submitted_at', since)
         .order('submitted_at', { ascending: false })
         .limit(1)
-      if (!rel.error && rel.data?.length) related = rel.data[0] as Row
+      if (!rel.error && rel.data?.length) {
+        const r = rel.data[0] as Record<string, unknown>
+        relatedNote = { note: String(r.inquiry_note || r.description || ''), sentAt: shortDate(r.submitted_at as string) }
+      }
 
-      const { data, migrated } = await insertLead(
-        {
-          ...base,
-          stage: 'details',
-          source: 'questionnaire',
-          interest,
-          details,
-          details_completed_at: completedAt,
-          linked_submission_id: related?.id ?? null,
-        },
+      const { data } = await insertLead(
+        { ...base, stage: 'details', source: 'questionnaire', interest, details, details_completed_at: completedAt },
         detailsAsText(details)
       )
       saved = data
-      if (migrated && related) {
-        await supabaseAdmin
-          .from('intake_submissions')
-          .update({ stage: 'merged', linked_submission_id: saved.id, continue_token_hash: null, continue_token_expires_at: null })
-          .eq('id', related.id)
-        relatedNote = { note: String(related.inquiry_note || related.description || ''), sentAt: shortDate(related.submitted_at as string) }
-      }
     }
 
     const bookingPath = `/book?ref=${encodeURIComponent(saved.id)}`

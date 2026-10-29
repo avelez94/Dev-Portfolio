@@ -116,6 +116,16 @@ export default function BookingCalendar() {
         body: JSON.stringify({ intakeId: ref, scheduledAt: slot }),
       })
       const data = await res.json().catch(() => ({}))
+      if (data?.error === 'ALREADY_BOOKED') {
+        setPhase('booked')
+        return
+      }
+      if (data?.error === 'SLOT_UNAVAILABLE') {
+        setError('That time isn’t available anymore. Here are the times still open.')
+        setSlot(null)
+        setReloadKey((k) => k + 1)
+        return
+      }
       if (res.status === 409) {
         setError('Someone just took that time. Here are the times still open.')
         setSlot(null)
