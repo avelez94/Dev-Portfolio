@@ -93,7 +93,7 @@ function EnvBanner({ s }: { s: Status }) {
       <Badge tone={s.runner.token ? 'ok' : 'warn'}>Check runner: {s.runner.token ? (s.runner.dispatch ? 'token and dispatch set' : 'token set, scheduled pickup') : 'not configured'}</Badge>
       <Badge tone="ok">Calendar: admin Schedule</Badge>
       <Badge tone={s.calendar.resendWebhook ? 'ok' : 'info'}>Delivery tracking: {s.calendar.resendWebhook ? 'on' : 'off (provider acceptance only)'}</Badge>
-      <Badge tone={s.policyApproved ? 'ok' : 'warn'}>Billing policy: {s.policyApproved ? 'approved' : 'proposed, needs approval'}</Badge>
+      <Badge tone={s.policyApproved ? 'ok' : 'warn'}>Billing policy: {s.policyApproved ? 'approved' : 'refunds and cancellation approved; grace period and disputes to decide'}</Badge>
     </div>
   )
 }
@@ -118,6 +118,7 @@ function Overview({ go, queueOnly }: { go: (n: { view?: View; site?: string | nu
   const week = open.filter((c: Row) => new Date(c.review_due_at).getTime() >= now && new Date(c.review_due_at).getTime() < now + 7 * 86400_000)
   const billing = data.sites.filter((s: Row) => ['attention', 'past_due', 'unpaid', 'refunded', 'disputed'].includes(s.billing_state))
   const problems = data.failedRuns.length + data.failedNotes.length + data.failedEvents.length + data.stuckSends.filter((s: Row) => s.status === 'sending').length
+    + (data.heldCycles?.length || 0) + (data.blockedRuns?.length || 0) + (data.termsNeeded?.length || 0)
   const name = (s: Row | undefined) => { const c = s && clientOf(s); return c?.business || c?.name || s?.label || 'Unknown' }
 
   const queue = (
@@ -160,13 +161,31 @@ function Overview({ go, queueOnly }: { go: (n: { view?: View; site?: string | nu
       </div>
       {!data.policyApproved && (
         <div className="care-sub" style={{ marginBottom: 16 }}>
-          <b>Billing policies are still proposals.</b> Grace period, refund, dispute, and cancellation handling need your approval before production. <button className="care-btn small" onClick={() => go({ view: 'settings' })}>Review in settings</button>
+          <b>Two billing rules are still undecided.</b> Billing, refunds and cancellation are approved; the grace period and dispute handling still need your approval before live checkout. <button className="care-btn small" onClick={() => go({ view: 'settings' })}>Review in settings</button>
         </div>
       )}
       {problems > 0 && (
         <section className="care-panel" aria-labelledby="att-h">
           <h2 id="att-h" style={{ marginBottom: 10 }}>Needs your attention</h2>
           <div className="care-grid">
+            {(data.heldCycles || []).map((c: Row) => (
+              <div key={c.id} className="care-sub care-between">
+                <div><Badge tone="bad">Paid review on hold</Badge> <b>{name(siteOf(c.site_id))}</b><div className="care-muted">{({ enrollment: 'Setup never confirmed', setup_changed: 'Setup changed, confirm it again', paused: 'Care is paused', ended: 'Care ended but this period was paid' } as Record<string, string>)[c.hold_reason] || c.hold_reason} · paid {fmt(c.paid_at, tz)}</div></div>
+                <button className="care-btn small" onClick={() => go({ cycle: c.id })}>Open review</button>
+              </div>
+            ))}
+            {(data.blockedRuns || []).map((r: Row) => (
+              <div key={r.id} className="care-sub care-between">
+                <div><Badge tone={r.dispatch_status === 'blocked' ? 'bad' : 'warn'}>{r.dispatch_status === 'blocked' ? 'Check couldn’t start' : 'Check start retrying'}</Badge> <b>{name(siteOf(r.site_id))}</b><div className="care-muted">{r.dispatch_error} · {r.dispatch_attempts} attempt(s)</div></div>
+                <button className="care-btn small" onClick={() => go({ cycle: r.cycle_id })}>Open review</button>
+              </div>
+            ))}
+            {(data.termsNeeded || []).map((id: string) => (
+              <div key={id} className="care-sub care-between">
+                <div><Badge tone="warn">Terms acceptance needed</Badge> <b>{name(siteOf(id))}</b><div className="care-muted">Existing subscriber on an earlier agreement. The current terms don’t apply until they accept.</div></div>
+                <button className="care-btn small" onClick={() => go({ site: id })}>Open website</button>
+              </div>
+            ))}
             {data.failedRuns.map((r: Row) => (
               <div key={r.id} className="care-sub care-between">
                 <div><Badge tone="bad">Check failed</Badge> <b>{name(siteOf(r.site_id))}</b><div className="care-muted">{r.error} · {r.attempts} attempt(s) · {fmt(r.finished_at, tz)}</div></div>

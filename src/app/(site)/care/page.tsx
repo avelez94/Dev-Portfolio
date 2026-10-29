@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import s from '@/components/site/site.module.css'
-import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, PageHeader, SubNav } from '@/components/site/blocks'
+import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, FaqList, PageHeader, SubNav } from '@/components/site/blocks'
 import { inquiryHref } from '@/content/site'
-import { careBenefits, careSubscribeNote, occasionalSupport } from '@/content/offers'
+import { careBenefits, careFaqs, careSubscribeNote, occasionalSupport } from '@/content/offers'
+import { CARE_QUEUED_LINE, CARE_TERMS_PATH } from '@/content/care-terms'
 import { CARE_SAMPLES } from '@/content/care-samples'
 import CareSample from '@/components/site/CareSample'
 
@@ -34,6 +35,7 @@ export default function CarePage() {
             { href: '#sample', label: 'Sample report' },
             { href: '#time', label: 'How time works' },
             { href: '#support', label: 'Occasional support' },
+            { href: '#questions', label: 'Questions' },
           ]}
         />
       </PageHeader>
@@ -66,6 +68,9 @@ export default function CarePage() {
           <p className={s.sectionLede}>
             Every plan includes monthly website checks and a monthly health report. Business and Premium Care add monthly time for content updates or
             troubleshooting. Care plans are optional.
+          </p>
+          <p className={s.sectionLede}>
+            Plans are billed monthly in advance. {CARE_QUEUED_LINE} <Link href={CARE_TERMS_PATH}>Billing, cancellation and refund terms</Link>.
           </p>
         </div>
         <CarePlanCards />
@@ -125,6 +130,20 @@ export default function CarePage() {
             ))}
           </ul>
         </div>
+      </section>
+
+      {/* ---------------- FAQ ---------------- */}
+      <section id="questions" className={s.faq} aria-labelledby="faq-title">
+        <div className={s.faqIntro} data-reveal>
+          <p className={s.eyebrow}>Questions</p>
+          <h2 id="faq-title" className={s.sectionTitle}>
+            Billing, <em>plainly.</em>
+          </h2>
+          <p className={s.sectionLede}>
+            The full details are in the <Link href={CARE_TERMS_PATH}>Website Care terms</Link>.
+          </p>
+        </div>
+        <FaqList faqs={careFaqs} />
       </section>
 
       {/* ---------------- Costs reference ---------------- */}

@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 
 /**
  * Where Stripe Checkout returns. This page only says thanks: it does not start
- * or confirm anything. The plan becomes active only from Stripe's verified
- * payment notice, after which I confirm the setup by email.
+ * or confirm anything. Only Stripe's verified payment notice starts the paid
+ * period and queues its check.
  */
 export default function CareSubscribedPage() {
   if (!careEnabled()) notFound()
@@ -24,10 +24,13 @@ export default function CareSubscribedPage() {
       tone="teal"
       eyebrow="Website care"
       title="Thank you."
-      lede="Stripe is confirming your payment. Once it’s confirmed, I’ll be in touch about your first monthly check. Questions in the meantime? Just reply to any of my emails."
+      lede="Stripe is confirming your payment. Your monthly website check is automatically queued when payment is confirmed, and I’ll send your report once I’ve reviewed the results. Questions in the meantime? Just reply to any of my emails."
     >
       <Link href="/care" className={`${s.btn} ${s.btnGhost}`}>
         Back to Website Care
+      </Link>{' '}
+      <Link href="/care/terms" className={`${s.btn} ${s.btnGhost}`}>
+        Care Terms
       </Link>
     </PageHeader>
   )

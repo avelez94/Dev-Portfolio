@@ -81,6 +81,12 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-sect[open]>summary::before{transform:rotate(45deg)}
 .care-sect>summary h2{font-size:18px}
 .care-sect-body{padding:0 18px 18px}
+.care-pipe{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
+.care-pipe li{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--border2);border-radius:10px;padding:8px 10px;min-width:0}
+.care-pipe li.done{border-top-color:var(--greenText)}.care-pipe li.active{border-top-color:var(--accent)}.care-pipe li.problem{border-top-color:var(--redText)}
+.care-pipe b{display:block;font-size:13px}.care-pipe span{display:block;font-size:12px;color:var(--text3);overflow-wrap:anywhere}
+@media (max-width:760px){.care-pipe{grid-template-columns:1fr 1fr}}
+.care-frame{width:100%;height:520px;border:1px solid var(--border2);border-radius:12px;background:#fff}
 .care-skel{height:14px;border-radius:6px;background:var(--surface2);animation:carepulse 1.2s infinite}
 @keyframes carepulse{50%{opacity:.5}}
 @media (prefers-reduced-motion:reduce){.care-skel{animation:none}}
@@ -211,10 +217,12 @@ export function BillingBadge({ state }: { state: string }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function workStatus(c: Record<string, any>, report?: { status: string } | null): [string, 'ok' | 'warn' | 'bad' | 'info' | 'coral'] {
   if (c.completed_at) return ['Report sent', 'ok']
-  if (c.hold_reason === 'enrollment') return ['Waiting for setup confirmation', 'warn']
+  if (c.hold_reason === 'ended') return ['Paid, on hold: care ended', 'bad']
+  if (c.hold_reason === 'paused') return ['Paid, on hold: paused', 'bad']
+  if (c.hold_reason) return ['Paid, on hold: confirm setup', 'bad']
   const overdue = new Date(c.review_due_at) < new Date()
   if (c.scan_state === 'failed') return ['Check failed: retry needed', 'bad']
-  if (c.scan_state === 'queued') return ['Check queued', 'info']
+  if (c.scan_state === 'queued') return ['Paid, check queued', 'info']
   if (c.scan_state === 'running') return ['Check running', 'info']
   if (report?.status === 'approved') return ['Approved, not sent', 'coral']
   if (report?.status === 'ready') return [overdue ? 'Overdue: ready for approval' : 'Ready for approval', overdue ? 'bad' : 'coral']
@@ -226,4 +234,23 @@ export function workStatus(c: Record<string, any>, report?: { status: string } |
 export function fmt(d: string | null | undefined, tz: string, withTime = true) {
   if (!d) return 'Not set'
   return new Intl.DateTimeFormat('en-US', { timeZone: tz, dateStyle: 'medium', ...(withTime ? { timeStyle: 'short' } : {}) }).format(new Date(d))
+}
+
+export type PipeStep = { key: string; label: string; state: 'done' | 'active' | 'waiting' | 'problem'; at: string | null; detail?: string }
+
+/** Payment received, then scan queued, running, and completed or failed. */
+export function Pipeline({ steps, tz, label = 'Payment to check' }: { steps: PipeStep[]; tz: string; label?: string }) {
+  if (!steps?.length) return null
+  const word = { done: 'done', active: 'in progress', waiting: 'not yet', problem: 'needs attention' }
+  return (
+    <ol className="care-pipe" aria-label={label}>
+      {steps.map((st) => (
+        <li key={st.key} className={st.state}>
+          <b>{st.label}<span className="care-sr"> ({word[st.state]})</span></b>
+          {st.at && <span>{fmt(st.at, tz)}</span>}
+          {st.detail && <span>{st.detail}</span>}
+        </li>
+      ))}
+    </ol>
+  )
 }

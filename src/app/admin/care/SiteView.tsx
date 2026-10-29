@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
-import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus } from './ui'
+import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, Pipeline, type PipeStep } from './ui'
 import { SitesTable } from './CareApp'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -218,7 +218,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
       {!confirmed && !ended && site.enrollment_status !== 'paused' && (
         <section className="care-panel" aria-labelledby="conf-h">
           <h2 id="conf-h">Confirm the setup</h2>
-          <p className="care-muted" style={{ margin: '4px 0 12px' }}>Recurring reviews stay off until you confirm. A paid period that arrives before then waits here; no scan of any address starts on payment alone.{data.setupChanged && ' The setup changed since the last confirmation.'}</p>
+          <p className="care-muted" style={{ margin: '4px 0 12px' }}>Checkout and reviews stay off until you confirm. A paid period that arrives while the setup isn’t confirmed is kept on hold and flagged to you; no address is scanned outside the confirmed scope.{data.setupChanged && ' The setup changed since the last confirmation.'}</p>
           <div className="care-grid">
             <label className="care-row"><input type="checkbox" checked={conf.confirm_website} onChange={(e) => setConf({ ...conf, confirm_website: e.target.checked })} /> The website address, approved domains, pages, and destinations above are the agreed scope.</label>
             <label className="care-row"><input type="checkbox" checked={conf.confirm_authorization} onChange={(e) => setConf({ ...conf, confirm_authorization: e.target.checked })} /> The client authorized these read only checks of their website.</label>
@@ -244,7 +244,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             <div className="care-muted">Last synced {fmt(site.stripe_synced_at, tz)}</div>
           </div>
           <div className="care-grid">
-            {!site.stripe_subscription_id && !ended && <Action label="Create Stripe checkout link" run={() => careApi<Row>(`sites/${id}/checkout`, { method: 'POST', json: {} })} done={(r) => { setLink((r as Row).url); reload() }} />}
+            {!site.stripe_subscription_id && !ended && data.checkoutProblems.length === 0 && <Action label="Create Stripe checkout link" run={() => careApi<Row>(`sites/${id}/checkout`, { method: 'POST', json: {} })} done={(r) => { setLink((r as Row).url); reload() }} />}
             {site.stripe_customer_id && <Action label="Create billing portal link" run={() => careApi<Row>(`sites/${id}/portal`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
             {site.stripe_subscription_id && <Action label="Refresh from Stripe" run={() => careApi(`sites/${id}/sync`, { method: 'POST', json: {} })} done={reload} />}
             {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. Opening it doesn’t activate anything; only Stripe’s verified payment notice does.</small></div>}
@@ -256,6 +256,12 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             )}
           </div>
         </div>
+        {cycles[0] && data.pipelines?.[cycles[0].id] && (
+          <div style={{ marginTop: 12 }}>
+            <div className="care-label">Latest paid period: {fmt(cycles[0].period_start, tz, false)} to {fmt(cycles[0].period_end, tz, false)}</div>
+            <Pipeline steps={data.pipelines[cycles[0].id]} tz={tz} label="Latest payment to check" />
+          </div>
+        )}
         {!site.stripe_subscription_id && !ended && (
           <details style={{ marginTop: 12 }}>
             <summary>Billed outside Stripe? Add a paid service period by hand</summary>
@@ -272,6 +278,10 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         )}
       </section>
 
+      {!site.stripe_subscription_id && !ended && <InvitePanel id={id} data={data} reload={reload} />}
+
+      <TermsPanel id={id} data={data} tz={tz} reload={reload} />
+
       <section className="care-panel" aria-labelledby="hist-h">
         <h2 id="hist-h" style={{ marginBottom: 10 }}>Monthly reviews</h2>
         {cycles.length === 0 ? <Empty>No service periods yet. The first appears when the first payment succeeds.</Empty> : (
@@ -283,7 +293,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
               return (
                 <tr key={c.id}>
                   <td>{fmt(c.period_start, tz, false)} to {fmt(c.period_end, tz, false)}<div className="care-muted">{c.source === 'manual' ? 'Added by hand' : 'Stripe'}{c.billing_flag ? ` · ${c.billing_flag.replace(/_/g, ' ')}` : ''}</div></td>
-                  <td><Badge tone={tone}>{label}</Badge></td>
+                  <td><Badge tone={tone}>{label}</Badge><PipeLine steps={data.pipelines?.[c.id]} /></td>
                   <td style={{ textTransform: 'capitalize' }}>{r?.status || 'draft'} <span className="care-muted">v{r?.version}</span></td>
                   <td>{fmt(c.review_due_at, tz)}</td>
                   <td><button className="care-btn small" onClick={() => go({ cycle: c.id })}>Open</button></td>
@@ -316,5 +326,72 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         )}
       </section>
     </>
+  )
+}
+
+function PipeLine({ steps }: { steps?: PipeStep[] }) {
+  if (!steps?.length) return null
+  return <div className="care-muted" style={{ fontSize: 12, marginTop: 4 }}>{steps.filter((x) => x.state !== 'waiting').map((x) => x.label + (x.detail && x.key === 'queued' ? ` (${x.detail})` : '')).join(' → ')}</div>
+}
+
+/** Readiness checks, the invitation preview, and the typed confirmation to send it. */
+function InvitePanel({ id, data, reload }: { id: string; data: Row; reload: () => void }) {
+  const [pv, setPv] = useState<Row | null>(null)
+  const [confirmEmail, setConfirmEmail] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const problems: string[] = data.checkoutProblems || []
+  const site = data.site
+  return (
+    <section className="care-panel" aria-labelledby="inv-h">
+      <div className="care-between"><h2 id="inv-h">Checkout invitation</h2>{site.invited_at ? <Badge tone="ok">Invited {new Date(site.invited_at).toLocaleDateString()}</Badge> : <Badge>Not sent</Badge>}</div>
+      <p className="care-muted" style={{ margin: '4px 0 12px' }}>The invitation explains monthly billing in advance, the automatic check, refunds and how to cancel, and links the current care terms. Checkout requires the client to accept those terms; the version and time are recorded from Stripe.</p>
+      {problems.length > 0 ? (
+        <div className="care-sub" role="status"><b>Before you can invite this client:</b><ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{problems.map((p) => <li key={p}>{p}</li>)}</ul></div>
+      ) : <div className="care-okmsg">Setup, authorization, scope and address are confirmed. Ready to invite.</div>}
+      <div className="care-row" style={{ marginTop: 12 }}>
+        <Action label="Preview invitation" run={() => careApi<Row>(`sites/${id}/invite`, { method: 'POST', json: { preview: true } })} done={(r) => setPv(r as Row)} />
+      </div>
+      {pv && (
+        <div className="care-grid" style={{ marginTop: 12 }}>
+          <div className="care-muted">To {pv.recipient_name || ''} &lt;{pv.recipient_email}&gt; · Subject: {pv.subject} · Terms version {pv.terms_version}</div>
+          {!pv.allowed?.ok && <div className="care-err">{pv.allowed?.reason}</div>}
+          <iframe className="care-frame" title="Invitation preview" srcDoc={pv.html} sandbox="" />
+          <Field label="Type the recipient’s email to send" id="inv-confirm"><input id="inv-confirm" value={confirmEmail} onChange={(e) => setConfirmEmail(e.target.value)} placeholder={pv.recipient_email} autoComplete="off" /></Field>
+          <div><Action tone="primary" label="Send invitation with secure checkout link" disabled={problems.length > 0 || !pv.allowed?.ok}
+            run={() => careApi<Row>(`sites/${id}/invite`, { method: 'POST', json: { confirm_email: confirmEmail } })} done={() => { setMsg('Invitation sent.'); setPv(null); reload() }} /></div>
+        </div>
+      )}
+      {msg && <div className="care-okmsg" role="status" style={{ marginTop: 10 }}>{msg}</div>}
+    </section>
+  )
+}
+
+/** Which care terms this client accepted, and recording acceptance made outside Stripe. */
+function TermsPanel({ id, data, tz, reload }: { id: string; data: Row; tz: string; reload: () => void }) {
+  const t = data.terms
+  const [f, setF] = useState({ evidence: '', accepted_on: '', confirm: false })
+  if (!t) return null
+  const tone = t.state === 'current' ? 'ok' : t.state === 'acceptance_needed' ? 'bad' : 'info'
+  const label = t.state === 'current' ? `Accepted version ${t.version}` : t.state === 'acceptance_needed' ? `Acceptance needed (current terms ${t.current})` : 'Accepted at checkout'
+  return (
+    <section className="care-panel" aria-labelledby="terms-h">
+      <div className="care-between"><h2 id="terms-h">Care terms</h2><Badge tone={tone}>{label}</Badge></div>
+      {t.state === 'acceptance_needed' && <p style={{ margin: '6px 0' }}>This client subscribed under {t.version ? `version ${t.version}` : 'an earlier agreement'}. Their existing agreement stays in place: the current terms aren’t applied to them until they accept. Ask them, then record it here.</p>}
+      {t.state === 'at_checkout' && <p className="care-muted" style={{ margin: '6px 0' }}>The client accepts version {t.current} at checkout.</p>}
+      {(data.acceptances || []).length > 0 && (
+        <ul style={{ margin: '6px 0', paddingLeft: 18 }}>{data.acceptances.map((a: Row) => <li key={a.id}>Version {a.terms_version} accepted {fmt(a.accepted_at, tz)} <span className="care-muted">({a.source === 'stripe_checkout' ? 'Stripe Checkout' : `recorded by you: ${a.evidence}`})</span></li>)}</ul>
+      )}
+      {t.state === 'acceptance_needed' && (
+        <details style={{ marginTop: 8 }}>
+          <summary>Record acceptance of version {t.current}</summary>
+          <div className="care-grid" style={{ marginTop: 10 }}>
+            <Field label="How they accepted" id="t-ev"><input id="t-ev" value={f.evidence} onChange={(e) => setF({ ...f, evidence: e.target.value })} placeholder="Replied yes to the updated terms email" /></Field>
+            <Field label="Date accepted" id="t-on"><input id="t-on" type="date" value={f.accepted_on} onChange={(e) => setF({ ...f, accepted_on: e.target.value })} /></Field>
+            <label className="care-row"><input type="checkbox" checked={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.checked })} /> The client accepted Website Care terms version {t.current}.</label>
+            <div><Action label="Record acceptance" run={() => careApi(`sites/${id}/terms`, { method: 'POST', json: f })} done={reload} /></div>
+          </div>
+        </details>
+      )}
+    </section>
   )
 }

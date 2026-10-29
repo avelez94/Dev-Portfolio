@@ -3219,3 +3219,59 @@ details[open] > summary .summaryIcon {
     transform: none;
   }
 }
+
+/* Website Care terms page */
+.termsDoc {
+  max-width: 760px;
+  display: grid;
+  gap: 14px;
+}
+
+.termsDocSection {
+  padding: 22px 24px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  scroll-margin-top: 96px;
+}
+
+.termsDocSection p + p {
+  margin-top: 10px;
+}
+
+.termsDocSection:target {
+  border: 2px solid var(--ink);
+  background: var(--teal-soft);
+}
+
+.termsDocFoot {
+  margin-top: 8px;
+  color: var(--ink-soft);
+}
+
+.termsDocFoot a {
+  font-weight: 700;
+  color: var(--coral-deep);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.demoSteps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.demoAt {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--teal-deep, var(--ink));
+}

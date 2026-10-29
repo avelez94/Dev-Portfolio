@@ -111,6 +111,66 @@ export function billingAttention(p: { client: string; site: string; state: strin
   }
 }
 
+export function paidReviewHeld(p: { client: string; site: string; siteUrl: string; reason: string; reasonText: string; renewal: boolean; period: string; due: string; link: string }): Email {
+  return {
+    subject: `Website Care: paid review for ${p.client} is on hold`,
+    ...renderEmail({
+      audience: 'admin',
+      preheader: `${p.renewal ? 'A renewal' : 'A payment'} was received but the check can’t start: ${p.reasonText}`,
+      eyebrow: 'Payment received, check on hold',
+      title: 'Paid review on hold for',
+      titleAccent: `${p.client}.`,
+      blocks: [
+        { type: 'details', rows: [['Website', `${esc(p.site)}<br>${esc(p.siteUrl)}`], ['Paid period', esc(p.period)], ['Why it’s held', esc(p.reasonText)], ['Review due', esc(p.due)]] },
+        { type: 'p', html: 'The paid review is kept. Nothing was scanned, because the confirmed scope doesn’t match what’s set up now. Confirm the setup (or resume care) and the check is queued straight away. If the service can’t be provided for this period, decide how to handle it; nothing was refunded.' },
+        { type: 'buttons', items: [{ label: 'Open Review', href: p.link }], fallbackLink: true },
+      ],
+    }),
+  }
+}
+
+export function dispatchBlocked(p: { client: string; site: string; siteUrl: string; error: string; attempts: number; due: string; link: string }): Email {
+  return {
+    subject: `Website Care: the check for ${p.client} couldn’t be started`,
+    ...renderEmail({
+      audience: 'admin',
+      preheader: 'The paid review is kept and its check is still queued.',
+      eyebrow: 'Check not started',
+      title: 'The check couldn’t start for',
+      titleAccent: `${p.client}.`,
+      blocks: [
+        { type: 'details', rows: [['Website', `${esc(p.site)}<br>${esc(p.siteUrl)}`], ['What happened', esc(p.error)], ['Attempts', String(p.attempts)], ['Review due', esc(p.due)]] },
+        { type: 'p', html: 'The paid review and its queued check are kept. The check workflow’s own schedule can still pick it up. Check the runner settings, then choose Retry start on the review.' },
+        { type: 'buttons', items: [{ label: 'Open Review', href: p.link }], fallbackLink: true },
+      ],
+    }),
+  }
+}
+
+/** The checkout invitation: what the plan is, how billing works, how to cancel, and the secure link. */
+export function checkoutInvite(p: { name: string; planName: string; price: string; siteLabel: string; siteUrl: string; checkoutUrl: string; termsUrl: string; termsVersion: string; disclosure: string; cancelRoute: string; queuedLine: string; message?: string }): Email {
+  const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
+  return {
+    subject: `Start your ${p.planName} plan`,
+    ...renderEmail({
+      audience: 'client',
+      preheader: `Your secure Stripe link to start ${p.planName} for ${p.siteLabel}.`,
+      eyebrow: 'Website Care',
+      title: 'Start your',
+      titleAccent: 'care plan.',
+      blocks: [
+        { type: 'p', html: p.message ? escLines(p.message) : `Hi ${esc(first)},<br><br>Here’s your secure Stripe link to start ${esc(p.planName)} for ${esc(p.siteLabel)}. We’ve already agreed on the website and what gets checked each month.` },
+        { type: 'details', rows: [['Plan', esc(p.planName)], ['Price', esc(p.price)], ['Website', `${esc(p.siteLabel)}<br>${esc(p.siteUrl)}`]] },
+        { type: 'callout', title: 'How billing works', html: esc(p.disclosure), tone: 'teal' },
+        { type: 'p', html: `<strong>Cancelling:</strong> ${esc(p.cancelRoute)}` },
+        { type: 'p', html: `At checkout you’ll be asked to accept the Website Care terms (version ${esc(p.termsVersion)}): <a href="${esc(p.termsUrl)}">${esc(p.termsUrl)}</a>. ${esc(p.queuedLine)}` },
+        { type: 'buttons', items: [{ label: 'Start My Plan', href: p.checkoutUrl }], fallbackLink: true },
+        { type: 'note', html: 'This secure link is from Stripe and expires after 24 hours. If it expires, reply and I’ll send a new one.' },
+      ],
+    }),
+  }
+}
+
 /**
  * The client's report email: your message, then the complete concise report
  * from the approved snapshot, with the same version attached as a PDF.

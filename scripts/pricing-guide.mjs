@@ -19,6 +19,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCES = [
   'src/content/offers.ts',
   'src/content/guide.ts',
+  'src/content/care-terms.ts',
   'src/app/pricing-guide/page.tsx',
   'src/app/pricing-guide/guide.module.css',
 ]

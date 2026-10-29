@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import s from './guide.module.css'
+import { CARE_QUEUED_LINE, CARE_TERMS_PATH } from '@/content/care-terms'
+import { BRAND } from '@/lib/brand'
 import {
   HOURLY_RATE,
   carePlans,
@@ -174,6 +176,11 @@ export default function PricingGuide() {
           Launch day <em>isn’t goodbye.</em>
         </h1>
         <p className={s.lede}>Care plans are optional. Every plan includes monthly website checks and a monthly health report.</p>
+        <p className={s.lede}>
+          Plans are billed monthly in advance. {CARE_QUEUED_LINE} Cancel before your next billing date to stop future renewals. Terms:{' '}
+          {BRAND.site}
+          {CARE_TERMS_PATH}
+        </p>
         <div className={s.plans}>
           {carePlans.map((p, i) => (
             <article key={p.id} className={s.plan} data-tone={i}>

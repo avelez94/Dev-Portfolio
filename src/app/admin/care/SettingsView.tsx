@@ -1,8 +1,17 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useLoad, careApi, Badge, Field, Loading, ErrorBox, Action } from './ui'
+import { CARE_TERMS_VERSION, CARE_TERMS_PATH, CARE_QUEUED_LINE } from '@/content/care-terms'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+const APPROVED: [string, string][] = [
+  ['Billing', 'Care plans are billed monthly in advance. Successful payment starts the paid service period.'],
+  ['Automatic check', `${CARE_QUEUED_LINE} The verified payment queues and starts the scan; the scheduled tick only recovers missed or failed starts.`],
+  ['Refunds', 'Non-refundable after successful payment, except where required by law. Refunds made in Stripe are flagged for you; none are issued automatically.'],
+  ['Cancellation', 'Clients cancel future renewals before the next billing date. It takes effect at the end of the paid period; the plan stays available until then. No prorated refund. The Stripe billing portal is set to cancel at period end with no proration.'],
+  ['Billing errors', 'Duplicate or incorrect charges are always investigated and corrected; the refund policy never blocks that. Possible duplicates and payments with no linked review are flagged to you.'],
+  ['Service not provided', 'Paid periods that can’t be checked (setup not confirmed, paused, ended, or ended early by Stripe) are kept and flagged for your review.'],
+]
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export default function SettingsView() {
@@ -62,24 +71,30 @@ export default function SettingsView() {
         </p>
       </section>
 
+      <section className="care-panel" aria-labelledby="apr-h">
+        <div className="care-between"><h2 id="apr-h">Billing policy: approved</h2><Badge tone="ok">{data.refund_policy_approved_at ? `Approved ${new Date(data.refund_policy_approved_at).toLocaleDateString()}` : 'Approved'} · terms {CARE_TERMS_VERSION}</Badge></div>
+        <p className="care-muted" style={{ margin: '4px 0 12px' }}>Published in the <a href={CARE_TERMS_PATH} target="_blank" rel="noreferrer">care terms</a>, the Website Care FAQ, the checkout invitation and Stripe Checkout. Changing any of these needs a new terms version, so they can’t be edited here.</p>
+        <dl className="care-grid" style={{ margin: 0 }}>
+          {APPROVED.map(([k, v]) => <div key={k} className="care-sub"><dt className="care-label">{k}</dt><dd style={{ margin: '4px 0 0' }}>{v}</dd></div>)}
+        </dl>
+      </section>
+
       <section className="care-panel" aria-labelledby="pol-h">
-        <div className="care-between"><h2 id="pol-h">Billing policy (proposed)</h2><Badge tone={data.policy_approved_at ? 'ok' : 'warn'}>{data.policy_approved_at ? `Approved ${new Date(data.policy_approved_at).toLocaleDateString()}` : 'Needs your approval before production'}</Badge></div>
-        <p className="care-muted" style={{ margin: '4px 0 12px' }}>These decide how the dashboard reacts. None of them charge, refund, cancel, or pause anything in Stripe. Changing one clears an earlier approval.</p>
+        <div className="care-between"><h2 id="pol-h">Billing policy: still to decide</h2><Badge tone={data.policy_approved_at ? 'ok' : 'warn'}>{data.policy_approved_at ? `Approved ${new Date(data.policy_approved_at).toLocaleDateString()}` : 'Not approved: live checkout stays off'}</Badge></div>
+        <p className="care-muted" style={{ margin: '4px 0 12px' }}>The grace period and dispute handling aren’t approved yet. Until they are, the dashboard only flags these for you; nothing charges, refunds, cancels or pauses anything in Stripe, and live checkout stays off. Changing one clears an earlier approval.</p>
         <div className="care-grid">
           <div className="care-two">
             <Field label="Flag billing attention after this many failed payments" id="p-af"><input id="p-af" inputMode="numeric" value={f.billing_attention_after_failures} onChange={(e) => set('billing_attention_after_failures', e.target.value)} /></Field>
-            <Field label="Grace period after a failed payment (days)" id="p-g" hint="Empty means not decided yet. Reviews only ever start for paid periods."><input id="p-g" inputMode="numeric" value={f.grace_days ?? ''} onChange={(e) => set('grace_days', e.target.value)} /></Field>
+            <Field label="Grace period after a failed payment (days)" id="p-g" hint="Not decided yet. Reviews only ever start for paid periods."><input id="p-g" inputMode="numeric" value={f.grace_days ?? ''} onChange={(e) => set('grace_days', e.target.value)} /></Field>
           </div>
           <div className="care-two">
-            <Field label="When a payment is refunded" id="p-r"><select id="p-r" value={f.refund_handling} onChange={(e) => set('refund_handling', e.target.value)}><option value="flag_for_review">Flag the review for me to decide</option></select></Field>
-            <Field label="When a payment is disputed" id="p-d"><select id="p-d" value={f.dispute_handling} onChange={(e) => set('dispute_handling', e.target.value)}><option value="flag_for_review">Flag the review for me to decide</option></select></Field>
+            <Field label="When a payment is disputed" id="p-d" hint="Not decided yet."><select id="p-d" value={f.dispute_handling} onChange={(e) => set('dispute_handling', e.target.value)}><option value="flag_for_review">Flag the review for me to decide (no automatic response)</option></select></Field>
+            <Field label="When Stripe ends a subscription before the paid period ends" id="p-c"><select id="p-c" value={f.immediate_cancel_handling} onChange={(e) => set('immediate_cancel_handling', e.target.value)}><option value="flag_for_review">Keep the open review and flag it for me (nothing is refunded)</option></select></Field>
           </div>
-          <Field label="When a subscription is canceled immediately" id="p-c"><select id="p-c" value={f.immediate_cancel_handling} onChange={(e) => set('immediate_cancel_handling', e.target.value)}><option value="keep_paid_cycles">Keep the open review and flag it for me to decide</option></select></Field>
-          <p className="care-muted">Not set by this system: proration, refunds, trials, and cancellation terms. Those stay in Stripe’s settings and your care agreement. Cancel at period end always honors the paid period.</p>
-          <div><Action label="Save policy settings" run={() => save(['billing_attention_after_failures', 'grace_days', 'refund_handling', 'dispute_handling', 'immediate_cancel_handling'])} done={(r) => { setData(r as Row); setMsg('Policy settings saved. They need approval again.') }} /></div>
+          <div><Action label="Save these settings" run={() => save(['billing_attention_after_failures', 'grace_days', 'dispute_handling', 'immediate_cancel_handling'])} done={(r) => { setData(r as Row); setMsg('Policy settings saved. They need approval again.') }} /></div>
           {!data.policy_approved_at && (
             <div className="care-sub">
-              <label className="care-row"><input type="checkbox" checked={policyOk} onChange={(e) => setPolicyOk(e.target.checked)} /> I approve these billing policies for production.</label>
+              <label className="care-row"><input type="checkbox" checked={policyOk} onChange={(e) => setPolicyOk(e.target.checked)} /> I approve the grace period and dispute handling above for production.</label>
               <Field label="Where the policy is written down" id="p-n"><input id="p-n" value={policyNote} onChange={(e) => setPolicyNote(e.target.value)} placeholder="Care agreement v1, section 4" /></Field>
               <div style={{ marginTop: 8 }}><Action tone="primary" disabled={!policyOk} label="Record approval" run={() => careApi<Row>('settings/approve-policy', { method: 'POST', json: { confirm: policyOk, note: policyNote } })} done={(r) => { setData(r as Row); setMsg('Approval recorded.') }} /></div>
             </div>

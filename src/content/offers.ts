@@ -20,6 +20,8 @@ import 'server-only'
  * Copy rule: no dashes of any kind in visitor facing text.
  */
 
+import { careBillingFaq } from './care-terms'
+
 export const SHOW_DRAFTS =
   process.env.SHOW_DRAFTS === 'true' ||
   process.env.VERCEL_ENV === 'preview' ||
@@ -248,7 +250,7 @@ export const careBoundaries = [
 export const careSubscribeNote = {
   approved: false,
   title: 'Starting a plan',
-  body: 'Once we agree on your site and what gets checked each month, I’ll send you a secure Stripe link to start your plan.',
+  body: 'Once we agree on your site and what gets checked each month, I’ll send you a secure Stripe link to start your plan. Your monthly website check is automatically queued when payment is confirmed.',
 }
 
 export const careUpdatesNote =
@@ -280,6 +282,11 @@ export const occasionalSupport = [
 /* ------------------------------------------------------------------ */
 
 export type Faq = { q: string; a: Offer<string> }
+
+/** Website Care questions. Billing wording approved Oct 29, 2026 (see care-terms.ts). */
+export const careFaqs: Faq[] = [
+  { q: careBillingFaq.q, a: approved(careBillingFaq.a) },
+]
 
 export const projectFaqs: Faq[] = [
   {

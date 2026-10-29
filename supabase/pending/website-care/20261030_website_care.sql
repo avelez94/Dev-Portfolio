@@ -29,14 +29,22 @@ create table if not exists public.care_settings (
   overdue_reminder_max int not null default 3 check (overdue_reminder_max between 0 and 10),
   notify_email text,
   evidence_retention_days int not null default 90 check (evidence_retention_days between 30 and 730),
-  -- Proposed billing handling (needs approval before production).
+  -- Billing handling. Billing timing, refunds, cancellation and billing errors
+  -- were approved by the owner on 2026-10-29 (care terms 2026-10-29). The grace
+  -- period and dispute handling are still PROPOSALS until approved.
   grace_days int check (grace_days is null or grace_days between 0 and 60),
   billing_attention_after_failures int not null default 1 check (billing_attention_after_failures between 1 and 10),
-  refund_handling text not null default 'flag_for_review',
+  refund_handling text not null default 'non_refundable_except_law',
+  cancellation_handling text not null default 'end_of_paid_period_no_proration',
+  billing_error_handling text not null default 'investigate_and_correct',
   dispute_handling text not null default 'flag_for_review',
-  immediate_cancel_handling text not null default 'keep_paid_cycles',
+  immediate_cancel_handling text not null default 'flag_for_review',
+  refund_policy_approved_at timestamptz default '2026-10-29T12:00:00Z',
+  refund_policy_approved_note text default 'Approved by the owner on Oct 29, 2026: billed monthly in advance; payment queues the review; non-refundable except where required by law; cancel future renewals before the next billing date, effective at the end of the paid period, no prorated refund; billing errors are always investigated and corrected.',
   policy_approved_at timestamptz,
   policy_approved_note text,
+  -- Stripe customer portal configuration ids by mode ({"test": "bpc_..."}).
+  stripe_portal_config jsonb not null default '{}',
   updated_at timestamptz not null default now()
 );
 insert into public.care_settings (id) values (1) on conflict (id) do nothing;
@@ -66,6 +74,11 @@ create table if not exists public.care_sites (
   authorization_note text,
   confirmed_at timestamptz,
   confirmed_hash text,
+  -- Care terms accepted for this website (latest), see care_terms_acceptances.
+  terms_version text,
+  terms_accepted_at timestamptz,
+  terms_source text,
+  invited_at timestamptz,
   stripe_customer_id text,
   stripe_subscription_id text,
   stripe_price_id text,
@@ -107,7 +120,11 @@ create table if not exists public.care_cycles (
   scan_after timestamptz,
   review_start_at timestamptz,
   review_due_at timestamptz not null,
-  hold_reason text,                  -- 'enrollment' while setup is unconfirmed
+  allowance_minutes int not null default 0,   -- included time for this paid period (from the plan)
+  -- Why a paid period's scan is waiting: enrollment (never confirmed), setup_changed
+  -- (scope edited, needs confirming again), paused, ended. Flagged to the owner.
+  hold_reason text check (hold_reason is null or hold_reason in ('enrollment','setup_changed','paused','ended')),
+  hold_flagged_at timestamptz,
   scan_state text not null default 'not_started' check (scan_state in ('not_started','queued','running','done','partial','failed','canceled')),
   manual_state text not null default 'not_started' check (manual_state in ('not_started','in_progress','done')),
   billing_flag text,                 -- refunded, disputed, canceled_immediately
@@ -142,6 +159,12 @@ create table if not exists public.care_scan_runs (
   summary jsonb,
   error text,
   requested_by text,
+  -- Asking the runner to start (GitHub workflow dispatch), retried within limits.
+  dispatch_status text not null default 'pending' check (dispatch_status in ('pending','dispatched','failed','blocked','not_needed')),
+  dispatch_attempts int not null default 0,
+  dispatch_error text,
+  dispatched_at timestamptz,
+  next_dispatch_at timestamptz not null default now(),
   started_at timestamptz,
   finished_at timestamptz,
   created_at timestamptz not null default now(),
@@ -150,6 +173,8 @@ create table if not exists public.care_scan_runs (
 -- Duplicate run prevention: one queued or running scan per cycle.
 create unique index if not exists care_scan_runs_one_active on public.care_scan_runs (cycle_id) where status in ('queued','running');
 create index if not exists care_scan_runs_queue on public.care_scan_runs (status, available_at);
+-- Exactly one initial (paid period) scan per cycle. Owner reruns are separate.
+create unique index if not exists care_scan_runs_one_initial on public.care_scan_runs (cycle_id) where trigger = 'scheduled';
 
 create table if not exists public.care_findings (
   id uuid primary key default gen_random_uuid(),
@@ -306,6 +331,20 @@ create table if not exists public.care_email_events (
   received_at timestamptz not null default now()
 );
 
+-- Care terms acceptance records (one per checkout session or owner record).
+create table if not exists public.care_terms_acceptances (
+  id uuid primary key default gen_random_uuid(),
+  site_id uuid not null references public.care_sites(id) on delete restrict,
+  terms_version text not null,
+  accepted_at timestamptz not null,
+  source text not null check (source in ('stripe_checkout','recorded_by_owner')),
+  stripe_checkout_session_id text unique,
+  evidence text,
+  recorded_by text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists care_terms_site on public.care_terms_acceptances (site_id, accepted_at desc);
+
 create table if not exists public.care_activity (
   id uuid primary key default gen_random_uuid(),
   site_id uuid references public.care_sites(id) on delete set null,
@@ -334,7 +373,9 @@ begin
   update public.care_scan_runs
      set status = 'running', attempts = attempts + 1, lease_owner = p_owner,
          lease_expires_at = now() + make_interval(secs => p_lease_seconds),
-         started_at = coalesce(started_at, now()), updated_at = now()
+         started_at = coalesce(started_at, now()), updated_at = now(),
+         -- Picked up (by a dispatch or the workflow's own schedule): no more dispatching needed.
+         dispatch_status = case when dispatch_status in ('pending','failed','blocked') then 'not_needed' else dispatch_status end
    where id = r.id
    returning * into r;
   update public.care_cycles set scan_state = 'running', updated_at = now() where id = r.cycle_id;
@@ -414,7 +455,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['care_settings','care_sites','care_cycles','care_scan_runs','care_findings','care_manual_results','care_issue_notes',
-    'care_reports','care_report_approvals','care_report_sends','care_notifications','care_stripe_events','care_email_events','care_activity'] loop
+    'care_reports','care_report_approvals','care_report_sends','care_notifications','care_stripe_events','care_email_events','care_terms_acceptances','care_activity'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('revoke all on public.%I from anon, authenticated', t);
     execute format('grant select, insert, update, delete on public.%I to service_role', t);
