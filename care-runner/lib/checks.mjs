@@ -175,13 +175,13 @@ export async function runChecks(config, ctx) {
     }
     const wall = BOT_WALL.test(v.title || '') || (status === 403 || status === 429 || status === 503) && BOT_WALL.test(v.text || '')
     if (wall) {
-      add({ code: 'blocked_by_site',  ...base, check_key: 'page_load', status: 'could_not_check', observed: `The site showed a robot check or access page instead of the content (HTTP ${status}).`, explanation: 'Some sites block automated visitors. This is not a problem with the site for people.', next_action: 'Check the page by hand.', evidence: ev })
+      add({ code: 'blocked_by_site',  ...base, check_key: 'page_load', status: 'could_not_check', observed: `The site showed a robot check or access page instead of the content (HTTP ${status}).`, explanation: 'The automated check was blocked, so this page wasn’t verified. A blocked check doesn’t show whether visitors have a problem.', next_action: 'Check the page by hand.', evidence: ev })
       return false
     }
     if (status >= 400) {
       const soft = status === 401 || status === 403 || status === 429
       add({ code: (soft ? 'blocked_by_site' : status >= 500 ? 'server_error' : 'page_error'),  ...base, check_key: 'page_load', status: soft ? 'could_not_check' : status >= 500 ? 'needs_review' : 'failed', observed: `The page answered with HTTP ${status}.`,
-        explanation: soft ? 'The site refused the automated visit. People may still see the page.' : status >= 500 ? 'The server reported an error. This can be temporary.' : 'Visitors following this link see an error page.',
+        explanation: soft ? 'The site refused the automated visit, so this page wasn’t verified.' : status >= 500 ? 'The server reported an error. This can be temporary.' : 'Visitors following this link see an error page.',
         possible_cause: status === 404 || status === 410 ? 'The page was moved, renamed, or deleted.' : null,
         next_action: soft ? 'Check the page by hand.' : status >= 500 ? 'Open the page again later; if it persists, check the host.' : 'Restore the page or update links to its new address.', evidence: ev })
       return false
@@ -207,7 +207,7 @@ export async function runChecks(config, ctx) {
     const ownFailed = v.failedImages.filter((i) => hostInDomains(hostOf(i.url), domains) && i.status)
     const otherFailed = v.failedImages.filter((i) => !ownFailed.includes(i))
     if (ownFailed.length) add({ code: 'image_broken',  ...base, check_key: 'images', status: 'failed', observed: `${ownFailed.length} image(s) from the site failed to load (for example ${ownFailed[0].url}, HTTP ${ownFailed[0].status}).`, explanation: 'Visitors may see empty spaces or broken image icons.', possible_cause: 'The image file was moved or deleted.', next_action: 'Replace or relink the image.', evidence: { request_url: ownFailed[0].url, http_status: ownFailed[0].status } })
-    if (otherFailed.length) add({ code: 'image_unverified',  ...base, check_key: 'images', status: 'needs_review', observed: `${otherFailed.length} image request(s) did not load (for example ${otherFailed[0].url}: ${otherFailed[0].error || 'HTTP ' + otherFailed[0].status}).`, explanation: 'These may come from another service, or may have been blocked by the checker’s safety rules. People may still see them.', next_action: 'Look at the screenshot and the live page.', evidence: { request_url: otherFailed[0].url, blocked_reason: blockedFor(otherFailed[0].url) } })
+    if (otherFailed.length) add({ code: 'image_unverified',  ...base, check_key: 'images', status: 'needs_review', observed: `${otherFailed.length} image request(s) did not load (for example ${otherFailed[0].url}: ${otherFailed[0].error || 'HTTP ' + otherFailed[0].status}).`, explanation: 'These may come from another service, or may have been blocked by the checker’s safety rules, so they weren’t verified.', next_action: 'Look at the screenshot and the live page.', evidence: { request_url: otherFailed[0].url, blocked_reason: blockedFor(otherFailed[0].url) } })
     if (!v.failedImages.length) add({ code: 'ok',  ...base, check_key: 'images', status: 'passed', observed: 'No image requests failed.', explanation: 'Images on the page loaded.' })
 
     // Overflow
@@ -273,7 +273,7 @@ export async function runChecks(config, ctx) {
           const wall = BOT_WALL.test(v.title || '')
           const guard = v.resp?.headers()['x-care-blocked']
           if (guard) add({ ...base, ...describeNavError(null, guard, 'destination'), evidence: { blocked_reason: guard } })
-          else if (wall || status === 401 || status === 403 || status === 429) add({ code: 'blocked_by_site',  ...base, status: 'could_not_check', observed: `${d.label} showed an access or robot check page (HTTP ${status}).`, explanation: 'The service limits automated visitors. This is not a site defect.', next_action: 'Open it by hand.', evidence: { http_status: status, final_url: v.finalUrl } })
+          else if (wall || status === 401 || status === 403 || status === 429) add({ code: 'blocked_by_site',  ...base, status: 'could_not_check', observed: `${d.label} showed an access or robot check page (HTTP ${status}).`, explanation: 'The automated check was blocked, so this wasn’t verified. A blocked check doesn’t show whether visitors have a problem.', next_action: 'Open it by hand.', evidence: { http_status: status, final_url: v.finalUrl } })
           else if (status >= 400) add({ code: (own && status < 500 ? 'page_error' : 'dest_error'),  ...base, status: own && status < 500 ? 'failed' : 'needs_review', observed: `${d.label} answered with HTTP ${status}.`, explanation: own ? 'Visitors following this link see an error.' : 'The outside service returned an error. It may be temporary.', next_action: 'Open it by hand and check the link.', evidence: { http_status: status, final_url: v.finalUrl } })
           else add({ code: 'ok',  ...base, status: 'passed', observed: `${d.label} opened (HTTP ${status}).`, explanation: `The destination page loaded.${limitNote}`, evidence: { http_status: status, final_url: v.finalUrl } })
         }
@@ -301,7 +301,7 @@ export async function runChecks(config, ctx) {
       else if (r.error) add({ code: 'no_response',  ...base, status: 'could_not_check', observed: `The link did not respond (${r.error}).`, explanation: 'This can be temporary and is not proof of a broken link.', next_action: 'Open it by hand.' })
       else if (r.status === 404 || r.status === 410) add({ code: 'link_broken',  ...base, status: 'failed', observed: `Broken link: HTTP ${r.status}.`, explanation: `Visitors who click this link on ${pathOf(l.found_on)} see an error page.`, possible_cause: 'The page was moved or deleted.', next_action: 'Update or remove the link.' })
       else if (r.status >= 500) add({ code: 'server_error',  ...base, status: 'needs_review', observed: `The link returned HTTP ${r.status}.`, explanation: 'The server reported an error. It may be temporary.', next_action: 'Open it again later.' })
-      else if (r.status === 401 || r.status === 403 || r.status === 429) add({ code: 'blocked_by_site',  ...base, status: 'could_not_check', observed: `The site refused the automated request (HTTP ${r.status}).`, explanation: 'People may still be able to open it.', next_action: 'Open it by hand if it matters.' })
+      else if (r.status === 401 || r.status === 403 || r.status === 429) add({ code: 'blocked_by_site',  ...base, status: 'could_not_check', observed: `The site refused the automated request (HTTP ${r.status}).`, explanation: 'The site refused the automated request, so this link wasn’t verified.', next_action: 'Open it by hand if it matters.' })
       else if (r.final && !hostInDomains(hostOf(r.final), domains)) add({ code: 'redirect_outside',  ...base, status: 'needs_review', observed: `The link redirects outside the approved domains to ${r.final}.`, explanation: 'This may be intended.', next_action: 'Confirm the redirect is expected.' })
       else okCount++
       await tick('links')

@@ -197,38 +197,49 @@ export async function reportPdf(s: Snapshot): Promise<Buffer> {
     for (const f of s.fixed) para(`${f.title}${f.pages.length ? `: ${f.pages.join(', ')}` : ''}. Verified: ${f.verified}${f.note ? ` ${f.note}` : ''}`, { size: 8.8, indent: 6.5, gap: 1 })
   }
 
-  // ---------- Checklist ----------
-  const colW = (W - 6) / 2
+  // ---------- Checklist: two columns, row dividers, a thin divider between columns ----------
+  const GUT = 10
+  const colW = (W - GUT) / 2
   const rows = s.checklist
   const half = Math.ceil(rows.length / 2)
+  const cols = [rows.slice(0, half), rows.slice(half)]
   const rowH = (r: (typeof rows)[number]) => {
     set('helvetica', 'bold', 8.8, C.ink)
     const ll = lines(r.label, colW - 30).length
     set('helvetica', 'normal', 7.6, C.muted)
-    return 1.6 + ll * 3.6 + (r.note ? lines(r.note, colW - 7).length * 3.2 : 0)
+    return 3.4 + ll * 3.6 + (r.note ? lines(r.note, colW - 7).length * 3.2 : 0)
   }
-  const colHeights = [rows.slice(0, half), rows.slice(half)].map((c) => c.reduce((a, r) => a + rowH(r), 0))
+  const colHeights = cols.map((c) => c.reduce((a, r) => a + rowH(r), 0))
   // Keep the heading with the whole checklist.
   ensure(Math.max(...colHeights) + 16)
   heading('This month’s checks')
-  const top = y
-  ;[rows.slice(0, half), rows.slice(half)].forEach((col, ci) => {
+  const top = y - 3
+  cols.forEach((col, ci) => {
     let yy = top
-    const x = M + ci * (colW + 6)
+    const x = M + ci * (colW + GUT)
     for (const r of col) {
-      icon(r.state, x + 2.2, yy - 1.1, 1.9)
+      const h = rowH(r)
+      const base = yy + 4.2
+      icon(r.state, x + 2.2, base - 1.1, 1.9)
       set('helvetica', 'bold', 7.8, TONE[r.state].text)
-      doc.text(STATE_LABEL[r.state], x + colW, yy, { align: 'right' })
+      doc.text(STATE_LABEL[r.state], x + colW, base, { align: 'right' })
+      let ty = base
       set('helvetica', 'bold', 8.8, C.ink)
-      for (const l of lines(r.label, colW - 30)) { doc.text(l, x + 6, yy); yy += 3.6 }
+      for (const l of lines(r.label, colW - 30)) { doc.text(l, x + 6, ty); ty += 3.6 }
       if (r.note) {
         set('helvetica', 'normal', 7.6, C.muted)
-        for (const l of lines(r.note, colW - 7)) { doc.text(l, x + 6, yy); yy += 3.2 }
+        for (const l of lines(r.note, colW - 7)) { doc.text(l, x + 6, ty); ty += 3.2 }
       }
-      yy += 1.6
+      yy += h
+      doc.setDrawColor(...rgb(C.line))
+      doc.setLineWidth(0.25)
+      doc.line(x, yy, x + colW, yy)
     }
   })
-  y = top + Math.max(...colHeights) + 1
+  doc.setDrawColor(...rgb(C.line))
+  doc.setLineWidth(0.25)
+  doc.line(M + colW + GUT / 2, top + 1, M + colW + GUT / 2, top + Math.max(...colHeights) - 1)
+  y = top + Math.max(...colHeights) + 4
   if (s.not_applicable.length) para(`Not part of this month: ${s.not_applicable.join(', ')}.`, { size: 7.8, color: C.muted, gap: 1 })
 
   // ---------- Not verified ----------
@@ -251,6 +262,7 @@ export async function reportPdf(s: Snapshot): Promise<Buffer> {
   for (const t of s.next_step.send) nextLines.push(`Please send: ${t}`)
   for (const t of s.next_step.approve) nextLines.push(`Approval needed for: ${t}`)
   if (s.next_step.estimate && s.next_step.approve.length) nextLines.push(`Estimate: ${s.next_step.estimate}. Nothing starts until you approve it.`)
+  if (s.next_step.why_extra) nextLines.push(`Why this is extra: ${s.next_step.why_extra}`)
   if (s.next_step.more) nextLines.push(s.next_step.more)
   set('helvetica', 'bold', 9.5, C.ink)
   const nl = nextLines.flatMap((l, i) => { set('helvetica', i === 0 ? 'bold' : 'normal', 9.2, C.ink); return lines(l, W - 10) })

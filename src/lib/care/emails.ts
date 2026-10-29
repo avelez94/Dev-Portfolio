@@ -5,6 +5,7 @@
  */
 import { esc, escLines, renderEmail } from '@/lib/email/layout'
 import type { Snapshot } from './report-model'
+import { reportEmailBlock } from './report-email'
 
 export type Email = { subject: string; html: string; text: string }
 const oneLine = (s: unknown) => String(s ?? '').replace(/[\r\n]+/g, ' ').trim()
@@ -110,19 +111,12 @@ export function billingAttention(p: { client: string; site: string; state: strin
   }
 }
 
-/** The client's report email: your message plus the same summary as the attached approved report. */
+/**
+ * The client's report email: your message, then the complete concise report
+ * from the approved snapshot, with the same version attached as a PDF.
+ */
 export function clientReport(p: { subject: string; message: string; snap: Snapshot }): Email {
   const s = p.snap
-  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-  const next: string[] = []
-  if (s.next_step.none) next.push('No action needed.')
-  s.next_step.send.forEach((t) => next.push(`Please send: ${t}`))
-  s.next_step.approve.forEach((t) => next.push(`Approval needed for: ${t}`))
-  const rows: [string, string][] = [
-    ['Passed', `✓ ${count(s.counts.passed, 'check', 'checks')}${s.counts.fixed ? ` (${s.counts.fixed} fixed and verified)` : ''}`],
-    ['Issues found', `✗ ${count(s.counts.issues, 'issue', 'issues')}`],
-    ['Not verified', `! ${count(s.counts.unverified, 'item', 'items')}`],
-  ]
   return {
     subject: oneLine(p.subject),
     ...renderEmail({
@@ -133,10 +127,8 @@ export function clientReport(p: { subject: string; message: string; snap: Snapsh
       titleAccent: 'health report.',
       blocks: [
         { type: 'p', html: escLines(p.message) },
-        { type: 'details', title: `${s.site.label}, ${s.period.label}`, rows: [['Result', esc(s.headline)], ...rows.map(([k, v]) => [k, esc(v)] as [string, string])] },
-        ...(s.attention.length ? [{ type: 'callout' as const, title: 'Needs attention', tone: 'coral' as const, html: s.attention.map((a) => `✗ <strong>${esc(a.title)}</strong>: ${esc(a.status)}${a.note ? `: ${esc(a.note)}` : ''}`).join('<br>') }] : []),
-        { type: 'p', html: `<strong>Next step:</strong> ${next.map(esc).join('<br>')}` },
-        { type: 'note', html: `The full report (version ${s.version}) is attached as a PDF. Reply to this email with any questions.` },
+        reportEmailBlock(s),
+        { type: 'note', html: `The same report (version ${s.version}) is attached as a PDF for your records. Reply to this email with any questions.` },
       ],
     }),
   }

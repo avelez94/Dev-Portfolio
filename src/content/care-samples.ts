@@ -67,6 +67,9 @@ const bakery = buildReport({
 /* Sample 2: one issue and one item not verified                        */
 /* ------------------------------------------------------------------ */
 
+// The same explanation is used for both booking items, so the report lists them together once.
+const BOOKING_NOTE = 'The automated check was blocked. The booking service was also unavailable during my manual review, so I couldn’t verify booking. I’ll recheck next week.'
+
 const physioPages = [
   { label: 'Home', url: 'https://physio.example.com/' },
   { label: 'Services', url: 'https://physio.example.com/services' },
@@ -94,16 +97,18 @@ const physio = buildReport({
   manual: [
     { item_id: 'visual', label: 'Desktop appearance looks right', status: 'passed', note: 'Checked on a laptop.' },
     { item_id: 'content', label: 'Hours, prices, and contact details are correct', status: 'passed', note: 'Matches your September price list.' },
-    { item_id: 'booking', label: 'Booking shows open times and the steps make sense', status: 'not_checked', reason: 'Your booking provider was down for maintenance during this review. I’ll check it next week.' },
+    { item_id: 'booking', label: 'Booking shows open times and the steps make sense', status: 'not_checked', reason: BOOKING_NOTE },
   ],
   notes: [
     { group_key: 'overflow:overflow', resolution: 'approval', client_note: 'Rebuilding the team section so photos resize on phones' },
+    { group_key: 'destination:blocked_by_site', resolution: null, client_note: BOOKING_NOTE },
     { group_key: 'internal_links:link_broken', resolution: 'fixed', verification_note: 'Rechecked automatically: no longer found.', client_note: '' },
   ],
   content: {
-    summary: 'One issue needs your approval: the team page doesn’t fit phone screens. The booking page couldn’t be verified this month because the booking service blocked the automated check and was down when I tried by hand.',
+    summary: 'One issue needs your approval: the team page doesn’t fit phone screens. I couldn’t verify online booking this month; details are below.',
     fixes: 'Fixed a broken link on the services page that pointed to the old pricing page (5 minutes of your included time).',
     estimate: 'about 1.5 hours, $150',
+    extra_work_reason: 'Rebuilding the team section is redesign work, which your plan quotes separately. Your 30 included minutes cover content updates and troubleshooting, so they don’t apply to this. The broken link fix used 5 of them, and the other 25 stay available this month.',
   },
 })
 

@@ -2025,9 +2025,10 @@ details[open] > summary .summaryIcon {
   color: var(--ink-soft);
 }
 
+/* Four Website Care benefits: a balanced 2 by 2 grid, one column on phones. */
 .benefits {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -2038,10 +2039,6 @@ details[open] > summary .summaryIcon {
   background: var(--paper);
   border: 1.5px solid var(--line);
   color: var(--ink-soft);
-}
-
-.benefit:nth-child(2) {
-  margin-top: 24px;
 }
 
 .benefitNum {

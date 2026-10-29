@@ -17,6 +17,7 @@ const FIELDS: [string, string, string][] = [
   ['outstanding', 'Still open', 'Anything unresolved that isn’t already an issue above.'],
   ['proposed_work', 'Additional work needing approval', 'Outside the plan. Nothing starts until the client approves.'],
   ['estimate', 'Estimate (optional)', 'For example: about 2 hours, $200'],
+  ['extra_work_reason', 'Why this is extra work (required when asking for approval)', 'Why it’s outside the included care scope, and whether any remaining included time applies. Use your agreed plan terms.'],
   ['next_steps', 'Anything else for next month', ''],
   ['client_notes', 'Note for the client', ''],
 ]

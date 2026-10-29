@@ -29,6 +29,8 @@ export type Block =
   | { type: 'callout'; title: string; html: string; tone?: 'teal' | 'coral' }
   | { type: 'lineItems'; rows: [string, string][]; total?: [string, string] }
   | { type: 'divider' }
+  /** Prebuilt, already escaped table markup with its own plain text version. */
+  | { type: 'html'; html: string; text: string }
 
 export type EmailInput = {
   /** Short summary shown in the inbox preview line. */
@@ -57,6 +59,8 @@ function buttonHtml(b: Button): string {
 function blockHtml(b: Block): string {
   const p = `margin:0 0 16px;font-family:${FONTS.body};font-size:16px;line-height:26px;color:${C.inkSoft};`
   switch (b.type) {
+    case 'html':
+      return b.html
     case 'p':
       return `<p style="${p}">${b.html}</p>`
     case 'note':
@@ -120,6 +124,8 @@ function htmlToText(html: string): string {
 
 function blockText(b: Block): string {
   switch (b.type) {
+    case 'html':
+      return b.text
     case 'p':
     case 'note':
       return htmlToText(b.html)
@@ -159,6 +165,7 @@ export function renderEmail(input: EmailInput): RenderedEmail {
     .h1 { font-size: 28px !important; line-height: 34px !important; }
     .btn, .btn-td { display: block !important; width: 100% !important; margin-right: 0 !important; }
     .btn-a { display: block !important; text-align: center !important; }
+    .col2 { display: block !important; width: 100% !important; border-right: 0 !important; padding-left: 0 !important; padding-right: 0 !important; }
   }
 </style>
 </head>

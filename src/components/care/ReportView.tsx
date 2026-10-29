@@ -48,9 +48,22 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
   s.next_step.send.forEach((t) => next.push(`Please send: ${t}`))
   s.next_step.approve.forEach((t) => next.push(`Approval needed for: ${t}`))
   if (s.next_step.estimate && s.next_step.approve.length) next.push(`Estimate: ${s.next_step.estimate}. Nothing starts until you approve it.`)
+  if (s.next_step.why_extra) next.push(`Why this is extra: ${s.next_step.why_extra}`)
   if (s.next_step.more) next.push(s.next_step.more)
   return (
-    <article style={{ background: C.paper, color: C.ink, fontFamily: FONTS.body, borderRadius: 18, border: `1px solid ${C.line}`, padding: 'clamp(16px, 4vw, 28px)', lineHeight: 1.5 }} aria-label={`Monthly health report for ${s.site.label}`}>
+    <article className="crv" style={{ background: C.paper, color: C.ink, fontFamily: FONTS.body, borderRadius: 18, border: `1px solid ${C.line}`, padding: 'clamp(16px, 4vw, 28px)', lineHeight: 1.5 }} aria-label={`Monthly health report for ${s.site.label}`}>
+      <style>{`
+        .crv{container-type:inline-size}
+        .crv-checks{display:grid;grid-template-columns:1fr}
+        .crv-col{list-style:none;margin:0;padding:0}
+        .crv-row{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 0;border-bottom:1px solid ${C.line}}
+        .crv-row>svg{margin-top:2px}
+        @container (min-width: 600px){
+          .crv-checks{grid-template-columns:1fr 1fr}
+          .crv-col:first-child{border-right:1px solid ${C.line};padding-right:20px}
+          .crv-col:last-child{padding-left:20px}
+        }
+      `}</style>
       {(s.sample || sampleLabel) && (
         <p style={{ margin: '0 0 14px', background: C.coralSoft, color: C.coralDeep, fontWeight: 700, fontSize: 13, textAlign: 'center', borderRadius: 10, padding: '6px 10px' }}>{sampleLabel || 'Sample report • Illustrative findings'}</p>
       )}
@@ -105,18 +118,22 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
 
       <section aria-label="This month’s checks">
         <h4 style={sec}>This month’s checks</h4>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '6px 18px' }}>
-          {s.checklist.map((r, i) => (
-            <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '4px 0', borderBottom: `1px solid ${C.line}` }}>
-              <StateIcon state={r.state} size={18} />
-              <span style={{ flex: 1, fontSize: 14 }}>
-                <strong>{r.label}</strong>
-                {r.note && <span style={{ display: 'block', fontSize: 12.5, color: C.inkSoft }}>{r.note}</span>}
-              </span>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: TONE[r.state].text, whiteSpace: 'nowrap' }}>{STATE_LABEL[r.state]}</span>
-            </li>
+        <div className="crv-checks">
+          {[s.checklist.slice(0, Math.ceil(s.checklist.length / 2)), s.checklist.slice(Math.ceil(s.checklist.length / 2))].map((col, ci) => (
+            <ul key={ci} className="crv-col">
+              {col.map((r, i) => (
+                <li key={i} className="crv-row">
+                  <StateIcon state={r.state} size={18} />
+                  <span style={{ fontSize: 14, minWidth: 0 }}>
+                    <strong>{r.label}</strong>
+                    {r.note && <span style={{ display: 'block', fontSize: 12.5, color: C.inkSoft }}>{r.note}</span>}
+                  </span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: TONE[r.state].text, whiteSpace: 'nowrap', textAlign: 'right' }}>{STATE_LABEL[r.state]}</span>
+                </li>
+              ))}
+            </ul>
           ))}
-        </ul>
+        </div>
         {s.not_applicable.length > 0 && <p style={{ margin: '6px 0 0', fontSize: 12.5, color: C.inkSoft }}>Not part of this month: {s.not_applicable.join(', ')}.</p>}
       </section>
 

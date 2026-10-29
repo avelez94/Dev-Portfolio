@@ -11,7 +11,7 @@ import { plan as planInfo, type PlanId } from './plans'
 import { buildReport, modelProblems, type Snapshot, type ModelInput, type FindingIn, type ManualIn, type IssueNoteIn } from './report-model'
 import { formatDateOnly } from './schedule'
 
-export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'proposed_work', 'estimate', 'client_notes'] as const
+export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'proposed_work', 'estimate', 'extra_work_reason', 'client_notes'] as const
 export type ContentField = (typeof CONTENT_FIELDS)[number]
 export type ReportContent = Partial<Record<ContentField, string>>
 

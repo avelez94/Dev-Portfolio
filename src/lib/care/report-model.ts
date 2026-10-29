@@ -198,11 +198,18 @@ export function buildReport(i: ModelInput) {
     status: g.resolution ? RESOLUTION_LABEL[g.resolution] || 'I’m looking into it' : 'I’m looking into it', note: g.clientNote, kind: g.resolution || 'investigating',
   }))
   const fixed = visible.filter((g) => g.state === 'fixed').map((g) => ({ title: g.title, pages: g.pages, verified: g.verification, note: g.clientNote }))
-  const notVerified = [
+  const notVerifiedRaw = [
     ...visible.filter((g) => g.state === 'unverified').map((g) => ({ label: g.title, why: g.clientNote || g.why, pages: g.pages })),
     ...i.manual.filter((m) => m.status === 'not_checked' || m.status === 'could_not_check' || m.status === 'needs_review').map((m) => ({ label: m.label, why: (m.reason || '').trim() || 'Not checked by hand this month.', pages: [] as string[] })),
     ...(noScan ? [{ label: 'Automated checks', why: 'The automated check didn’t complete this month.', pages: [] as string[] }] : []),
   ]
+  // One entry per reason: items you explained with the same words are listed together.
+  const notVerified: { label: string; why: string; pages: string[] }[] = []
+  for (const n of notVerifiedRaw) {
+    const same = notVerified.find((x) => x.why === n.why)
+    if (same) { same.label = `${same.label}; ${n.label}`; same.pages = [...new Set([...same.pages, ...n.pages])] }
+    else notVerified.push({ ...n, pages: [...n.pages] })
+  }
 
   // Passed counts agreed checks; issues and not verified count the grouped items listed below them.
   const counts = {
@@ -225,6 +232,8 @@ export function buildReport(i: ModelInput) {
     send: sendItems,
     approve: approveItems,
     estimate: c.estimate || '',
+    // Why requested work is outside the included care scope, in your words. Required before any request for payment.
+    why_extra: approveItems.length || c.estimate ? (c.extra_work_reason || '').trim() : '',
     none: !sendItems.length && !approveItems.length,
     more: c.next_steps || '',
   }
@@ -283,6 +292,10 @@ export function modelProblems(i: ModelInput, s: Snapshot): string[] {
     if (n?.resolution === 'fixed' && !(n.verification_note || '').trim()) p.push(`“${g.title}” is marked fixed but the latest check still shows it. Rerun the check, or record how you verified the fix.`)
     if ((n?.resolution === 'client_input' || n?.resolution === 'approval') && !(n.client_note || '').trim()) p.push(`Say what you need from the client for “${g.title}”.`)
     if (n?.resolution === 'not_an_issue' && !(n.internal_note || '').trim()) p.push(`Add a private note explaining why “${g.title}” isn’t an issue.`)
+  }
+  const asksForPayment = s.next_step.approve.length > 0 || !!(i.content.estimate || '').trim()
+  if (asksForPayment && (i.content.extra_work_reason || '').trim().length < 20) {
+    p.push('This report asks the client to approve extra work. Explain why it’s outside the included care scope and whether any remaining included time applies (Why this is extra work).')
   }
   if (s.summary && (s.counts.issues || s.counts.unverified) && ALL_CLEAR.test(s.summary)) {
     p.push('The summary reads as if everything is fine, but some checks found issues or weren’t verified. Adjust the wording.')
