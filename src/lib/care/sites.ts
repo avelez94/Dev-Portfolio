@@ -9,8 +9,8 @@ import { db, must, CareError, logActivity, type Row } from './db'
 import { isPlanId, type PlanId } from './plans'
 import { checkUrlShape, checkUrlResolves, normalizeDomain, hostInDomains } from './url-safety'
 
-export const LIMIT_DEFAULTS = { maxPages: 15, maxLinks: 60, concurrency: 2, navTimeoutMs: 30000, runTimeoutMs: 600000 }
-export const LIMIT_CAPS = { maxPages: 25, maxLinks: 150, concurrency: 3, navTimeoutMs: 45000, runTimeoutMs: 900000 }
+export const LIMIT_DEFAULTS = { maxPages: 15, maxLinks: 60, concurrency: 2, navTimeoutMs: 30000, runTimeoutMs: 360000 }
+export const LIMIT_CAPS = { maxPages: 25, maxLinks: 150, concurrency: 3, navTimeoutMs: 45000, runTimeoutMs: 480000 }
 
 export type Page = { url: string; label: string }
 export type Destination = { kind: 'contact' | 'booking' | 'checkout' | 'other'; url: string; label: string }

@@ -12,7 +12,7 @@ type Status = {
   stripe: { mode: string; webhook: boolean; prices: Record<string, boolean> }
   runner: { token: boolean; dispatch: boolean }
   email: { provider: boolean; clientEmailsLive: boolean; allowlist: string[] }
-  calendar: { feed: boolean }
+  calendar: { adminCalendar: boolean; resendWebhook: boolean }
   policyApproved: boolean
 }
 
@@ -91,7 +91,8 @@ function EnvBanner({ s }: { s: Status }) {
       <Badge tone={s.stripe.mode === 'live' ? 'bad' : s.stripe.mode === 'test' ? 'ok' : 'warn'}>Stripe: {s.stripe.mode === 'missing' ? 'not configured' : `${s.stripe.mode} mode`}{s.stripe.mode !== 'missing' && ` (${prices}/3 prices${s.stripe.webhook ? ', webhook set' : ', no webhook secret'})`}</Badge>
       <Badge tone={s.email.clientEmailsLive ? 'bad' : 'ok'}>Client emails: {s.email.clientEmailsLive ? 'LIVE' : `test allowlist only (${s.email.allowlist.length})`}</Badge>
       <Badge tone={s.runner.token ? 'ok' : 'warn'}>Check runner: {s.runner.token ? (s.runner.dispatch ? 'token and dispatch set' : 'token set, scheduled pickup') : 'not configured'}</Badge>
-      <Badge tone={s.calendar.feed ? 'ok' : 'info'}>Calendar: {s.calendar.feed ? 'private feed on' : 'dashboard only'}</Badge>
+      <Badge tone="ok">Calendar: admin Schedule</Badge>
+      <Badge tone={s.calendar.resendWebhook ? 'ok' : 'info'}>Delivery tracking: {s.calendar.resendWebhook ? 'on' : 'off (provider acceptance only)'}</Badge>
       <Badge tone={s.policyApproved ? 'ok' : 'warn'}>Billing policy: {s.policyApproved ? 'approved' : 'proposed, needs approval'}</Badge>
     </div>
   )

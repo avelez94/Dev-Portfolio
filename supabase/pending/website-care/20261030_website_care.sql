@@ -28,8 +28,7 @@ create table if not exists public.care_settings (
   overdue_reminder_hours int not null default 48 check (overdue_reminder_hours >= 12),
   overdue_reminder_max int not null default 3 check (overdue_reminder_max between 0 and 10),
   notify_email text,
-  calendar_token_hash text,
-  calendar_token_created_at timestamptz,
+  evidence_retention_days int not null default 90 check (evidence_retention_days between 30 and 730),
   -- Proposed billing handling (needs approval before production).
   grace_days int check (grace_days is null or grace_days between 0 and 60),
   billing_attention_after_failures int not null default 1 check (billing_attention_after_failures between 1 and 10),
@@ -114,7 +113,6 @@ create table if not exists public.care_cycles (
   billing_flag text,                 -- refunded, disputed, canceled_immediately
   billing_flag_at timestamptz,
   completed_at timestamptz,
-  calendar_sequence int not null default 0,
   reminders_sent int not null default 0,
   last_reminder_at timestamptz,
   manual_note text,
@@ -159,6 +157,7 @@ create table if not exists public.care_findings (
   cycle_id uuid not null references public.care_cycles(id) on delete restrict,
   site_id uuid not null references public.care_sites(id) on delete restrict,
   check_key text not null,
+  issue_code text,
   fingerprint text not null,
   url text,
   viewport text,
@@ -175,6 +174,19 @@ create table if not exists public.care_findings (
 );
 create index if not exists care_findings_run on public.care_findings (run_id);
 create index if not exists care_findings_cycle on public.care_findings (cycle_id);
+
+-- Your decision on each grouped issue (one row per cycle and issue group).
+create table if not exists public.care_issue_notes (
+  id uuid primary key default gen_random_uuid(),
+  cycle_id uuid not null references public.care_cycles(id) on delete restrict,
+  group_key text not null,
+  resolution text check (resolution is null or resolution in ('fixed','client_input','approval','investigating','not_an_issue')),
+  client_note text,        -- client visible
+  verification_note text,  -- how a fix was verified (client visible as "verified by")
+  internal_note text,      -- never shown to the client
+  updated_at timestamptz not null default now(),
+  unique (cycle_id, group_key)
+);
 
 create table if not exists public.care_manual_results (
   id uuid primary key default gen_random_uuid(),
@@ -236,6 +248,10 @@ create table if not exists public.care_report_sends (
   status text not null default 'sending' check (status in ('sending','accepted','failed')),
   provider_message_id text,
   error text,
+  -- Provider acceptance is status = accepted. Delivery is only known from Resend's
+  -- signed delivery events: unknown until then.
+  delivery_status text not null default 'unknown' check (delivery_status in ('unknown','delivered','delayed','bounced','complained')),
+  delivery_at timestamptz,
   sent_by text not null,
   created_at timestamptz not null default now(),
   finished_at timestamptz
@@ -280,6 +296,14 @@ create table if not exists public.care_stripe_events (
   error text,
   received_at timestamptz not null default now(),
   processed_at timestamptz
+);
+
+-- Resend webhook deliveries (deduplicated by the webhook message id).
+create table if not exists public.care_email_events (
+  id text primary key,
+  type text not null,
+  email_id text,
+  received_at timestamptz not null default now()
 );
 
 create table if not exists public.care_activity (
@@ -389,8 +413,8 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['care_settings','care_sites','care_cycles','care_scan_runs','care_findings','care_manual_results',
-    'care_reports','care_report_approvals','care_report_sends','care_notifications','care_stripe_events','care_activity'] loop
+  foreach t in array array['care_settings','care_sites','care_cycles','care_scan_runs','care_findings','care_manual_results','care_issue_notes',
+    'care_reports','care_report_approvals','care_report_sends','care_notifications','care_stripe_events','care_email_events','care_activity'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('revoke all on public.%I from anon, authenticated', t);
     execute format('grant select, insert, update, delete on public.%I to service_role', t);

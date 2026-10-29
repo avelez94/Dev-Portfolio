@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto'
 import { db, must, CareError, logActivity, getSettings, putObject, REPORTS_BUCKET, type Row } from './db'
 import { plan as planInfo, type PlanId } from './plans'
-import { CHECK_LABELS, ISSUE, diffFindings, type FindingRow, type FindingStatus } from './findings'
+import { buildReport, modelProblems, type Snapshot, type ModelInput, type FindingIn, type ManualIn, type IssueNoteIn } from './report-model'
 import { formatDateOnly } from './schedule'
 
 export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'proposed_work', 'estimate', 'client_notes'] as const
@@ -26,128 +26,65 @@ export const STATUS_LABEL: Record<string, string> = {
   not_checked: 'Not checked',
 }
 
-export const DISCLAIMERS = [
-  'Automated checks are read only. They open pages and links but never submit forms, send messages, book appointments, make payments, or sign in.',
-  'A booking or checkout page opening only shows that the page loads. It does not confirm that booking or payment works.',
-  'This report covers the agreed pages and checklist for this month. It is not a security, accessibility, or legal compliance certification, and it does not test every feature.',
-  'Some services block automated visitors. When that happens the item is listed as could not check, which is not the same as a problem with your site.',
-]
 
 export async function loadBundle(cycleId: string) {
   const cycle = must(await db.from('care_cycles').select('*').eq('id', cycleId).single(), 'Review cycle')
   const site = must(await db.from('care_sites').select('*').eq('id', cycle.site_id).single(), 'Website')
   const client = (await db.from('clients').select('id, name, email, business').eq('id', site.client_id).maybeSingle()).data
   const runs = (await db.from('care_scan_runs').select('*').eq('cycle_id', cycleId).order('created_at', { ascending: false })).data || []
-  const latest = runs.find((r: { status: string }) => r.status === 'succeeded' || r.status === 'partial') || null
+  const done = runs.filter((r: { status: string }) => r.status === 'succeeded' || r.status === 'partial')
+  const latest = done[0] || null
   const findings = latest ? (await db.from('care_findings').select('*').eq('run_id', latest.id).order('check_key').order('url')).data || [] : []
-  // Comparison: the run before this one in the same cycle (a rerun), else the previous cycle's final run.
-  const earlierHere = latest ? runs.find((r: { status: string; created_at: string }) => (r.status === 'succeeded' || r.status === 'partial') && r.created_at < latest.created_at) : null
-  let previousRun = earlierHere || null
-  let previousLabel = earlierHere ? 'the earlier check this month' : ''
-  if (!previousRun) {
-    const prevCycle = (await db.from('care_cycles').select('id, period_start').eq('site_id', site.id).lt('period_start', cycle.period_start).order('period_start', { ascending: false }).limit(1).maybeSingle()).data
-    if (prevCycle) {
-      previousRun = (await db.from('care_scan_runs').select('*').eq('cycle_id', prevCycle.id).in('status', ['succeeded', 'partial']).order('created_at', { ascending: false }).limit(1).maybeSingle()).data
-      previousLabel = 'last month'
-    }
-  }
-  const previousFindings = previousRun ? (await db.from('care_findings').select('fingerprint, status, check_key, url, viewport, observed').eq('run_id', previousRun.id)).data || [] : []
+  // Earlier checks this month: lets a fix be verified by a clean recheck.
+  const earlierIds = done.slice(1).map((r: { id: string }) => r.id)
+  const earlierFindings = earlierIds.length ? (await db.from('care_findings').select('*').in('run_id', earlierIds)).data || [] : []
+  const previousRun = done[1] || null
   const manual = (await db.from('care_manual_results').select('*').eq('cycle_id', cycleId).order('category').order('label')).data || []
+  const notes = (await db.from('care_issue_notes').select('*').eq('cycle_id', cycleId)).data || []
   const report = must(await db.from('care_reports').select('*').eq('cycle_id', cycleId).single(), 'Report')
   const approvals = (await db.from('care_report_approvals').select('id, version, snapshot_hash, pdf_path, pdf_sha256, approved_by, approved_at, invalidated_at, invalidated_reason').eq('report_id', report.id).order('version', { ascending: false })).data || []
   const sends = (await db.from('care_report_sends').select('*').eq('report_id', report.id).order('created_at', { ascending: false })).data || []
-  return { cycle, site, client, runs, latest, findings, previousRun, previousLabel, previousFindings, manual, report, approvals, sends }
+  return { cycle, site, client, runs, latest, findings, earlierFindings, previousRun, manual, notes, report, approvals, sends }
 }
 
 export type Bundle = Awaited<ReturnType<typeof loadBundle>>
 
-export async function buildSnapshot(b: Bundle) {
-  const settings = await getSettings()
-  const tz = settings.timezone
-  const content: ReportContent = b.report.content || {}
+async function modelInput(b: Bundle): Promise<ModelInput> {
+  const tz = (await getSettings()).timezone
   const p = planInfo(b.cycle.plan as PlanId)
-  const visible = b.findings.filter((f: { client_visible: boolean }) => f.client_visible)
-  const auto = visible.map((f: Row) => ({
-    check: f.check_key, label: CHECK_LABELS[f.check_key] || f.check_key, url: f.url, viewport: f.viewport, status: f.status as FindingStatus,
-    observed: f.observed, explanation: f.explanation, possible_cause: f.possible_cause, next_action: f.next_action, checked_at: f.checked_at,
-    evidence: { http_status: f.evidence?.http_status ?? null, error_code: f.evidence?.error_code ?? null, final_url: f.evidence?.final_url ?? null, screenshot: f.evidence?.screenshot ?? null },
-  }))
-  const manual = b.manual.map((m: Row) => ({ label: m.label, category: m.category, status: m.status || null, note: m.note || '', reason: m.reason || '' }))
-
-  // What was checked: grouped automated checks plus confirmed manual items.
-  const groups = new Map<string, { label: string; total: number; passed: number }>()
-  for (const f of auto) {
-    if (f.check === 'screenshot') continue
-    const g = groups.get(f.check) || { label: f.label, total: 0, passed: 0 }
-    g.total++
-    if (f.status === 'passed') g.passed++
-    groups.set(f.check, g)
-  }
-  const checked = [
-    ...[...groups.values()].map((g) => `${g.label}: ${g.passed} of ${g.total} passed`),
-    ...manual.filter((m) => m.status === 'passed').map((m) => `${m.label}: passed (checked by hand)`),
-    ...manual.filter((m) => m.status === 'not_applicable').map((m) => `${m.label}: not applicable`),
-  ]
-  const attention = [
-    ...auto.filter((f) => ISSUE.includes(f.status)),
-    ...manual.filter((m) => m.status === 'failed' || m.status === 'needs_review').map((m) => ({ check: 'manual', label: m.label, url: null, viewport: null, status: m.status as FindingStatus, observed: m.note || STATUS_LABEL[m.status!], explanation: '', possible_cause: null, next_action: null, checked_at: null, evidence: {} })),
-  ]
-  const couldNot = [
-    ...auto.filter((f) => f.status === 'could_not_check').map((f) => ({ label: f.label, url: f.url, why: f.observed })),
-    ...manual.filter((m) => m.status === 'could_not_check' || m.status === 'not_checked').map((m) => ({ label: m.label, url: null, why: m.reason })),
-  ]
-  const diff = b.previousRun ? diffFindings(b.previousFindings as FindingRow[], visible as FindingRow[]) : null
-  const shots = auto.filter((f) => f.check === 'screenshot' && f.evidence.screenshot).slice(0, 2).map((f) => ({ viewport: f.viewport, url: f.url, path: f.evidence.screenshot }))
-
+  const cfg = b.latest?.config || { pages: b.site.pages, destinations: b.site.destinations }
   return {
-    schema: 1,
-    report_id: b.report.id,
-    cycle_id: b.cycle.id,
-    version: b.report.version,
+    reportId: b.report.id, cycleId: b.cycle.id, version: b.report.version,
     client: { name: b.client?.name || '', business: b.client?.business || '' },
     recipient: { name: b.site.recipient_name || b.client?.name || '', email: b.site.recipient_email || '' },
     site: { label: b.site.label, url: b.site.site_url },
     plan: { id: p.id, name: p.name, includedMinutes: p.includedMinutes },
     period: { start: formatDateOnly(b.cycle.period_start, tz), end: formatDateOnly(b.cycle.period_end, tz), label: new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'long', year: 'numeric' }).format(new Date(b.cycle.period_start)) },
-    review_date: b.latest?.finished_at ? formatDateOnly(b.latest.finished_at, tz) : null,
-    scope: {
-      pages: (b.latest?.config?.pages || b.site.pages || []).map((x: { label: string; url: string }) => ({ label: x.label, url: x.url })),
-      destinations: (b.latest?.config?.destinations || b.site.destinations || []).map((x: { label: string; url: string; kind: string }) => ({ label: x.label, url: x.url, kind: x.kind })),
-      checklist: manual.map((m) => m.label),
-      features: b.site.features || '',
-    },
-    scan: b.latest ? { status: b.latest.status, finished: formatDateOnly(b.latest.finished_at, tz), counts: b.latest.summary?.counts || {} } : null,
-    automated: auto,
-    manual,
-    sections: {
-      checked,
-      attention: attention.map((a) => ({ label: a.label, url: a.url, viewport: a.viewport, status: a.status, observed: a.observed, explanation: a.explanation, possible_cause: a.possible_cause, next_action: a.next_action })),
-      outstanding: content.outstanding || '',
-      fixed: content.fixes || '',
-      needs_approval: content.proposed_work || '',
-      estimate: content.estimate || '',
-    },
-    could_not_check: couldNot,
-    comparison: diff
-      ? { against: b.previousLabel, new_issues: diff.newIssues.map((f) => `${CHECK_LABELS[f.check_key] || f.check_key}: ${f.url || ''}`.trim()), resolved: diff.resolved.map((f) => `${CHECK_LABELS[f.check_key] || f.check_key}: ${f.url || ''}`.trim()), not_rechecked: diff.notSeen.length }
-      : null,
-    summary: content.summary || '',
-    investigated: content.investigated || '',
-    next_steps: content.next_steps || '',
-    client_notes: content.client_notes || '',
-    screenshots: shots,
-    disclaimers: DISCLAIMERS,
+    reviewDate: b.latest?.finished_at ? formatDateOnly(b.latest.finished_at, tz) : null,
+    scanStatus: b.latest?.status || null,
+    // Scope comes from the run that was actually checked, not the current settings.
+    pages: (cfg.pages || []).map((x: Row) => ({ label: x.label, url: x.url })),
+    destinations: (cfg.destinations || []).map((x: Row) => ({ label: x.label, url: x.url, kind: x.kind })),
+    findings: b.findings as FindingIn[],
+    earlierFindings: b.earlierFindings as FindingIn[],
+    manual: b.manual as ManualIn[],
+    notes: b.notes as IssueNoteIn[],
+    content: b.report.content || {},
   }
 }
 
-export type Snapshot = Awaited<ReturnType<typeof buildSnapshot>>
+export async function buildSnapshot(b: Bundle): Promise<Snapshot> {
+  return buildReport(await modelInput(b))
+}
+
+export type { Snapshot }
 
 export function hashSnapshot(s: Snapshot): string {
   return createHash('sha256').update(JSON.stringify(s)).digest('hex')
 }
 
 /** What has to be true before a report can be marked ready or approved. */
-export function readinessProblems(b: Bundle): string[] {
+export async function readinessProblems(b: Bundle): Promise<string[]> {
   const p: string[] = []
   const c: ReportContent = b.report.content || {}
   if (!c.summary || c.summary.trim().length < 10) p.push('Write the client summary.')
@@ -159,7 +96,32 @@ export function readinessProblems(b: Bundle): string[] {
   }
   if (!b.site.recipient_email) p.push('Add the report recipient email in the website settings.')
   if (b.runs.some((r: { status: string }) => r.status === 'queued' || r.status === 'running')) p.push('A check is still running. Wait for it to finish.')
+  const input = await modelInput(b)
+  p.push(...modelProblems(input, buildReport(input)))
   return p
+}
+
+export const RESOLUTIONS = ['fixed', 'client_input', 'approval', 'investigating', 'not_an_issue'] as const
+
+/** Your decision on a grouped issue. Client visible changes clear an approval. */
+export async function updateIssueNote(cycleId: string, groupKey: string, body: Record<string, unknown>, actor: string) {
+  if (!/^[a-z_]+:[\w-]{1,60}$/.test(groupKey)) throw new CareError('Unknown issue.', 400)
+  const cur = (await db.from('care_issue_notes').select('*').eq('cycle_id', cycleId).eq('group_key', groupKey).maybeSingle()).data
+  const next: Record<string, unknown> = { cycle_id: cycleId, group_key: groupKey, updated_at: new Date().toISOString() }
+  let changedClient = false
+  if ('resolution' in body) {
+    const r = body.resolution === '' || body.resolution === null ? null : String(body.resolution)
+    if (r !== null && !(RESOLUTIONS as readonly string[]).includes(r)) throw new CareError('Unknown decision.', 400)
+    next.resolution = r
+    if (r !== (cur?.resolution ?? null)) changedClient = true
+  }
+  for (const k of ['client_note', 'verification_note'] as const) {
+    if (typeof body[k] === 'string') { next[k] = (body[k] as string).slice(0, 600); if (next[k] !== (cur?.[k] || '')) changedClient = true }
+  }
+  if (typeof body.internal_note === 'string') next.internal_note = body.internal_note.slice(0, 2000)
+  const up = await db.from('care_issue_notes').upsert(next, { onConflict: 'cycle_id,group_key' })
+  if (up.error) throw new CareError(up.error.message, 500)
+  if (changedClient) await invalidateApproval(cycleId, 'An issue decision changed after approval.', actor)
 }
 
 /** Any client visible change returns an approved or ready report to draft. */
@@ -234,7 +196,7 @@ export async function updateFinding(findingId: string, body: Record<string, unkn
 
 export async function markReady(cycleId: string, actor: string) {
   const b = await loadBundle(cycleId)
-  const problems = readinessProblems(b)
+  const problems = await readinessProblems(b)
   if (problems.length) throw new CareError(problems.join(' '), 422)
   if (b.report.status !== 'draft') throw new CareError(`The report is already ${b.report.status}.`, 409)
   await db.from('care_reports').update({ status: 'ready', ready_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', b.report.id).eq('version', b.report.version)
@@ -244,7 +206,7 @@ export async function markReady(cycleId: string, actor: string) {
 export async function approve(cycleId: string, body: { snapshot_hash?: string; signoff?: boolean; approver?: string }, actor: string) {
   const b = await loadBundle(cycleId)
   if (b.report.status !== 'ready') throw new CareError('Mark the report ready for review first.', 409)
-  const problems = readinessProblems(b)
+  const problems = await readinessProblems(b)
   if (problems.length) throw new CareError(problems.join(' '), 422)
   if (body.signoff !== true) throw new CareError('Tick the sign off box to approve.', 422)
   const approver = String(body.approver || '').trim().slice(0, 80)

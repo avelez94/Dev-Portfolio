@@ -22,8 +22,7 @@ export type CareSettings = {
   immediate_cancel_handling: string
   policy_approved_at: string | null
   policy_approved_note: string | null
-  calendar_token_hash: string | null
-  calendar_token_created_at: string | null
+  evidence_retention_days: number
 }
 
 export function validTimeZone(tz: string): boolean {

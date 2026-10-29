@@ -67,7 +67,7 @@ export async function sendReport(cycleId: string, body: { approval_id?: string; 
     throw new CareError('The stored PDF does not match the approved file. Nothing was sent.', 500)
   }
   const snap = approval.snapshot
-  const m = clientReport({ subject, message, siteLabel: snap.site.label, monthLabel: snap.period.label })
+  const m = clientReport({ subject, message, snap })
   const filename = `Health report ${snap.site.label} ${snap.period.label}.pdf`.replace(/[^\w .]/g, '')
   try {
     const { data, error } = await client().emails.send(
@@ -84,8 +84,8 @@ export async function sendReport(cycleId: string, body: { approval_id?: string; 
   }
   const now = new Date().toISOString()
   await db.from('care_reports').update({ status: 'sent', updated_at: now }).eq('id', report.id).eq('current_approval_id', approval.id)
-  const cycle = must(await db.from('care_cycles').select('id, site_id, calendar_sequence').eq('id', cycleId).single(), 'Cycle')
-  await db.from('care_cycles').update({ completed_at: now, calendar_sequence: cycle.calendar_sequence + 1, updated_at: now }).eq('id', cycleId)
+  const cycle = must(await db.from('care_cycles').select('id, site_id').eq('id', cycleId).single(), 'Cycle')
+  await db.from('care_cycles').update({ completed_at: now, updated_at: now }).eq('id', cycleId)
   await db.from('care_sites').update({ last_completed_review_at: now, updated_at: now }).eq('id', cycle.site_id)
   await logActivity({ cycle_id: cycleId, site_id: cycle.site_id, actor, action: 'report_sent', detail: { version: approval.version, to, send_id: send.id } })
   return { send_id: send.id, status: 'accepted' }

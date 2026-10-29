@@ -14,6 +14,7 @@ const s = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) 
 
 export type RunnerFinding = {
   check_key: string
+  code?: string
   url?: string
   viewport?: string
   status: FindingStatus
@@ -80,7 +81,7 @@ export async function completeRun(runId: string, owner: string, body: Completion
       try { new URL(url) } catch { url = '' }
     }
     return [{
-      run_id: runId, cycle_id: run.cycle_id, site_id: run.site_id, check_key: f.check_key, fingerprint: fingerprint({ check_key: f.check_key, url, viewport: f.viewport }),
+      run_id: runId, cycle_id: run.cycle_id, site_id: run.site_id, check_key: f.check_key, issue_code: typeof f.code === 'string' && /^[a-z_]{2,40}$/.test(f.code) ? f.code : null, fingerprint: fingerprint({ check_key: f.check_key, url, viewport: f.viewport }),
       url: url || null, viewport: f.viewport === 'mobile' || f.viewport === 'desktop' ? f.viewport : null, status: f.status,
       observed: s(f.observed, 1000) || 'No details recorded.', explanation: s(f.explanation, 1000) || 'No explanation recorded.',
       possible_cause: s(f.possible_cause, 600) || null, next_action: s(f.next_action, 600) || null,
@@ -89,7 +90,7 @@ export async function completeRun(runId: string, owner: string, body: Completion
   })
   if (outcome === 'failed' && rows.length === 0) {
     rows.push({
-      run_id: runId, cycle_id: run.cycle_id, site_id: run.site_id, check_key: 'scan', fingerprint: 'scan|-|', url: run.config?.site_url || null, viewport: null,
+      run_id: runId, cycle_id: run.cycle_id, site_id: run.site_id, check_key: 'scan', issue_code: 'scan_incomplete', fingerprint: 'scan|-|', url: run.config?.site_url || null, viewport: null,
       status: 'could_not_check', observed: s(body.error, 600) || 'The automated check did not finish.', explanation: 'The automated check did not run to completion, so nothing was confirmed this time.',
       possible_cause: null, next_action: 'Retry the check from the review page. If it keeps failing, check the website manually.', evidence: {}, checked_at: now,
     })

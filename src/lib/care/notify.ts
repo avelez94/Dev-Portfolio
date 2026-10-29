@@ -9,6 +9,7 @@ import { db, getSettings, logActivity, type Row } from './db'
 import { appUrl } from './config'
 import { formatInTz } from './schedule'
 import * as mail from './emails'
+import { groupFindings } from './report-model'
 
 let resend: Resend | null = null
 const client = () => (resend ??= new Resend(process.env.RESEND_API_KEY))
@@ -42,15 +43,17 @@ export async function queueScanNotification(runId: string) {
   if (!cycle || !site) return
   const client = (await db.from('clients').select('name, business').eq('id', site.client_id).maybeSingle()).data
   const settings = await getSettings()
-  const findings = (await db.from('care_findings').select('check_key, url, viewport, status, observed').eq('run_id', runId)).data || []
+  const findings = (await db.from('care_findings').select('check_key, issue_code, url, viewport, status, observed, evidence').eq('run_id', runId)).data || []
   const manual = (await db.from('care_manual_results').select('label, status').eq('cycle_id', cycle.id)).data || []
   const name = client?.business || client?.name || site.label
-  const fmt = (f: { check_key: string; url: string | null; viewport: string | null; observed: string }) => `${f.check_key.replace(/_/g, ' ')}${f.viewport ? ` (${f.viewport})` : ''}: ${f.url || ''} ${f.observed}`.slice(0, 220)
+  // Grouped like the report: one line per issue type with its pages, not one per page and device.
+  const groups = groupFindings(findings, run.config?.pages || [], run.config?.destinations || [])
+  const fmt = (g: { title: string; pages: string[]; count: number }) => `${g.title}: ${g.pages.slice(0, 4).join(', ')}${g.pages.length > 4 ? ` and ${g.pages.length - 4} more` : ''}`.slice(0, 240)
   const payload = {
     client: name, site: site.label, siteUrl: site.site_url, due: formatInTz(cycle.review_due_at, settings.timezone),
     counts: run.summary?.counts || {}, outcome: run.status, error: run.error, attempts: run.attempts,
-    attention: findings.filter((f: { status: string }) => f.status === 'failed' || f.status === 'needs_review').map(fmt),
-    couldNot: findings.filter((f: { status: string }) => f.status === 'could_not_check').map(fmt),
+    attention: groups.filter((g) => g.severity === 'issue').map(fmt),
+    couldNot: groups.filter((g) => g.severity === 'unverified').map(fmt),
     manualOpen: manual.filter((m: { status: string | null }) => !m.status || m.status === 'needs_review').map((m: { label: string }) => m.label),
     link: reviewLink(cycle.id),
   }

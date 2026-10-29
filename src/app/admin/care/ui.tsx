@@ -74,6 +74,13 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-paper h2,.care-paper h3{color:#2A1F1B}.care-paper a{color:#B33A26}.care-paper .muted{color:#5C4A42}
 .care-paper .sec{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2F6B66;margin:18px 0 6px}
 .care-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.care-sect{background:var(--panel);border:1px solid var(--border);border-radius:16px;margin:0 0 12px}
+.care-sect>summary{list-style:none;cursor:pointer;padding:14px 18px;display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;border-radius:16px}
+.care-sect>summary::-webkit-details-marker{display:none}
+.care-sect>summary::before{content:'';width:8px;height:8px;border-right:2px solid var(--text2);border-bottom:2px solid var(--text2);transform:rotate(-45deg);transition:transform .15s;flex:none}
+.care-sect[open]>summary::before{transform:rotate(45deg)}
+.care-sect>summary h2{font-size:18px}
+.care-sect-body{padding:0 18px 18px}
 .care-skel{height:14px;border-radius:6px;background:var(--surface2);animation:carepulse 1.2s infinite}
 @keyframes carepulse{50%{opacity:.5}}
 @media (prefers-reduced-motion:reduce){.care-skel{animation:none}}

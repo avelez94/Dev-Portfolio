@@ -4,19 +4,19 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { careEnabled, careOff, appUrl, clientEmailAllowed } from '@/lib/care/config'
+import { careEnabled, careOff, clientEmailAllowed } from '@/lib/care/config'
 import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCKET, REPORTS_BUCKET, type Row } from '@/lib/care/db'
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
 import { createCycle, enqueueScan, cancelScan, releaseHeldCycles } from '@/lib/care/cycles'
-import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval } from '@/lib/care/report'
+import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote } from '@/lib/care/report'
+import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
 import { reportPdf } from '@/lib/care/report-pdf'
 import { sendPreview, sendReport, markStuckSend } from '@/lib/care/send'
 import { createCheckout, portalSession, syncSubscription, stripeMode } from '@/lib/care/stripe'
 import { deliver } from '@/lib/care/notify'
-import { newFeedToken } from '@/lib/care/ics'
 import { diffFindings, type FindingRow } from '@/lib/care/findings'
 import { checkUrlResolves } from '@/lib/care/url-safety'
-import { validTimeZone, zonedToUtc } from '@/lib/care/schedule'
+import { validTimeZone, zonedToUtc, localDate } from '@/lib/care/schedule'
 import { isPlanId, plan as planInfo, priceIdFor, PLAN_IDS } from '@/lib/care/plans'
 
 export const maxDuration = 60
@@ -42,7 +42,7 @@ async function status() {
     stripe: { mode: stripeMode(), webhook: !!process.env.STRIPE_WEBHOOK_SECRET, prices: Object.fromEntries(PLAN_IDS.map((p) => [p, !!priceIdFor(p)])) },
     runner: { token: !!process.env.CARE_RUNNER_TOKEN, dispatch: !!(process.env.CARE_GITHUB_DISPATCH_TOKEN && process.env.CARE_GITHUB_REPO) },
     email: { provider: !!process.env.RESEND_API_KEY, clientEmailsLive: process.env.CARE_CLIENT_EMAIL_LIVE === 'true', allowlist: (process.env.CARE_EMAIL_ALLOWLIST || '').split(',').filter(Boolean) },
-    calendar: { feed: !!s.calendar_token_hash, provider: null },
+    calendar: { adminCalendar: true, resendWebhook: !!process.env.RESEND_WEBHOOK_SECRET },
     policyApproved: !!s.policy_approved_at,
   })
 }
@@ -66,8 +66,7 @@ async function overview() {
 
 async function getSettingsRoute() {
   const s = await getSettings()
-  const { calendar_token_hash, ...rest } = s
-  return ok({ ...rest, calendar_feed: !!calendar_token_hash })
+  return ok(s)
 }
 
 async function putSettings({ body }: Ctx) {
@@ -86,7 +85,7 @@ async function putSettings({ body }: Ctx) {
       patch[k] = String(body[k]).slice(0, 5)
     }
   }
-  const ints: [string, number, number][] = [['review_minutes', 15, 480], ['review_window_days', 1, 28], ['lead_days', 0, 14], ['overdue_reminder_hours', 12, 720], ['overdue_reminder_max', 0, 10], ['billing_attention_after_failures', 1, 10]]
+  const ints: [string, number, number][] = [['review_minutes', 15, 480], ['review_window_days', 1, 28], ['lead_days', 0, 14], ['overdue_reminder_hours', 12, 720], ['overdue_reminder_max', 0, 10], ['billing_attention_after_failures', 1, 10], ['evidence_retention_days', 30, 730]]
   for (const [k, lo, hi] of ints) {
     if (body[k] === undefined) continue
     const n = Number(body[k])
@@ -134,14 +133,6 @@ async function approvePolicy({ body }: Ctx) {
   await db.from('care_settings').update({ policy_approved_at: new Date().toISOString(), policy_approved_note: note.slice(0, 1000) }).eq('id', 1)
   await logActivity({ actor: ACTOR, action: 'billing_policy_approved', detail: { note: note.slice(0, 200) } })
   return getSettingsRoute()
-}
-
-async function calendarToken() {
-  const { token, hash } = newFeedToken()
-  await db.from('care_settings').update({ calendar_token_hash: hash, calendar_token_created_at: new Date().toISOString() }).eq('id', 1)
-  await logActivity({ actor: ACTOR, action: 'calendar_feed_created', detail: {} })
-  // Shown once. Only the hash is stored; creating a new link turns off the old one.
-  return ok({ url: `${appUrl()}/api/care/calendar/${token}` })
 }
 
 /* ------------------------------ sites ------------------------------ */
@@ -276,14 +267,82 @@ async function getCycle({ seg }: Ctx) {
   const snapshot = await buildSnapshot(b)
   const hash = hashSnapshot(snapshot)
   const allFindings = (await db.from('care_findings').select('*').eq('cycle_id', cycleId).order('created_at')).data || []
-  const diff = b.previousRun ? diffFindings(b.previousFindings as FindingRow[], b.findings as FindingRow[]) : null
+  const prevFindings = b.previousRun ? b.earlierFindings.filter((f: Row) => f.run_id === b.previousRun.id) : []
+  const diff = b.previousRun ? diffFindings(prevFindings as FindingRow[], b.findings as FindingRow[]) : null
   const settings = await getSettings()
-  const notes = (await db.from('care_notifications').select('id, kind, status, attempts, error, created_at, sent_at').eq('cycle_id', cycleId).order('created_at', { ascending: false })).data || []
+  const notifications = (await db.from('care_notifications').select('id, kind, status, attempts, error, created_at, sent_at').eq('cycle_id', cycleId).order('created_at', { ascending: false })).data || []
   const activity = (await db.from('care_activity').select('*').eq('cycle_id', cycleId).order('created_at', { ascending: false }).limit(60)).data || []
+  // Grouped view for the review screen: one card per issue type, with its raw results.
+  const cfg = b.latest?.config || { pages: b.site.pages || [], destinations: b.site.destinations || [] }
+  const groups = groupFindings(b.findings.map((f: Row) => ({ ...f, client_visible: true }) as FindingIn), cfg.pages || [], cfg.destinations || []).map((g) => ({
+    ...g,
+    note: b.notes.find((n: Row) => n.group_key === g.key) || null,
+    items: b.findings.filter((f: Row) => groupKey(f as FindingIn) === g.key),
+  }))
+  // Issues an earlier check this month found that the latest check no longer shows.
+  const latestKeys = new Set(groups.map((g) => g.key))
+  const cleared = groupFindings(b.earlierFindings.map((f: Row) => ({ ...f, client_visible: true }) as FindingIn), cfg.pages || [], cfg.destinations || [])
+    .filter((g) => g.severity === 'issue' && !latestKeys.has(g.key))
+    .map((g) => ({ ...g, severity: 'cleared', note: b.notes.find((n: Row) => n.group_key === g.key) || null, items: [] }))
+  const manualIssues = b.manual.filter((m: Row) => m.status === 'failed').map((m: Row) => ({ key: `manual:${m.item_id}`, title: m.label, note: b.notes.find((n: Row) => n.group_key === `manual:${m.item_id}`) || null }))
+  const statusCounts: Record<string, number> = {}
+  for (const f of b.findings) if (f.check_key !== 'screenshot') statusCounts[f.status] = (statusCounts[f.status] || 0) + 1
+  const checkedUrls = { pages: (cfg.pages || []).map((p: Row) => p.url), destinations: (cfg.destinations || []).map((d: Row) => d.url) }
+  const currentUrls = { pages: (b.site.pages || []).map((p: Row) => p.url), destinations: (b.site.destinations || []).map((d: Row) => d.url) }
   return ok({
-    ...b, allFindings, snapshot, snapshotHash: hash, problems: readinessProblems(b), diff, notifications: notes, activity,
+    ...b, allFindings, snapshot, snapshotHash: hash, problems: await readinessProblems(b), diff, notifications, activity, groups, cleared, manualIssues, statusCounts,
+    scope: { checked: checkedUrls, setupChangedSinceCheck: !!b.latest && JSON.stringify(checkedUrls) !== JSON.stringify(currentUrls) },
     timezone: settings.timezone, plan: planInfo(b.cycle.plan), recipientAllowed: b.site.recipient_email ? clientEmailAllowed(b.site.recipient_email) : null,
   })
+}
+
+async function putIssue({ seg, body }: Ctx) {
+  await updateIssueNote(id(seg[1]), String(body.group_key || ''), body, ACTOR)
+  return ok({ ok: true })
+}
+
+/** Care reviews for the admin Schedule calendar: one item per review cycle. */
+async function calendarItems() {
+  const s = await getSettings()
+  const since = new Date(Date.now() - 60 * 86400_000).toISOString()
+  const cycles = (await db.from('care_cycles').select('*').or(`completed_at.is.null,review_due_at.gte.${since}`).order('review_due_at').limit(200)).data || []
+  if (!cycles.length) return ok({ items: [], timezone: s.timezone })
+  const sites = (await db.from('care_sites').select('id, label, site_url, client_id').in('id', [...new Set(cycles.map((c) => c.site_id))])).data || []
+  const clients = (await db.from('clients').select('id, name, business').in('id', [...new Set(sites.map((x) => x.client_id))])).data || []
+  const reports = (await db.from('care_reports').select('id, cycle_id, status, version').in('cycle_id', cycles.map((c) => c.id))).data || []
+  const sends = reports.length ? (await db.from('care_report_sends').select('report_id, status, delivery_status, finished_at').in('report_id', reports.map((r) => r.id)).eq('status', 'accepted')).data || [] : []
+  const items = cycles.map((c) => {
+    const site = sites.find((x) => x.id === c.site_id)
+    const client = clients.find((x) => x.id === site?.client_id)
+    const report = reports.find((r) => r.cycle_id === c.id)
+    const send = sends.find((x) => x.report_id === report?.id)
+    return {
+      id: c.id,
+      date: localDate(new Date(c.review_due_at), s.timezone),
+      due: c.review_due_at,
+      client: client?.business || client?.name || 'Unknown client',
+      site: site?.label || '',
+      url: site?.site_url || '',
+      status: careStatus(c, report, send),
+      overdue: !c.completed_at && new Date(c.review_due_at) < new Date(),
+      done: !!c.completed_at,
+      link: `/admin/care?cycle=${c.id}`,
+    }
+  })
+  return ok({ items, timezone: s.timezone })
+}
+
+function careStatus(c: Row, report: Row | undefined, send: Row | undefined): string {
+  if (send?.delivery_status === 'bounced' || send?.delivery_status === 'complained') return 'Sent, delivery failed'
+  if (send?.delivery_status === 'delivered') return 'Sent and delivered'
+  if (c.completed_at) return 'Sent, delivery not confirmed'
+  if (c.hold_reason === 'enrollment') return 'Waiting for setup'
+  if (c.scan_state === 'queued' || c.scan_state === 'running') return 'Automated check running'
+  if (c.scan_state === 'failed') return 'Check failed'
+  if (report?.status === 'approved') return 'Approved, not sent'
+  if (report?.status === 'ready') return 'Ready for approval'
+  if (c.scan_state === 'done' || c.scan_state === 'partial') return 'Manual review due'
+  return 'Scheduled'
 }
 
 async function rerun({ seg }: Ctx) {
@@ -308,7 +367,7 @@ async function putDue({ seg, body }: Ctx) {
   const due = zonedToUtc(String(body.date), s.work_end, s.timezone)
   const c = must(await db.from('care_cycles').select('*').eq('id', cycleId).single(), 'Cycle')
   if (due < new Date(c.period_start)) throw new CareError('The due date can’t be before the service period starts.')
-  await db.from('care_cycles').update({ review_due_at: due.toISOString(), calendar_sequence: c.calendar_sequence + 1, reminders_sent: 0, last_reminder_at: null, updated_at: new Date().toISOString() }).eq('id', cycleId)
+  await db.from('care_cycles').update({ review_due_at: due.toISOString(), reminders_sent: 0, last_reminder_at: null, updated_at: new Date().toISOString() }).eq('id', cycleId)
   await logActivity({ cycle_id: cycleId, site_id: c.site_id, actor: ACTOR, action: 'due_date_changed', detail: { to: body.date } })
   return ok({ ok: true })
 }
@@ -404,7 +463,6 @@ const routes: [string, string, Handler][] = [
   ['GET', 'settings', getSettingsRoute],
   ['PUT', 'settings', putSettings],
   ['POST', 'settings/approve-policy', approvePolicy],
-  ['POST', 'settings/calendar-token', calendarToken],
   ['GET', 'clients', clients],
   ['GET', 'template', template],
   ['GET', 'activity', activity],
@@ -427,6 +485,8 @@ const routes: [string, string, Handler][] = [
   ['PUT', 'cycles/:id/manual/:item', putManual],
   ['PUT', 'cycles/:id/due', putDue],
   ['PUT', 'cycles/:id/report', putReport],
+  ['PUT', 'cycles/:id/issue', putIssue],
+  ['GET', 'calendar', calendarItems],
   ['POST', 'cycles/:id/ready', ready],
   ['POST', 'cycles/:id/draft', backToDraft],
   ['POST', 'cycles/:id/approve', approveRoute],

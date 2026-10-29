@@ -14,7 +14,7 @@ import { testHosts } from './lib/ip-guard.mjs'
 
 const APP = (process.env.CARE_APP_URL || '').replace(/\/$/, '')
 const TOKEN = process.env.CARE_RUNNER_TOKEN || ''
-const MAX_RUNS = Math.max(1, Math.min(10, Number(process.env.CARE_RUNNER_MAX_RUNS) || 5))
+const MAX_RUNS = Math.max(1, Math.min(3, Number(process.env.CARE_RUNNER_MAX_RUNS) || 3))
 const OWNER = `${process.env.GITHUB_RUN_ID ? 'gha-' + process.env.GITHUB_RUN_ID : 'local'}-${randomBytes(4).toString('hex')}`
 
 if (!APP || !TOKEN) {

@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/care/cron",
-      "schedule": "7 * * * *"
+      "schedule": "7 */3 * * *"
     }
   ]
 }

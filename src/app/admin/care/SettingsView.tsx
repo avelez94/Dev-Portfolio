@@ -8,7 +8,6 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 export default function SettingsView() {
   const { data, error, reload, setData } = useLoad<Row>('settings')
   const [f, setF] = useState<Row | null>(null)
-  const [feed, setFeed] = useState<string | null>(null)
   const [policyNote, setPolicyNote] = useState('')
   const [policyOk, setPolicyOk] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -51,20 +50,16 @@ export default function SettingsView() {
             <Field label="Overdue reminder every (hours)" id="s-oh"><input id="s-oh" inputMode="numeric" value={f.overdue_reminder_hours} onChange={(e) => set('overdue_reminder_hours', e.target.value)} /></Field>
             <Field label="At most this many overdue reminders" id="s-om"><input id="s-om" inputMode="numeric" value={f.overdue_reminder_max} onChange={(e) => set('overdue_reminder_max', e.target.value)} /></Field>
           </div>
-          <div><Action tone="primary" label="Save scheduling" run={() => save(['timezone', 'notify_email', 'working_days', 'work_start', 'work_end', 'review_window_days', 'lead_days', 'review_minutes', 'start_reminder', 'overdue_reminder_hours', 'overdue_reminder_max'])} done={(r) => { setData(r as Row); setMsg('Scheduling saved.') }} /></div>
+          <Field label="Keep screenshots for (days)" id="s-ret" hint="Older screenshots are deleted to keep storage small. Reports, approved PDFs, and results are always kept."><input id="s-ret" inputMode="numeric" value={f.evidence_retention_days} onChange={(e) => set('evidence_retention_days', e.target.value)} /></Field>
+          <div><Action tone="primary" label="Save scheduling" run={() => save(['timezone', 'notify_email', 'working_days', 'work_start', 'work_end', 'review_window_days', 'lead_days', 'review_minutes', 'start_reminder', 'overdue_reminder_hours', 'overdue_reminder_max', 'evidence_retention_days'])} done={(r) => { setData(r as Row); setMsg('Scheduling saved.') }} /></div>
         </div>
       </section>
 
       <section className="care-panel" aria-labelledby="cal-h">
         <h2 id="cal-h">Calendar</h2>
-        <p className="care-muted" style={{ margin: '4px 0 12px' }}>
-          No personal calendar provider is connected, and the discovery call booking calendar is never used for this. Reviews live in the dashboard queue and reminder emails. For your own calendar, subscribe to a private feed: each review shows as an all day item on its due date (plus a start reminder), updates in place when dates change, never blocks time, and never invites anyone. To have work blocks placed in free time, a calendar connection (for example Google Calendar) would be needed.
+        <p className="care-muted" style={{ margin: '4px 0 0' }}>
+          Each monthly review appears in your admin Schedule calendar on its due date, marked as a care review, and updates as the work moves along. Care reviews never block discovery call availability, never create Zoom meetings, and never invite anyone.
         </p>
-        <div className="care-row">
-          <Badge tone={data.calendar_feed ? 'ok' : 'info'}>{data.calendar_feed ? 'Private feed is on' : 'No feed yet'}</Badge>
-          <Action label={data.calendar_feed ? 'Create a new feed link (turns off the old one)' : 'Create private feed link'} confirmText={data.calendar_feed ? 'Yes, replace the link' : undefined} run={() => careApi<Row>('settings/calendar-token', { method: 'POST', json: {} })} done={(r) => { setFeed((r as Row).url); reload() }} />
-        </div>
-        {feed && <div className="care-sub" style={{ marginTop: 10 }}><div className="care-label">Your private feed link (shown once)</div><input readOnly value={feed} onFocus={(e) => e.target.select()} aria-label="Calendar feed link" /><small className="care-muted">In Google Calendar: Other calendars, From URL. In Apple Calendar: File, New Calendar Subscription. Keep this link private.</small></div>}
       </section>
 
       <section className="care-panel" aria-labelledby="pol-h">

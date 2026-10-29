@@ -37,15 +37,15 @@ function netError(msg) {
 
 /** Plain language for a navigation error. Returns a finding shape without url/viewport. */
 function describeNavError(code, blockedReason, checkKey = 'page_load') {
-  if (blockedReason) return { check_key: checkKey, status: 'could_not_check', observed: `The check refused to open this address (${blockedReason}).`, explanation: 'For safety the checker only opens public web addresses. Nothing was confirmed for this page.', next_action: 'Confirm the address in the website settings and check the page by hand.' }
-  if (!code) return { check_key: checkKey, status: 'could_not_check', observed: 'The page did not finish loading.', explanation: 'The checker could not confirm whether the page works.', next_action: 'Open the page by hand.' }
-  if (code === 'TIMEOUT' || code === 'ERR_TIMED_OUT') return { check_key: checkKey, status: 'could_not_check', observed: 'The page took too long to respond.', explanation: 'A timeout is not proof of a problem. The site may be slow or may limit automated visitors.', next_action: 'Open the page by hand and note how long it takes.' }
-  if (code.startsWith('ERR_CERT') || code === 'ERR_SSL_PROTOCOL_ERROR' || code === 'ERR_BAD_SSL_CLIENT_AUTH_CERT') return { check_key: 'https', status: 'failed', observed: `The secure connection failed (${code}).`, explanation: 'Visitors may see a security warning instead of the page.', possible_cause: 'An expired, missing, or mismatched security certificate.', next_action: 'Check the certificate in a browser and with the hosting provider.' }
-  if (code === 'ERR_TOO_MANY_REDIRECTS') return { check_key: 'redirects', status: 'failed', observed: 'The page keeps redirecting and never loads (redirect loop).', explanation: 'Visitors can’t reach this page.', possible_cause: 'Conflicting redirect or HTTPS settings.', next_action: 'Review redirect settings with the host or platform.' }
-  if (code === 'ERR_NAME_NOT_RESOLVED') return { check_key: checkKey, status: 'needs_review', observed: 'The domain name could not be found.', explanation: 'This can mean a DNS change or an expired domain, or a temporary lookup problem.', next_action: 'Open the site by hand and check the domain registration.' }
-  if (code === 'ERR_TUNNEL_CONNECTION_FAILED' || code === 'ERR_PROXY_CONNECTION_FAILED') return { check_key: checkKey, status: 'could_not_check', observed: 'The checker was not allowed to connect to this address.', explanation: 'For safety the checker only connects to public web addresses on standard ports.', next_action: 'Check the page by hand.' }
-  if (code === 'ERR_CONNECTION_REFUSED' || code === 'ERR_CONNECTION_RESET' || code === 'ERR_CONNECTION_CLOSED' || code === 'ERR_EMPTY_RESPONSE') return { check_key: checkKey, status: 'needs_review', observed: `The server did not accept the connection (${code}).`, explanation: 'This can be a temporary outage or the server blocking automated visitors.', next_action: 'Open the page by hand.' }
-  return { check_key: checkKey, status: 'could_not_check', observed: `The page did not load (${code}).`, explanation: 'The checker could not confirm whether the page works.', next_action: 'Open the page by hand.' }
+  if (blockedReason) return { code: 'not_allowed', check_key: checkKey, status: 'could_not_check', observed: `The check refused to open this address (${blockedReason}).`, explanation: 'For safety the checker only opens public web addresses. Nothing was confirmed for this page.', next_action: 'Confirm the address in the website settings and check the page by hand.' }
+  if (!code) return { code: 'no_load', check_key: checkKey, status: 'could_not_check', observed: 'The page did not finish loading.', explanation: 'The checker could not confirm whether the page works.', next_action: 'Open the page by hand.' }
+  if (code === 'TIMEOUT' || code === 'ERR_TIMED_OUT') return { code: 'timeout', check_key: checkKey, status: 'could_not_check', observed: 'The page took too long to respond.', explanation: 'A timeout is not proof of a problem. The site may be slow or may limit automated visitors.', next_action: 'Open the page by hand and note how long it takes.' }
+  if (code.startsWith('ERR_CERT') || code === 'ERR_SSL_PROTOCOL_ERROR' || code === 'ERR_BAD_SSL_CLIENT_AUTH_CERT') return { code: 'cert_error', check_key: 'https', status: 'failed', observed: `The secure connection failed (${code}).`, explanation: 'Visitors may see a security warning instead of the page.', possible_cause: 'An expired, missing, or mismatched security certificate.', next_action: 'Check the certificate in a browser and with the hosting provider.' }
+  if (code === 'ERR_TOO_MANY_REDIRECTS') return { code: 'redirect_loop', check_key: 'redirects', status: 'failed', observed: 'The page keeps redirecting and never loads (redirect loop).', explanation: 'Visitors can’t reach this page.', possible_cause: 'Conflicting redirect or HTTPS settings.', next_action: 'Review redirect settings with the host or platform.' }
+  if (code === 'ERR_NAME_NOT_RESOLVED') return { code: 'dns', check_key: checkKey, status: 'needs_review', observed: 'The domain name could not be found.', explanation: 'This can mean a DNS change or an expired domain, or a temporary lookup problem.', next_action: 'Open the site by hand and check the domain registration.' }
+  if (code === 'ERR_TUNNEL_CONNECTION_FAILED' || code === 'ERR_PROXY_CONNECTION_FAILED') return { code: 'not_allowed', check_key: checkKey, status: 'could_not_check', observed: 'The checker was not allowed to connect to this address.', explanation: 'For safety the checker only connects to public web addresses on standard ports.', next_action: 'Check the page by hand.' }
+  if (code === 'ERR_CONNECTION_REFUSED' || code === 'ERR_CONNECTION_RESET' || code === 'ERR_CONNECTION_CLOSED' || code === 'ERR_EMPTY_RESPONSE') return { code: 'connection', check_key: checkKey, status: 'needs_review', observed: `The server did not accept the connection (${code}).`, explanation: 'This can be a temporary outage or the server blocking automated visitors.', next_action: 'Open the page by hand.' }
+  return { code: 'no_load', check_key: checkKey, status: 'could_not_check', observed: `The page did not load (${code}).`, explanation: 'The checker could not confirm whether the page works.', next_action: 'Open the page by hand.' }
 }
 
 async function pool(items, n, fn) {
@@ -175,46 +175,46 @@ export async function runChecks(config, ctx) {
     }
     const wall = BOT_WALL.test(v.title || '') || (status === 403 || status === 429 || status === 503) && BOT_WALL.test(v.text || '')
     if (wall) {
-      add({ ...base, check_key: 'page_load', status: 'could_not_check', observed: `The site showed a robot check or access page instead of the content (HTTP ${status}).`, explanation: 'Some sites block automated visitors. This is not a problem with the site for people.', next_action: 'Check the page by hand.', evidence: ev })
+      add({ code: 'blocked_by_site',  ...base, check_key: 'page_load', status: 'could_not_check', observed: `The site showed a robot check or access page instead of the content (HTTP ${status}).`, explanation: 'Some sites block automated visitors. This is not a problem with the site for people.', next_action: 'Check the page by hand.', evidence: ev })
       return false
     }
     if (status >= 400) {
       const soft = status === 401 || status === 403 || status === 429
-      add({ ...base, check_key: 'page_load', status: soft ? 'could_not_check' : status >= 500 ? 'needs_review' : 'failed', observed: `The page answered with HTTP ${status}.`,
+      add({ code: (soft ? 'blocked_by_site' : status >= 500 ? 'server_error' : 'page_error'),  ...base, check_key: 'page_load', status: soft ? 'could_not_check' : status >= 500 ? 'needs_review' : 'failed', observed: `The page answered with HTTP ${status}.`,
         explanation: soft ? 'The site refused the automated visit. People may still see the page.' : status >= 500 ? 'The server reported an error. This can be temporary.' : 'Visitors following this link see an error page.',
         possible_cause: status === 404 || status === 410 ? 'The page was moved, renamed, or deleted.' : null,
         next_action: soft ? 'Check the page by hand.' : status >= 500 ? 'Open the page again later; if it persists, check the host.' : 'Restore the page or update links to its new address.', evidence: ev })
       return false
     }
-    add({ ...base, check_key: 'page_load', status: 'passed', observed: `Loaded in ${(v.ms / 1000).toFixed(1)} seconds (HTTP ${status}).`, explanation: 'The page opened.', evidence: ev })
+    add({ code: 'ok',  ...base, check_key: 'page_load', status: 'passed', observed: `Loaded in ${(v.ms / 1000).toFixed(1)} seconds (HTTP ${status}).`, explanation: 'The page opened.', evidence: ev })
 
     // HTTPS (same answer on every screen size, so recorded once, on desktop)
     const final = v.finalUrl || target.url
-    if (kind !== 'desktop') { /* skip */ } else if (target.url.startsWith('https:') && final.startsWith('http:')) add({ ...base, check_key: 'https', status: 'needs_review', observed: 'The page ended on an insecure http address.', explanation: 'Visitors may see a “not secure” label.', possible_cause: 'A redirect sends visitors from https to http.', next_action: 'Check redirect and HTTPS settings.', evidence: ev })
-    else if (final.startsWith('https:')) add({ ...base, check_key: 'https', status: 'passed', observed: 'The secure connection worked and the certificate was accepted.', explanation: 'The browser trusted the site’s certificate.', evidence: { final_url: final } })
-    else add({ ...base, check_key: 'https', status: 'needs_review', observed: 'The page uses http, not https.', explanation: 'Browsers label http pages as not secure.', next_action: 'Consider turning on HTTPS for the site.', evidence: ev })
+    if (kind !== 'desktop') { /* skip */ } else if (target.url.startsWith('https:') && final.startsWith('http:')) add({ code: 'http_downgrade',  ...base, check_key: 'https', status: 'needs_review', observed: 'The page ended on an insecure http address.', explanation: 'Visitors may see a “not secure” label.', possible_cause: 'A redirect sends visitors from https to http.', next_action: 'Check redirect and HTTPS settings.', evidence: ev })
+    else if (final.startsWith('https:')) add({ code: 'ok',  ...base, check_key: 'https', status: 'passed', observed: 'The secure connection worked and the certificate was accepted.', explanation: 'The browser trusted the site’s certificate.', evidence: { final_url: final } })
+    else add({ code: 'http_only',  ...base, check_key: 'https', status: 'needs_review', observed: 'The page uses http, not https.', explanation: 'Browsers label http pages as not secure.', next_action: 'Consider turning on HTTPS for the site.', evidence: ev })
 
     // Redirects
     if (v.chain?.length) {
       const outside = !hostInDomains(hostOf(final), domains)
       const unexpected = !sameishRedirect(target.url, final) && !sameishRedirect(target.url.replace(/^http:/, 'https:'), final)
-      if (outside) add({ ...base, check_key: 'redirects', status: 'needs_review', observed: `Redirected to ${final}, which is outside the approved domains.`, explanation: 'This may be intended (for example a new domain), or a sign of a misconfiguration.', next_action: 'Confirm the redirect is expected.', evidence: ev })
-      else if (unexpected) add({ ...base, check_key: 'redirects', status: 'needs_review', observed: `Redirected to a different page: ${final}.`, explanation: 'The agreed page address now sends visitors somewhere else.', possible_cause: 'The page may have moved.', next_action: 'Confirm the redirect is expected, or update the page list.', evidence: ev })
-      else add({ ...base, check_key: 'redirects', status: 'passed', observed: `Redirected ${v.chain.length} time(s) to the same page.`, explanation: 'A normal redirect, such as adding https or www.', evidence: ev })
+      if (outside) add({ code: 'redirect_outside',  ...base, check_key: 'redirects', status: 'needs_review', observed: `Redirected to ${final}, which is outside the approved domains.`, explanation: 'This may be intended (for example a new domain), or a sign of a misconfiguration.', next_action: 'Confirm the redirect is expected.', evidence: ev })
+      else if (unexpected) add({ code: 'redirect_unexpected',  ...base, check_key: 'redirects', status: 'needs_review', observed: `Redirected to a different page: ${final}.`, explanation: 'The agreed page address now sends visitors somewhere else.', possible_cause: 'The page may have moved.', next_action: 'Confirm the redirect is expected, or update the page list.', evidence: ev })
+      else add({ code: 'ok',  ...base, check_key: 'redirects', status: 'passed', observed: `Redirected ${v.chain.length} time(s) to the same page.`, explanation: 'A normal redirect, such as adding https or www.', evidence: ev })
     }
 
     // Images
     const ownFailed = v.failedImages.filter((i) => hostInDomains(hostOf(i.url), domains) && i.status)
     const otherFailed = v.failedImages.filter((i) => !ownFailed.includes(i))
-    if (ownFailed.length) add({ ...base, check_key: 'images', status: 'failed', observed: `${ownFailed.length} image(s) from the site failed to load (for example ${ownFailed[0].url}, HTTP ${ownFailed[0].status}).`, explanation: 'Visitors may see empty spaces or broken image icons.', possible_cause: 'The image file was moved or deleted.', next_action: 'Replace or relink the image.', evidence: { request_url: ownFailed[0].url, http_status: ownFailed[0].status } })
-    if (otherFailed.length) add({ ...base, check_key: 'images', status: 'needs_review', observed: `${otherFailed.length} image request(s) did not load (for example ${otherFailed[0].url}: ${otherFailed[0].error || 'HTTP ' + otherFailed[0].status}).`, explanation: 'These may come from another service, or may have been blocked by the checker’s safety rules. People may still see them.', next_action: 'Look at the screenshot and the live page.', evidence: { request_url: otherFailed[0].url, blocked_reason: blockedFor(otherFailed[0].url) } })
-    if (!v.failedImages.length) add({ ...base, check_key: 'images', status: 'passed', observed: 'No image requests failed.', explanation: 'Images on the page loaded.' })
+    if (ownFailed.length) add({ code: 'image_broken',  ...base, check_key: 'images', status: 'failed', observed: `${ownFailed.length} image(s) from the site failed to load (for example ${ownFailed[0].url}, HTTP ${ownFailed[0].status}).`, explanation: 'Visitors may see empty spaces or broken image icons.', possible_cause: 'The image file was moved or deleted.', next_action: 'Replace or relink the image.', evidence: { request_url: ownFailed[0].url, http_status: ownFailed[0].status } })
+    if (otherFailed.length) add({ code: 'image_unverified',  ...base, check_key: 'images', status: 'needs_review', observed: `${otherFailed.length} image request(s) did not load (for example ${otherFailed[0].url}: ${otherFailed[0].error || 'HTTP ' + otherFailed[0].status}).`, explanation: 'These may come from another service, or may have been blocked by the checker’s safety rules. People may still see them.', next_action: 'Look at the screenshot and the live page.', evidence: { request_url: otherFailed[0].url, blocked_reason: blockedFor(otherFailed[0].url) } })
+    if (!v.failedImages.length) add({ code: 'ok',  ...base, check_key: 'images', status: 'passed', observed: 'No image requests failed.', explanation: 'Images on the page loaded.' })
 
     // Overflow
     const o = v.overflow || 0
-    if (o >= 20) add({ ...base, check_key: 'overflow', status: 'failed', observed: `The page is ${o}px wider than the ${kind} screen, so it scrolls sideways.`, explanation: 'Visitors may need to scroll sideways, and parts of the page may be cut off.', possible_cause: 'An element wider than the screen, such as an image, table, or embed.', next_action: 'Check the screenshot and fix the wide element.', evidence: { overflow_px: o } })
-    else if (o >= 4) add({ ...base, check_key: 'overflow', status: 'needs_review', observed: `The page is ${o}px wider than the ${kind} screen.`, explanation: 'A small sideways scroll may or may not be noticeable.', next_action: 'Check the screenshot.', evidence: { overflow_px: o } })
-    else add({ ...base, check_key: 'overflow', status: 'passed', observed: `No sideways scrolling on ${kind}.`, explanation: 'The page fits the screen width.' })
+    if (o >= 20) add({ code: 'overflow',  ...base, check_key: 'overflow', status: 'failed', observed: `The page is ${o}px wider than the ${kind} screen, so it scrolls sideways.`, explanation: 'Visitors may need to scroll sideways, and parts of the page may be cut off.', possible_cause: 'An element wider than the screen, such as an image, table, or embed.', next_action: 'Check the screenshot and fix the wide element.', evidence: { overflow_px: o } })
+    else if (o >= 4) add({ code: 'overflow_minor',  ...base, check_key: 'overflow', status: 'needs_review', observed: `The page is ${o}px wider than the ${kind} screen.`, explanation: 'A small sideways scroll may or may not be noticeable.', next_action: 'Check the screenshot.', evidence: { overflow_px: o } })
+    else add({ code: 'ok',  ...base, check_key: 'overflow', status: 'passed', observed: `No sideways scrolling on ${kind}.`, explanation: 'The page fits the screen width.' })
     return true
   }
 
@@ -226,13 +226,13 @@ export async function runChecks(config, ctx) {
         if (stopped) return
         const v = await visit(context, kind, target, 'page_load')
         const ok = pageFindings(target, v, kind)
-        if (ok && idx < 6) {
+        if (ok && idx < 3) {
           try {
             const shot = await v.page.screenshot({ type: 'jpeg', quality: 60, fullPage: false, timeout: 15000 })
             const path = await ctx.upload(`${kind}-${idx + 1}`, shot)
-            add({ url: target.url, viewport: kind, check_key: 'screenshot', status: 'passed', observed: `${kind === 'mobile' ? 'Mobile' : 'Desktop'} screenshot captured.`, explanation: 'For visual review.', evidence: { screenshot: path } })
+            add({ code: 'ok',  url: target.url, viewport: kind, check_key: 'screenshot', status: 'passed', observed: `${kind === 'mobile' ? 'Mobile' : 'Desktop'} screenshot captured.`, explanation: 'For visual review.', evidence: { screenshot: path } })
           } catch (e) {
-            add({ url: target.url, viewport: kind, check_key: 'screenshot', status: 'could_not_check', observed: 'The screenshot could not be captured.', explanation: 'Review the page by hand.', evidence: { error_code: netError(e.message) || 'SCREENSHOT_FAILED' } })
+            add({ code: 'screenshot_failed',  url: target.url, viewport: kind, check_key: 'screenshot', status: 'could_not_check', observed: 'The screenshot could not be captured.', explanation: 'Review the page by hand.', evidence: { error_code: netError(e.message) || 'SCREENSHOT_FAILED' } })
           }
         }
         if (ok && kind === 'desktop') {
@@ -273,9 +273,9 @@ export async function runChecks(config, ctx) {
           const wall = BOT_WALL.test(v.title || '')
           const guard = v.resp?.headers()['x-care-blocked']
           if (guard) add({ ...base, ...describeNavError(null, guard, 'destination'), evidence: { blocked_reason: guard } })
-          else if (wall || status === 401 || status === 403 || status === 429) add({ ...base, status: 'could_not_check', observed: `${d.label} showed an access or robot check page (HTTP ${status}).`, explanation: 'The service limits automated visitors. This is not a site defect.', next_action: 'Open it by hand.', evidence: { http_status: status, final_url: v.finalUrl } })
-          else if (status >= 400) add({ ...base, status: own && status < 500 ? 'failed' : 'needs_review', observed: `${d.label} answered with HTTP ${status}.`, explanation: own ? 'Visitors following this link see an error.' : 'The outside service returned an error. It may be temporary.', next_action: 'Open it by hand and check the link.', evidence: { http_status: status, final_url: v.finalUrl } })
-          else add({ ...base, status: 'passed', observed: `${d.label} opened (HTTP ${status}).`, explanation: `The destination page loaded.${limitNote}`, evidence: { http_status: status, final_url: v.finalUrl } })
+          else if (wall || status === 401 || status === 403 || status === 429) add({ code: 'blocked_by_site',  ...base, status: 'could_not_check', observed: `${d.label} showed an access or robot check page (HTTP ${status}).`, explanation: 'The service limits automated visitors. This is not a site defect.', next_action: 'Open it by hand.', evidence: { http_status: status, final_url: v.finalUrl } })
+          else if (status >= 400) add({ code: (own && status < 500 ? 'page_error' : 'dest_error'),  ...base, status: own && status < 500 ? 'failed' : 'needs_review', observed: `${d.label} answered with HTTP ${status}.`, explanation: own ? 'Visitors following this link see an error.' : 'The outside service returned an error. It may be temporary.', next_action: 'Open it by hand and check the link.', evidence: { http_status: status, final_url: v.finalUrl } })
+          else add({ code: 'ok',  ...base, status: 'passed', observed: `${d.label} opened (HTTP ${status}).`, explanation: `The destination page loaded.${limitNote}`, evidence: { http_status: status, final_url: v.finalUrl } })
         }
         await v.page.close().catch(() => {})
         await tick(`destination: ${d.label}`)
@@ -296,23 +296,23 @@ export async function runChecks(config, ctx) {
       if (stopped) return
       const r = await checkLink(l.url, { timeoutMs: 10000, ua: `Mozilla/5.0 ${UA_SUFFIX}` })
       const base = { url: l.url, check_key: 'internal_links', evidence: { found_on: l.found_on, http_status: r.status ?? null, final_url: r.final, redirect_chain: r.chain } }
-      if (r.blocked) add({ ...base, status: 'could_not_check', observed: `Not opened (${r.blocked}).`, explanation: 'The checker only opens public addresses.', next_action: 'Check the link by hand.' })
-      else if (r.loop) add({ ...base, status: 'failed', observed: 'The link redirects in a loop.', explanation: 'Visitors can’t reach this page.', next_action: 'Fix the redirect.' })
-      else if (r.error) add({ ...base, status: 'could_not_check', observed: `The link did not respond (${r.error}).`, explanation: 'This can be temporary and is not proof of a broken link.', next_action: 'Open it by hand.' })
-      else if (r.status === 404 || r.status === 410) add({ ...base, status: 'failed', observed: `Broken link: HTTP ${r.status}.`, explanation: `Visitors who click this link on ${pathOf(l.found_on)} see an error page.`, possible_cause: 'The page was moved or deleted.', next_action: 'Update or remove the link.' })
-      else if (r.status >= 500) add({ ...base, status: 'needs_review', observed: `The link returned HTTP ${r.status}.`, explanation: 'The server reported an error. It may be temporary.', next_action: 'Open it again later.' })
-      else if (r.status === 401 || r.status === 403 || r.status === 429) add({ ...base, status: 'could_not_check', observed: `The site refused the automated request (HTTP ${r.status}).`, explanation: 'People may still be able to open it.', next_action: 'Open it by hand if it matters.' })
-      else if (r.final && !hostInDomains(hostOf(r.final), domains)) add({ ...base, status: 'needs_review', observed: `The link redirects outside the approved domains to ${r.final}.`, explanation: 'This may be intended.', next_action: 'Confirm the redirect is expected.' })
+      if (r.blocked) add({ code: 'not_allowed',  ...base, status: 'could_not_check', observed: `Not opened (${r.blocked}).`, explanation: 'The checker only opens public addresses.', next_action: 'Check the link by hand.' })
+      else if (r.loop) add({ code: 'redirect_loop',  ...base, status: 'failed', observed: 'The link redirects in a loop.', explanation: 'Visitors can’t reach this page.', next_action: 'Fix the redirect.' })
+      else if (r.error) add({ code: 'no_response',  ...base, status: 'could_not_check', observed: `The link did not respond (${r.error}).`, explanation: 'This can be temporary and is not proof of a broken link.', next_action: 'Open it by hand.' })
+      else if (r.status === 404 || r.status === 410) add({ code: 'link_broken',  ...base, status: 'failed', observed: `Broken link: HTTP ${r.status}.`, explanation: `Visitors who click this link on ${pathOf(l.found_on)} see an error page.`, possible_cause: 'The page was moved or deleted.', next_action: 'Update or remove the link.' })
+      else if (r.status >= 500) add({ code: 'server_error',  ...base, status: 'needs_review', observed: `The link returned HTTP ${r.status}.`, explanation: 'The server reported an error. It may be temporary.', next_action: 'Open it again later.' })
+      else if (r.status === 401 || r.status === 403 || r.status === 429) add({ code: 'blocked_by_site',  ...base, status: 'could_not_check', observed: `The site refused the automated request (HTTP ${r.status}).`, explanation: 'People may still be able to open it.', next_action: 'Open it by hand if it matters.' })
+      else if (r.final && !hostInDomains(hostOf(r.final), domains)) add({ code: 'redirect_outside',  ...base, status: 'needs_review', observed: `The link redirects outside the approved domains to ${r.final}.`, explanation: 'This may be intended.', next_action: 'Confirm the redirect is expected.' })
       else okCount++
       await tick('links')
     })
   }
-  if (okCount || (!all.length && !stopped)) add({ url: config.site_url, check_key: 'internal_links', status: 'passed', observed: all.length ? `${okCount} link(s) within the site opened without errors.` : 'No other links within the approved domains were found on the agreed pages.', explanation: 'Links found on the agreed pages were checked.', evidence: {} })
-  if (skipped > 0) add({ url: config.site_url, check_key: 'internal_links', status: 'not_applicable', observed: `${skipped} link(s) were not opened because they look like account, cart, or action links, or were over the ${limits.maxLinks} link limit.`, explanation: 'Read only checks skip links that could change something.', evidence: {} })
-  if (writeAttempts.length) add({ url: config.site_url, check_key: 'scan', status: 'not_applicable', observed: `${writeAttempts.length} background request(s) that would send data were blocked (for example ${writeAttempts[0].method}).`, explanation: 'The checker is read only, so it blocks anything that sends data. Some widgets may look different in screenshots because of this.', evidence: { request_url: writeAttempts[0].url } })
+  if (okCount || (!all.length && !stopped)) add({ code: 'ok',  url: config.site_url, check_key: 'internal_links', status: 'passed', observed: all.length ? `${okCount} link(s) within the site opened without errors.` : 'No other links within the approved domains were found on the agreed pages.', explanation: 'Links found on the agreed pages were checked.', evidence: {} })
+  if (skipped > 0) add({ code: 'skipped',  url: config.site_url, check_key: 'internal_links', status: 'not_applicable', observed: `${skipped} link(s) were not opened because they look like account, cart, or action links, or were over the ${limits.maxLinks} link limit.`, explanation: 'Read only checks skip links that could change something.', evidence: {} })
+  if (writeAttempts.length) add({ code: 'writes_blocked',  url: config.site_url, check_key: 'scan', status: 'not_applicable', observed: `${writeAttempts.length} background request(s) that would send data were blocked (for example ${writeAttempts[0].method}).`, explanation: 'The checker is read only, so it blocks anything that sends data. Some widgets may look different in screenshots because of this.', evidence: { request_url: writeAttempts[0].url } })
 
   if (stopped && stopped !== 'lease lost') {
-    add({ url: config.site_url, check_key: 'scan', status: 'could_not_check', observed: stopped === 'canceled' ? 'The check was canceled before it finished.' : 'The check stopped at its time limit before finishing.', explanation: 'Items that did not run are not confirmed.', next_action: 'Retry the check, or check the remaining items by hand.' })
+    add({ code: 'scan_incomplete',  url: config.site_url, check_key: 'scan', status: 'could_not_check', observed: stopped === 'canceled' ? 'The check was canceled before it finished.' : 'The check stopped at its time limit before finishing.', explanation: 'Items that did not run are not confirmed.', next_action: 'Retry the check, or check the remaining items by hand.' })
   }
   return { findings, stopped }
 }

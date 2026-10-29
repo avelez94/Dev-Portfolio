@@ -4,6 +4,8 @@ import s from '@/components/site/site.module.css'
 import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, PageHeader, SubNav } from '@/components/site/blocks'
 import { inquiryHref } from '@/content/site'
 import { careBenefits, careSubscribeNote, occasionalSupport } from '@/content/offers'
+import { CARE_SAMPLES } from '@/content/care-samples'
+import CareSample from '@/components/site/CareSample'
 
 const title = 'Website Care'
 const description =
@@ -29,6 +31,7 @@ export default function CarePage() {
         <SubNav
           items={[
             { href: '#plans', label: 'Plans' },
+            { href: '#sample', label: 'Sample report' },
             { href: '#time', label: 'How time works' },
             { href: '#support', label: 'Occasional support' },
           ]}
@@ -72,6 +75,20 @@ export default function CarePage() {
             <strong>{careSubscribeNote.title}.</strong> {careSubscribeNote.body}
           </p>
         )}
+      </section>
+
+      {/* ---------------- Sample report ---------------- */}
+      <section id="sample" className={s.section} aria-labelledby="sample-title">
+        <div className={s.sectionHead} data-reveal>
+          <p className={s.eyebrow}>Monthly health report</p>
+          <h2 id="sample-title" className={s.sectionTitle}>
+            See what you’d <em>get each month.</em>
+          </h2>
+          <p className={s.sectionLede}>
+            A short report you can read in seconds: what passed, anything that needs attention, anything I couldn’t verify, and the next step. I review every report before it’s sent. These samples use fictional businesses.
+          </p>
+        </div>
+        <CareSample samples={CARE_SAMPLES.map((x) => ({ ...x }))} />
       </section>
 
       {/* ---------------- Included time ---------------- */}

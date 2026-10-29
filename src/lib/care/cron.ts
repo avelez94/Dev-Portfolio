@@ -4,7 +4,7 @@
  * missed during an outage, sends start and overdue reminders within their
  * limits, and retries owner notifications.
  */
-import { db, getSettings } from './db'
+import { db, getSettings, EVIDENCE_BUCKET } from './db'
 import { enqueueScan, dispatchRunner } from './cycles'
 import { queueReminder, queueBillingNotice, retryPendingNotifications } from './notify'
 
@@ -66,5 +66,26 @@ export async function careTick(now = new Date()) {
   }
 
   out.notifications = await retryPendingNotifications()
+  out.evidenceRemoved = await pruneEvidence(settings.evidence_retention_days || 90, now)
   return out
+}
+
+/**
+ * Keeps storage bounded: screenshots older than the retention period are
+ * deleted (at most 200 per tick). Findings, reports, approved PDFs, and send
+ * records are never deleted; the finding notes that its screenshot expired.
+ */
+export async function pruneEvidence(days: number, now = new Date()) {
+  const cutoff = new Date(now.getTime() - days * 86400_000).toISOString()
+  const old = (await db.from('care_findings').select('id, evidence').lt('checked_at', cutoff).not('evidence->>screenshot', 'is', null).limit(200)).data || []
+  if (!old.length) return 0
+  const paths = old.map((f: { evidence: { screenshot: string } }) => f.evidence.screenshot)
+  const rm = await db.storage.from(EVIDENCE_BUCKET).remove(paths)
+  if (rm.error) { console.error('care evidence cleanup failed', rm.error.message); return 0 }
+  for (const f of old) {
+    const { screenshot: _drop, ...rest } = f.evidence as Record<string, unknown>
+    void _drop
+    await db.from('care_findings').update({ evidence: { ...rest, screenshot_expired: true } }).eq('id', f.id)
+  }
+  return old.length
 }

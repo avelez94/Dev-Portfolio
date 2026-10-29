@@ -290,7 +290,7 @@ export function CareCompare() {
     },
   ]
   return (
-    <div className={s.compareWrap} data-reveal>
+    <div className={s.compareWrap} data-reveal tabIndex={0} role="region" aria-label="Care plan comparison (scrolls sideways on small screens)">
       <table className={s.compare}>
         <caption className={s.srOnly}>Care plan comparison</caption>
         <thead>

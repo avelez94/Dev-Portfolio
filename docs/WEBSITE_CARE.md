@@ -9,7 +9,7 @@ Status: built and tested locally on `feature/website-care`. **Not merged, not de
 3. Nothing is scanned until you **confirm the setup** (website, client authorization, checklist). A paid period that arrives earlier waits.
 4. A read only scan runs in GitHub Actions (Playwright). It records findings and screenshots and emails you a summary with a link to the draft.
 5. You complete the manual checklist and write the report. Draft, then Ready for review, then Approved (with a frozen snapshot and PDF), then Sent.
-6. Sending attaches the exact approved PDF through Resend. Reminders, overdue notices, and a private calendar feed keep the work visible.
+6. Sending attaches the exact approved PDF through Resend. Each review also appears in your existing admin **Schedule** calendar, with reminders and overdue notices by email.
 
 ```
 Stripe ──webhook──▶ /api/care/stripe/webhook ──▶ care_cycles (1 per paid period)
@@ -27,23 +27,26 @@ Admin /admin/care ─▶ /api/care/admin/* (admin cookie) ─▶ review, approve
 |---|---|
 | Migration (pending, separate from released ones) | `supabase/pending/website-care/20261030_website_care.sql` |
 | Server logic | `src/lib/care/*` (config, sites, cycles, runs, findings, report, report-pdf, send, stripe, notify, emails, ics, schedule, cron, url-safety) |
-| API | `src/app/api/care/admin/[...path]`, `runner/[...path]`, `stripe/webhook`, `calendar/[token]`, `cron` |
-| Admin UI | `src/app/admin/care/*` (link in the admin sidebar shows only when the feature is on) |
+| API | `src/app/api/care/admin/[...path]`, `runner/[...path]`, `stripe/webhook`, `resend/webhook`, `cron` |
+| Admin UI | `src/app/admin/care/*` (link in the admin sidebar shows only when the feature is on); care items in the existing Schedule calendar in `src/app/admin/page.tsx` |
+| Client report | `src/lib/care/report-model.ts` (content rules), `report-pdf.ts` (PDF), `src/components/care/ReportView.tsx` (web view), `issue-catalog.ts` (client wording) |
+| Public samples | `src/content/care-samples.ts`, `src/components/site/CareSample.tsx`, `/care/sample-report/[slug].pdf` |
 | Public page | `src/app/(site)/care/page.tsx`, `src/content/offers.ts`, `src/app/(site)/care/subscribed` |
 | Check runner | `care-runner/` and `.github/workflows/website-care-checks.yml` |
 
-## Expected costs and limits
+## Costs, allowances, and limits (no new paid services)
 
-| Service | Cost | Notes |
-|---|---|---|
-| Stripe | No monthly fee. Card processing (US standard 2.9% + 30¢) plus Stripe Billing 0.7% of billing volume | About $2.42 on a $59 payment, $4.95 on $129, $8.95 on $249 |
-| GitHub Actions | $0 | The repository is public, so hosted runner minutes are free. If it becomes private, GitHub Free includes 2,000 minutes a month; a check is about 2 to 4 minutes, idle polls exit in seconds |
-| Vercel Pro | Included | One hourly cron (`/api/care/cron`); Pro allows it. Route timeout set to 60 seconds |
-| Resend | Existing account | A few owner emails per client per month plus one report email |
-| Supabase storage | Within current plan | Screenshots are about 50 to 150 KB each, up to 12 per check: roughly 1 MB per site per month |
-| Calendar | $0 | Private iCalendar feed; no paid provider |
+What I could verify from here, and what you need to check in each account. Nothing here requires an upgrade or a paid add on.
 
-Scan limits (per site, adjustable within caps): 15 pages (cap 25), 60 site links (cap 150), 2 pages at a time (cap 3), 30 second page timeout (cap 45), 10 minute run limit (cap 15). Screenshots are taken for the first 6 pages per screen size.
+| Service | Verified | Usage this feature adds | Guard rails |
+|---|---|---|---|
+| GitHub Actions | The repository is **public** (checked through the GitHub API). GitHub's docs: Actions usage is free for standard GitHub hosted runners in public repositories. The workflow uploads **no artifacts** (artifact count is 0). | One job per queued check, plus a 6 hourly idle poll that exits in seconds without installing a browser. | 30 minute job timeout, at most 3 checks per job, 6 minute run limit per check (cap 8), one workflow at a time, 3 attempts per check. I couldn't read your account billing settings from here: set the Actions spending limit to $0 in GitHub Billing so nothing can ever be charged. If the repository becomes private, GitHub Free includes 2,000 minutes a month; this uses roughly 3 to 5 minutes per site per month. |
+| Vercel Pro | Pro gives a monthly usage credit and bills on demand **after** the credit is used (Vercel docs). Cron jobs run as normal functions. | One cron every 3 hours (240 short runs a month), webhooks, about 50 small runner calls per check, and your admin use. This is far below the credit for a single site business, but I can't see your current usage. | Every route has a 60 second limit. Turn on Spend Management with a hard pause at a level you choose, so on demand charges can't happen. |
+| Resend | Free plan: 3,000 emails a month, 100 a day (Resend). I couldn't see which plan you're on. | 2 to 5 owner notices and 1 report email per site per month. | Notices are deduplicated and capped (4 attempts, overdue reminders capped). Delivery webhooks are optional; without them delivery shows "not confirmed". |
+| Supabase storage | Free plan quotas: 1 GB storage, 5 GB egress (Supabase docs). The docs don't state what happens above Free quotas. | Up to 6 screenshots per check (about 0.5 MB per site per month) and about 30 KB per approved PDF. | Screenshots are deleted after 90 days (adjustable, 30 to 730) by the scheduled job, at most 200 per run. Reports, approved PDFs, results, and send records are always kept. |
+| Stripe | No monthly fee. Card processing plus Stripe Billing 0.7% per charge (Stripe). | Only on real client payments, after you approve live billing. | Test mode only; a live key is refused unless `CARE_STRIPE_LIVE_APPROVED=true` and the billing policy is approved. |
+
+**If a limit is ever reached:** checks wait in the queue (nothing is lost) and you can run the runner by hand: `cd care-runner && npm install && npx playwright install chromium && CARE_APP_URL=… CARE_RUNNER_TOKEN=… node run.mjs` on your Mac, or review the site by hand and record it in the manual checklist. Owner emails that fail stay queued and are retried later, and the review stays open in the dashboard and calendar either way.
 
 ## Setup (in this order, test mode first)
 
@@ -70,11 +73,12 @@ Run `supabase/pending/website-care/20261030_website_care.sql` in the SQL editor.
 ### 5. Email
 Uses the existing `RESEND_API_KEY`. Owner notices go to the address in admin settings (or `CARE_NOTIFY_EMAIL`, or the studio address). Client report emails are refused unless the recipient matches `CARE_EMAIL_ALLOWLIST` (for example `alante.v+*@gmail.com`) or `CARE_CLIENT_EMAIL_LIVE=true`. Keep the allowlist on in preview.
 
-### 6. Calendar
-Admin, Website Care, Settings, Calendar: "Create private feed link", then subscribe in Google Calendar (Other calendars, From URL) or Apple Calendar. No personal calendar is connected, and the discovery call booking calendar is never used. To place work blocks in free time, a calendar connection (Google Calendar API with OAuth) would be needed; it isn't built, and the system never claims time is free.
+### 6. Calendar (your existing admin calendar)
+No setup. Each monthly review appears in admin, Schedule: a small diamond on its due date in the 14 day calendar, a "Monthly care reviews" list under it (client, website, due date, status, link to the review and draft), and the review in the day panel when you click that date. One item per review cycle, so duplicate payment webhooks, reruns, and job retries can't add more; moving the deadline or progressing the work updates the same item. Care items never touch availability, blocked times, bookings, or Zoom, and nobody is invited. There is no external calendar feed.
 
-### 7. Switch on
-`WEBSITE_CARE_ENABLED=true` and `CARE_APP_URL=https://alantevelez.com` (or the preview URL while testing in a separate environment).
+**Which state completes the calendar item:** the review is complete when the email provider (Resend) **accepts** the report. The item then shows "Sent, delivery not confirmed". It shows "Sent and delivered" only when Resend sends a signed delivery event, and "Sent, delivery failed" on a bounce or complaint. Approval alone never completes it.
+
+Optional: in Resend, Webhooks, add `https://<deployment>/api/care/resend/webhook` for `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, and set `RESEND_WEBHOOK_SECRET` in Vercel. Check that your Resend plan includes webhooks; if not, leave it off and delivery stays "not confirmed".
 
 ## Business policy decisions still needing your approval
 
@@ -92,8 +96,8 @@ Admin, Website Care, Settings, Calendar: "Create private feed link", then subscr
 
 Record approval in admin settings once the policy is written into your care agreement. Changing a policy value clears the approval.
 
-## Retention (proposal)
-Reports, approvals, sent versions, send records, findings, and activity are never deleted automatically. Suggested later step: delete screenshots older than 13 months from `care-evidence` when they aren't used by an approved report's snapshot. This isn't automated; it would be a reviewed manual SQL step.
+## Retention
+Reports, approvals, sent versions, send records, findings, and activity are never deleted. Screenshots are deleted after the retention period in settings (default 90 days); the finding keeps its text and notes that its screenshot expired. Approved PDFs don't contain screenshots, so this never changes a report.
 
 ## Security summary
 - Every admin endpoint requires the admin cookie; the runner endpoints require the runner token; the webhook verifies Stripe's signature on the raw body (wrong secret, old timestamp, or missing signature is refused).
@@ -103,50 +107,46 @@ Reports, approvals, sent versions, send records, findings, and activity are neve
 - Runner results are validated: unknown checks and statuses are dropped, evidence is limited to known fields, and screenshot paths must be in the run's own folder.
 - No card data is stored. Webhook events keep only id, type, time, and object id.
 
+## The client report
+
+A one page summary for a typical month, built from one frozen snapshot shared by the preview, the PDF, and the email summary:
+- Top: client, website, review date, a short scope ("4 pages, 1 booking page, 3 hand checks"), an accurate headline, and three counts with icon and text: **Passed** (agreed checks), **Issues found**, **Not verified**.
+- **Needs attention**: one entry per kind of problem, with all affected pages and devices listed once. Each says what's wrong, why it matters, and what happens next (I'm looking into it, needs your input, needs your approval, or fixed and verified).
+- **Fixed and verified** only when you mark it fixed **and** either a recheck no longer finds it or you record how you verified it.
+- **This month's checks**: the agreed checks with a green check, red X, or amber warning plus a text label. A check is "Passed" only with an automated pass or your recorded manual pass. A booking, checkout, or contact page row says the page opens but the booking, payment, or message itself wasn't tested. Not applicable items are listed separately.
+- **Not verified this month** with reasons, a short "What I did", and a **Next step** box ("No action needed", "Please send…", "Approval needed for…" with your estimate).
+- Plan line: checks and the report are included; fixes use the plan's included minutes or a separate estimate approved first.
+- The headline is computed, and readiness refuses a summary that reads as all clear while issues or unverified items remain. Every red issue needs a decision before the report can be marked ready.
+- Technical detail (error codes per result, redirect chains, screenshots, every individual result) stays in admin.
+
+Public samples: two fictional reports (no outstanding issues; an issue plus unverified items) on example.com addresses are on the public Website Care page with PDF downloads. Every PDF page says "Sample report • Illustrative findings". They are static content built with the real report template and never read the database. They appear publicly only when this branch is merged.
+
 ## Verification
 
-**Verified locally** (197 automated checks on real Postgres 16 + PostgREST, a stateful fake Stripe API, fake Resend, fixture websites, the production build, and the real runner with Chromium; plus axe with 0 WCAG A/AA violations on 7 admin views at desktop and phone width, no horizontal overflow, and the existing regression suites):
-- Activation only after a verified paid invoice. Bad, old, or missing signatures are refused. The success page and checkout completion alone create nothing.
-- Duplicate, replayed, delayed, and out of order webhooks: one cycle per paid period, event ids stored once, and a stale "active" event can't revive a canceled subscription.
-- Failed payment (attention, no cycle), late payment (cycle created, attention cleared), plan change (no new cycle), unrelated invoice (ignored), cancel at period end (paid period kept), immediate cancel, refund, and dispute (flagged).
-- Correct client association: subscription metadata naming a site with a different client is ignored, and a second subscription can't take over a linked site.
-- Incomplete enrollment: paid cycle waits; confirmation releases it; setup changes require confirming again.
-- Jobs: one active run per cycle, two runners never share a run, stalled runs requeue with backoff then fail after 3 attempts, late results from a timed out runner are refused, missed scans are recovered by cron, and queued runs can be canceled. A failed scan blocks approval and never completes a review.
-- Findings on fixture sites: 404, redirect loop, redirect outside the approved domains, server error, robot check page (could not check), timeout (could not check), certificate error, missing image, mobile overflow with measured width, broken link with the page it was found on, and the booking page with the "doesn't confirm booking works" caveat.
-- Read only and network safety, proven from the fixture server's request log: no POST, beacon, form submission, or WebSocket; logout and cart links never requested; private address, metadata address, and rebinding host never reached.
-- Report: readiness rules, not checked needs a reason, stale preview refused, explicit sign off, edits invalidate approval (private notes don't), and the sent version is preserved.
-- PDF contains the four sections, could not check, disclaimers, and no private notes or health score. The downloaded and emailed attachment hashes equal the approved file.
-- Sending: typed recipient required, provider failure keeps the approval and retry works without rescanning, duplicate send refused, provider acceptance labeled as not confirmed delivery, and a non allowlisted recipient refused.
-- Calendar: all day items only, no attendees or organizer, correct date across the November DST change, the same UID with a higher SEQUENCE when a deadline moves, completed items marked Done, and a new link disables the old one.
-- Reminders: one per interval, capped, failed reminder kept and retried, and the review is never erased.
-- No Stripe calls besides customers, checkout, and portal sessions; no bookings created; emails only to the owner and allowlisted test addresses.
-- Feature off: every care endpoint returns 404, the cron skips, the admin link is hidden, and the subscribed page returns 404.
+**Verified locally** (242 automated Website Care checks on real Postgres 16 + PostgREST, a stateful fake Stripe API, fake Resend with signed delivery events, fixture websites, the production build, and the real runner with Chromium; axe found 0 WCAG A/AA violations on the review screen, sent review, and public Care page at desktop and phone width; no horizontal overflow; the earlier regression suites pass 385 of 385: flow 133, site 78, admin 60, documents 26, targeting 30, real database 39, document links 19):
+- Everything from the first build (activation only after a verified paid invoice, duplicate and out of order webhooks, one cycle per paid period, failed payments and cancellations, client association, incomplete enrollment, job retries and recovery, read only and private network safety, approval invalidation, exact attachment, send failure recovery, nothing unintended).
+- Admin calendar: one item per cycle with client, website, deadline, status, and link; the deadline change updates the same item; reruns add nothing; delivery states shown only from signed events; availability, blocked times, bookings, and meetings unchanged; admin only.
+- Report: grouping (one issue per type across pages and devices), every red issue needs a decision, fixed needs verification, fixed and verified after a clean recheck, all clear summaries refused while issues remain, not applicable items listed separately, booking caveat, counts match the lists, one page for a typical month, sent version unchanged.
+- Delivery: bad signature and stale timestamps refused, duplicates ignored, a late "delayed" can't undo "delivered".
+- Retention: old screenshots deleted from storage and marked expired; approved reports untouched.
+- Public samples: both PDFs download, every page labeled, example.com data only, no private endpoints or client data on the page; the sample route works without the feature switch.
+- The regression database failure from last time was the test database's state (already locked down). I recreated it in the state the test expects (all release migrations except the lockdown, which the test applies itself) with `realdb-setup/reset_race_test.sh`; it now passes 39 of 39 without changing the test.
 
-**Needs a manual check on a real deployment:**
-- Stripe test mode end to end with real test keys: checkout page, test card 4242, webhook delivery, portal, failure card 4000 0000 0000 0341, refund and dispute from the dashboard.
-- GitHub Actions run against a test deployment (Playwright install and run on ubuntu-latest).
-- Resend delivery of the report email and PDF to your own `+care` address.
-- Subscribing to the calendar feed in Google and Apple Calendar.
+**Needs a manual check on a real deployment:** Stripe test mode with real test keys; a GitHub Actions run against a test deployment; Resend delivery to your `+care` address and, if your plan includes webhooks, a delivery event; your GitHub, Vercel, and Resend billing settings (spending limits), which I couldn't read from here.
 
-**Deferred (not built):**
-- Personal calendar integration (Google OAuth) for real work blocks with free/busy checks.
-- Resend delivery webhooks (confirmed delivery). Today the system records provider acceptance only.
-- Automated screenshot cleanup.
-- Client dashboard access (intentionally not offered).
+**Deferred:** placing work blocks in free time (needs a personal calendar connection); automatic client dashboard (not offered).
 
-**Blocked from this environment:**
-- Preview deployment testing: this workspace can't reach vercel.app or Supabase, and the preview shares the production database with the migration unapplied, so the preview runs with the feature off.
-- Real Stripe test mode (no test keys here, and api.stripe.com isn't reachable).
+**Blocked from this environment:** opening the preview (vercel.app isn't reachable from here, and the preview runs with the feature off against the shared database), real Stripe test mode, and account billing pages.
 
 ## Walkthrough: your first client
 
 1. **Before:** set the environment variables above in a test setup, apply the migration there, and turn the feature on.
-2. **Settings:** Admin, Care, Settings. Check the time zone, working days and hours, review deadline (default 7 days after payment), and reminders. Create the calendar feed link and subscribe.
+2. **Settings:** Admin, Care, Settings. Check the time zone, working days and hours, review deadline (default 7 days after payment), reminders, and screenshot retention.
 3. **Enroll:** Websites, then Enroll a website. Pick the client record, plan, site URL, approved domains, pages, destinations, and checklist (use the template buttons). Set the recipient name and email. Save. It's a draft; nothing runs.
 4. **Confirm:** open the website, read the setup, tick the three boxes, describe how the client authorized it (for example "signed care agreement, Nov 3"), and confirm.
 5. **Billing:** Create Stripe checkout link, then send it to the client yourself. When Stripe reports the paid invoice, a review appears in the queue with its due date. (Billed by invoice instead? Use "Add a paid service period by hand".)
-6. **Check:** the scan starts automatically. You get an email with results and a link. Open the review: look at the findings, screenshots, and anything that couldn't be checked. Add private notes and hide a finding from the client only if it truly doesn't apply.
+6. **Check:** the scan starts automatically and the review appears in your Schedule calendar. You get an email with grouped results and a link. Open the review: each issue is one card with its pages; choose what happens next for every red issue, and open individual results or screenshots only when you need them.
 7. **Manual review:** record each checklist item. Use Not checked with a reason when needed.
-8. **Write:** summary, what you looked into, what you fixed (only confirmed fixes), still open items, and anything needing approval with an estimate.
+8. **Write:** a short summary, what you fixed (only confirmed fixes), and anything needing approval with an estimate. If you fix something, run the check again or record how you verified it, and it shows as Fixed and verified.
 9. **Approve:** Mark ready for review, open the client report and PDF preview, tick sign off, type your name, and approve.
 10. **Send:** check the name and exact email, adjust the subject and message, type the address to confirm, then Send Report. Or download the PDF without sending. The review counts as complete only once sent.

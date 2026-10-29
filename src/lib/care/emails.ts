@@ -4,6 +4,7 @@
  * Copy rule: no dashes in client facing text.
  */
 import { esc, escLines, renderEmail } from '@/lib/email/layout'
+import type { Snapshot } from './report-model'
 
 export type Email = { subject: string; html: string; text: string }
 const oneLine = (s: unknown) => String(s ?? '').replace(/[\r\n]+/g, ' ').trim()
@@ -41,8 +42,8 @@ export function scanDone(p: ScanNotice): Email {
       titleAccent: `${p.client}.`,
       blocks: [
         { type: 'details', rows: [['Client', esc(p.client)], ['Website', `${esc(p.site)}<br>${esc(p.siteUrl)}`], ['Review due', esc(p.due)], ['Results', esc(countLine(p.counts))]] },
-        { type: 'callout', title: 'Needs attention', html: list(p.attention), tone: 'coral' },
-        { type: 'p', html: `<strong>Could not check:</strong><br>${list(p.couldNot)}` },
+        { type: 'callout', title: 'Issues found', html: list(p.attention), tone: 'coral' },
+        { type: 'p', html: `<strong>Not verified (needs review or couldn’t be checked):</strong><br>${list(p.couldNot)}` },
         { type: 'p', html: `<strong>Manual checks still open:</strong><br>${list(p.manualOpen)}` },
         { type: 'buttons', items: [{ label: 'Open Draft Report', href: p.link }], fallbackLink: true },
         { type: 'note', html: 'The link opens your admin dashboard and asks you to sign in if needed. Nothing has been sent to the client.' },
@@ -109,19 +110,33 @@ export function billingAttention(p: { client: string; site: string; state: strin
   }
 }
 
-/** The client's report email. The message is the owner's own words, kept as written. */
-export function clientReport(p: { subject: string; message: string; siteLabel: string; monthLabel: string }): Email {
+/** The client's report email: your message plus the same summary as the attached approved report. */
+export function clientReport(p: { subject: string; message: string; snap: Snapshot }): Email {
+  const s = p.snap
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+  const next: string[] = []
+  if (s.next_step.none) next.push('No action needed.')
+  s.next_step.send.forEach((t) => next.push(`Please send: ${t}`))
+  s.next_step.approve.forEach((t) => next.push(`Approval needed for: ${t}`))
+  const rows: [string, string][] = [
+    ['Passed', `✓ ${count(s.counts.passed, 'check', 'checks')}${s.counts.fixed ? ` (${s.counts.fixed} fixed and verified)` : ''}`],
+    ['Issues found', `✗ ${count(s.counts.issues, 'issue', 'issues')}`],
+    ['Not verified', `! ${count(s.counts.unverified, 'item', 'items')}`],
+  ]
   return {
     subject: oneLine(p.subject),
     ...renderEmail({
       audience: 'client',
-      preheader: `Your ${p.monthLabel} website health report for ${p.siteLabel} is attached.`,
+      preheader: s.headline,
       eyebrow: 'Website Care',
       title: 'Your monthly',
       titleAccent: 'health report.',
       blocks: [
         { type: 'p', html: escLines(p.message) },
-        { type: 'note', html: 'The full report is attached as a PDF. Reply to this email with any questions.' },
+        { type: 'details', title: `${s.site.label}, ${s.period.label}`, rows: [['Result', esc(s.headline)], ...rows.map(([k, v]) => [k, esc(v)] as [string, string])] },
+        ...(s.attention.length ? [{ type: 'callout' as const, title: 'Needs attention', tone: 'coral' as const, html: s.attention.map((a) => `✗ <strong>${esc(a.title)}</strong>: ${esc(a.status)}${a.note ? `: ${esc(a.note)}` : ''}`).join('<br>') }] : []),
+        { type: 'p', html: `<strong>Next step:</strong> ${next.map(esc).join('<br>')}` },
+        { type: 'note', html: `The full report (version ${s.version}) is attached as a PDF. Reply to this email with any questions.` },
       ],
     }),
   }

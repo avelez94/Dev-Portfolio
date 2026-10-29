@@ -160,8 +160,16 @@ export default function AdminDashboard() {
   const [dark, setDark] = useState(true)
   // Website Care link shows only where the feature is switched on (its API answers 404 otherwise).
   const [careOn, setCareOn] = useState(false)
+  // Monthly care reviews shown in the Schedule calendar: one item per review, read only.
+  // They never touch availability, bookings, or Zoom.
+  const [careItems, setCareItems] = useState<{ id: string; date: string; due: string; client: string; site: string; status: string; overdue: boolean; done: boolean; link: string }[]>([])
   useEffect(() => {
-    fetch('/api/care/admin/status', { cache: 'no-store' }).then((r) => setCareOn(r.ok)).catch(() => {})
+    fetch('/api/care/admin/status', { cache: 'no-store' }).then(async (r) => {
+      setCareOn(r.ok)
+      if (!r.ok) return
+      const c = await fetch('/api/care/admin/calendar', { cache: 'no-store' })
+      if (c.ok) setCareItems((await c.json()).items || [])
+    }).catch(() => {})
   }, [])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [unbooked, setUnbooked] = useState<Submission[]>([])
@@ -1451,6 +1459,12 @@ export default function AdminDashboard() {
         .cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:12px;cursor:pointer;transition:all 0.12s;position:relative}
         .cal-cell:hover{opacity:0.8}.cal-cell.empty{opacity:0;pointer-events:none}
         .slot-indicator{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:${ADMIN_CORAL}}
+        .care-diamond{display:inline-block;width:8px;height:8px;transform:rotate(45deg);background:#9BE3B6;border:1.5px solid #FBF3E8;flex:none}
+        .care-diamond.in-cell{position:absolute;top:3px;right:3px}
+        .care-cal-list{border:1px solid;border-radius:14px;padding:14px;margin:12px 0}
+        .care-cal-item{display:flex;align-items:center;gap:10px;border:1px solid;border-radius:10px;padding:8px 10px;margin:0 0 6px;text-decoration:none;font-size:13px}
+        .care-cal-item:hover{opacity:.9}.care-cal-item:focus-visible{outline:3px solid ${ADMIN_CORAL};outline-offset:2px}
+        .care-cal-status{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}
         .day-block-panel{border-radius:12px;border-width:1px;border-style:solid;padding:14px;margin-bottom:16px}
         .dbp-title{font-size:12px;font-weight:500;margin-bottom:12px}
         .dbp-slots{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
@@ -2350,6 +2364,7 @@ export default function AdminDashboard() {
                       <div className="legend-dot" style={{background:l.bg,border:l.border?'1px solid '+l.border:'none'}}/>{l.label}
                     </div>
                   ))}
+                  {careOn && <div className="legend-item" style={{color:d.text3}}><span className="care-diamond" aria-hidden="true"/>Care review due (doesn’t block booking)</div>}
                 </div>
                 <div className="cal-wrap" style={{background:d.white,borderColor:d.border}}>
                   <div className="cal-header">
@@ -2362,8 +2377,9 @@ export default function AdminDashboard() {
                       const cells=[], start=new Date(); start.setHours(0,0,0,0)
                       for(let i=0;i<start.getDay();i++) cells.push(<div key={'e'+i} className="cal-cell empty"/>)
                       for(let i=0;i<14;i++){
-                        const dt=new Date(start.getTime()+i*86400000)
-                        const ds=dt.toISOString().split('T')[0]
+                        // Calendar days, not 24 hour steps, so the daylight saving change can't repeat or skip a date.
+                        const dt=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i)
+                        const ds=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')
                         const key=dt.getFullYear()+'-'+dt.getMonth()+'-'+dt.getDate()
                         const isToday=i===0, hasB=bookedDays.has(key), isBlockedDay=blockedDaySet.has(ds)
                         const hasBlockedSlots=blockedSlotDays.has(ds), isSelected=selectedDay===ds
@@ -2373,6 +2389,7 @@ export default function AdminDashboard() {
                             onClick={()=>!isBlockedDay&&setSelectedDay(isSelected?null:ds)}>
                             {dt.getDate()}
                             {hasBlockedSlots&&!isBlockedDay&&<div className="slot-indicator"/>}
+                            {careItems.some(c=>c.date===ds)&&<span className="care-diamond in-cell" title={`${careItems.filter(c=>c.date===ds).length} care review(s) due`} aria-label={`${careItems.filter(c=>c.date===ds).length} care review due`}/>}
                           </div>
                         )
                       }
@@ -2380,9 +2397,31 @@ export default function AdminDashboard() {
                     })()}
                   </div>
                 </div>
+                {careOn && (
+                  <div className="care-cal-list" style={{background:d.white,borderColor:d.border}} aria-label="Monthly care reviews">
+                    <div className="section-label" style={{color:d.text2,marginBottom:8}}>Monthly care reviews</div>
+                    {careItems.filter(c=>!c.done||new Date(c.due).getTime()>Date.now()-14*86400000).length===0 ? <div className="empty-note" style={{color:d.text3,textAlign:'left',padding:0}}>No care reviews scheduled.</div> :
+                      careItems.filter(c=>!c.done||new Date(c.due).getTime()>Date.now()-14*86400000).slice(0,12).map(c=>(
+                        <a key={c.id} href={c.link} className="care-cal-item" style={{borderColor:c.overdue?d.redText:d.border2,color:d.text,background:d.surface}}>
+                          <span className="care-diamond" aria-hidden="true"/>
+                          <span style={{width:92,flex:'none',fontSize:12,color:c.overdue?d.redText:d.text2}}>{c.overdue?'Overdue · ':''}{new Date(c.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                          <span style={{flex:1,minWidth:0}}><b>{c.client}</b><span style={{display:'block',color:d.text3,fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.site}</span></span>
+                          <span className="care-cal-status" style={{background:c.done?d.green:c.overdue?d.red:d.surface3,color:c.done?d.greenText:c.overdue?d.redText:d.text}}>{c.status}</span>
+                        </a>
+                      ))}
+                    <div style={{fontSize:12,color:d.text3,marginTop:6}}>Care reviews are your own work items. They don’t block discovery call times, create Zoom meetings, or invite anyone.</div>
+                  </div>
+                )}
                 {selectedDay && (
                   <div className="day-block-panel" style={{background:d.surface,borderColor:d.border}}>
                     <div className="dbp-title" style={{color:d.text}}>{fmtDayFull(selectedDay)}</div>
+                    {careItems.filter(c=>c.date===selectedDay).map(c=>(
+                      <a key={c.id} href={c.link} className="care-cal-item" style={{borderColor:d.border2,color:d.text,background:d.white}}>
+                        <span className="care-diamond" aria-hidden="true"/>
+                        <span style={{flex:1,minWidth:0}}><b>Care review: {c.client}</b><span style={{display:'block',color:d.text3,fontSize:12}}>{c.site} · {c.status}</span></span>
+                        <span style={{color:d.accent,fontSize:12,fontWeight:700}}>Open review</span>
+                      </a>
+                    ))}
                     {slotsForSelectedDay.length>0 && (
                       <div className="dbp-slots">
                         {slotsForSelectedDay.map(s=>(
