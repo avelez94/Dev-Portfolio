@@ -44,6 +44,14 @@ Vercel previews share the production database, so the admin on a preview runs as
 | Harbor Street Bakery (older terms, flagged) | `/admin/care?site=00000000-0000-4000-8000-000000000202` |
 | Lakeside Dental (simulated Stripe subscription) | `/admin/care?site=00000000-0000-4000-8000-000000000203` |
 | Owner's guide | `/admin/care/guide` |
+| My Pricing cards, proposal and contract forms | `/admin/documents` |
+| Proposal with milestone payments (client view, current terms) | `/proposals/00000000-0000-4000-8000-000000000933` |
+| Proposal issued under the October terms (kept as issued) | `/proposals/00000000-0000-4000-8000-000000000932` |
+| Unsigned contract with milestones (sign as the client) | `/contracts/00000000-0000-4000-8000-000000000944` |
+| Signed contract and its invoice schedule | `/contracts/00000000-0000-4000-8000-000000000943` |
+| Invoice schedule after signing (Taylor Brooks) | `/admin/pipeline?client=00000000-0000-4000-8000-000000000106` |
+
+Client document pages use the demo only when the browser has a demo session (open `/admin` first). Without one they read the real database as before.
 
 A new client to enroll: **Rivera Garden Design** (Casey Rivera) is in the client list without a care website.
 
