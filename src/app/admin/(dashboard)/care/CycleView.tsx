@@ -124,7 +124,7 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
         )}
       </Section>
 
-      <Section id="sec-plan" title="Plan time and work" open={data.snapshot.plan_box.price === null} counts={<><span className="care-muted">{data.snapshot.plan_box.price === null ? 'Price not recorded' : `${data.snapshot.plan_box.price_label} a month`}</span>{data.snapshot.plan_box.rows.map(([k, v]: [string, string]) => <Badge key={k} tone={v.startsWith('Not') ? 'warn' : 'info'}>{k}: {v}</Badge>)}</>}>
+      <Section id="sec-plan" title="Plan time and work" open={data.snapshot.plan_box.price === null || new URLSearchParams(window.location.search).has('work')} counts={<><span className="care-muted">{data.snapshot.plan_box.price === null ? 'Price not recorded' : `${data.snapshot.plan_box.price_label} a month`}</span>{data.snapshot.plan_box.rows.map(([k, v]: [string, string]) => <Badge key={k} tone={v.startsWith('Not') ? 'warn' : 'info'}>{k}: {v}</Badge>)}</>}>
         <PlanTime data={data} reload={reload} />
         <div style={{ marginTop: 14 }}><WorkPanel cycleId={cycle.id} tz={tz} /></div>
       </Section>

@@ -12,6 +12,7 @@
 import { useMemo, useState } from 'react'
 import { useLoad, careApi, Badge, Field, Loading, ErrorBox, Empty, Action, fmt } from './ui'
 import { useUnsaved } from '../_components/unsaved'
+import { STANDARD_HOURLY_RATE, formatRate } from '@/lib/terms'
 import { EXCLUDED_LABEL, describeCalc, draftSummary, estimateProblems, lineTotals, money, type Allowance, type DraftLine, type MinuteRule, type Preset } from '@/lib/care/work'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -24,13 +25,19 @@ type WorkData = {
   terms: { current: boolean; version: string; onFile: string | null; note: string | null }
 }
 
+/** A direct link can open Quick add (?work=add) or a new estimate (?work=estimate). */
+const linkedMode = () => {
+  const w = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('work')
+  return w === 'add' ? { kind: 'add' as const } : w === 'estimate' ? { kind: 'estimate' as const } : null
+}
+
 const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `k${Date.now()}${Math.random().toString(36).slice(2)}`)
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
 
 export default function WorkPanel({ siteId, cycleId, tz }: { siteId?: string; cycleId?: string; tz: string }) {
   const path = cycleId ? `cycles/${cycleId}/work` : `sites/${siteId}/work`
   const { data, error, reload } = useLoad<WorkData>(path)
-  const [mode, setMode] = useState<null | { kind: 'add'; estimate?: Row; corrects?: Row[] } | { kind: 'estimate'; initial?: Row; revisionOf?: Row }>(null)
+  const [mode, setMode] = useState<null | { kind: 'add'; estimate?: Row; corrects?: Row[] } | { kind: 'estimate'; initial?: Row; revisionOf?: Row }>(linkedMode)
   const [now] = useState(() => Date.now())
   if (error) return <ErrorBox error={error} onRetry={reload} />
   if (!data) return <Loading lines={4} />
@@ -92,7 +99,7 @@ function TermsReview({ siteId, onFile, done }: { siteId: string; onFile: string 
         {onFile ? `Their agreement is on older terms (${onFile}).` : 'There’s no record of which care terms this client agreed to.'} The flexible plan time method (standard minutes, included time usable for any work, estimates for larger requests) applies only once their agreement uses the current terms. Quick add and estimates stay off until then. Earlier agreements are kept as issued.
       </p>
       <div className="care-row" style={{ alignItems: 'flex-end' }}>
-        <div style={{ flex: 1, minWidth: 240 }}><Field label="How the client accepted the current terms" id="terms-note"><input id="terms-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Signed updated care agreement, Nov 4" /></Field></div>
+        <div className="care-fluid"><Field label="How the client accepted the current terms" id="terms-note"><input id="terms-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Signed updated care agreement, Nov 4" /></Field></div>
         <Action tone="primary" label="Mark agreement reviewed" disabled={note.trim().length < 5} run={() => careApi(`sites/${siteId}/terms`, { method: 'POST', json: { note } })} done={done} />
       </div>
     </div>
@@ -191,7 +198,7 @@ function QuickAdd({ data, estimate, corrects, onDone, onCancel }: { data: WorkDa
             return (
               <div key={l.key} className="care-line">
                 <div className="care-between">
-                  {l.source === 'preset' ? <b>{l.name}</b> : <div style={{ flex: 1, minWidth: 220 }}><Field label="Custom task name" id={`n-${l.key}`}><input id={`n-${l.key}`} value={l.name} onChange={(e) => update(l.key, { name: e.target.value })} placeholder="New booking widget" /></Field></div>}
+                  {l.source === 'preset' ? <b>{l.name}</b> : <div className="care-fluid"><Field label="Custom task name" id={`n-${l.key}`}><input id={`n-${l.key}`} value={l.name} onChange={(e) => update(l.key, { name: e.target.value })} placeholder="New booking widget" /></Field></div>}
                   <button className="care-btn small" aria-label={`Remove ${l.name || 'custom task'}`} onClick={() => setLines(lines.filter((x) => x.key !== l.key))}>Remove</button>
                 </div>
                 {l.source === 'preset' && <div className="care-muted">One unit: {l.preset?.unit_definition}</div>}
@@ -206,8 +213,8 @@ function QuickAdd({ data, estimate, corrects, onDone, onCancel }: { data: WorkDa
                   </div>
                   {l.source === 'custom' && (
                     <>
-                      <Field label="Agreed standard minutes per unit" id={`w-${l.key}`}><input id={`w-${l.key}`} type="number" min={0} style={{ width: 120 }} value={l.work_minutes} onChange={(e) => update(l.key, { work_minutes: Number(e.target.value) || 0 })} /></Field>
-                      <Field label="Testing minutes" id={`t-${l.key}`}><input id={`t-${l.key}`} type="number" min={0} style={{ width: 100 }} value={l.testing_minutes} onChange={(e) => update(l.key, { testing_minutes: Number(e.target.value) || 0 })} /></Field>
+                      <Field label="Agreed standard minutes per unit" id={`w-${l.key}`}><input id={`w-${l.key}`} type="number" min={0} style={{ width: 120, maxWidth: '100%' }} value={l.work_minutes} onChange={(e) => update(l.key, { work_minutes: Number(e.target.value) || 0 })} /></Field>
+                      <Field label="Testing minutes" id={`t-${l.key}`}><input id={`t-${l.key}`} type="number" min={0} style={{ width: 100, maxWidth: '100%' }} value={l.testing_minutes} onChange={(e) => update(l.key, { testing_minutes: Number(e.target.value) || 0 })} /></Field>
                     </>
                   )}
                   <label className="care-row" style={{ gap: 6 }}><input type="checkbox" checked={l.testing_shared} onChange={(e) => update(l.key, { testing_shared: e.target.checked })} /> Tested together with another task here</label>
@@ -294,26 +301,28 @@ function History({ entries, tz, onCorrect, reload }: { entries: Row[]; tz: strin
               <div className="care-between">
                 <span className="care-muted">Completed {b[0].completed_on} · recorded {fmt(b[0].recorded_at, tz)} by {b[0].recorded_by}</span>
                 {live.length > 0 && (
-                  <span className="care-row">
+                  <span className="care-actions">
                     <button className="care-btn small" onClick={() => onCorrect(live)}>Correct</button>
                     <UndoButton ids={live.map((e) => e.id)} done={reload} />
                   </span>
                 )}
               </div>
-              <table className="care-table care-sum" style={{ marginTop: 6 }}>
+              <div className="care-scroll" style={{ marginTop: 6 }} role="region" aria-label="Recorded tasks" tabIndex={0}>
+              <table className="care-table care-sum care-stack">
                 <thead><tr><th>Task</th><th className="n">Qty</th><th className="n">Standard min</th><th className="n">Plan time</th><th className="care-hide-sm">Calculation</th></tr></thead>
                 <tbody>
                   {b.map((e) => (
                     <tr key={e.id} style={{ textDecoration: e.voided_at ? 'line-through' : undefined }}>
                       <td><b>{e.name}</b><div className="care-muted">{e.client_description}</div>{e.private_note && <div className="care-muted">Private: {e.private_note}</div>}{e.voided_at && <div className="care-muted" style={{ textDecoration: 'none' }}>Undone: {e.void_reason}</div>}</td>
-                      <td className="n">{e.quantity}</td>
-                      <td className="n">{e.total_minutes}</td>
-                      <td className="n">{e.excluded_reason ? <Badge>{EXCLUDED_LABEL[e.excluded_reason as keyof typeof EXCLUDED_LABEL]}</Badge> : <>{e.applied_minutes}{e.additional_minutes ? <div className="care-muted">+{e.additional_minutes} additional</div> : null}</>}</td>
+                      <td className="n" data-label="Qty">{e.quantity}</td>
+                      <td className="n" data-label="Standard min">{e.total_minutes}</td>
+                      <td className="n" data-label="Plan time">{e.excluded_reason ? <Badge>{EXCLUDED_LABEL[e.excluded_reason as keyof typeof EXCLUDED_LABEL]}</Badge> : <>{e.applied_minutes}{e.additional_minutes ? <div className="care-muted">+{e.additional_minutes} additional</div> : null}</>}</td>
                       <td className="care-hide-sm care-muted care-calc">{describeCalc(e as MinuteRule, e.quantity, e.testing_shared)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )
         })}
@@ -327,8 +336,8 @@ function UndoButton({ ids, done }: { ids: string[]; done: () => void }) {
   const [reason, setReason] = useState('')
   if (!open) return <button className="care-btn small danger" onClick={() => setOpen(true)}>Undo</button>
   return (
-    <span className="care-row">
-      <input aria-label="Why undo this work" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" style={{ width: 200 }} />
+    <span className="care-actions">
+      <input className="care-fluid" aria-label="Why undo this work" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" />
       <Action small tone="danger" label="Undo and restore minutes" disabled={reason.trim().length < 3} run={() => careApi('work/void', { method: 'POST', json: { entries: ids, reason } })} done={done} />
       <button className="care-btn small" onClick={() => setOpen(false)}>Keep</button>
     </span>
@@ -336,6 +345,12 @@ function UndoButton({ ids, done }: { ids: string[]; done: () => void }) {
 }
 
 /* ------------------------------ estimates ------------------------------ */
+
+const ADDITIONAL_RATE = `${formatRate(STANDARD_HOURLY_RATE)} with a one hour minimum`
+const PRICE_WORDING = {
+  fixed: 'A fixed quote for the work beyond your included time.',
+  hourly: `Estimated at ${formatRate(STANDARD_HOURLY_RATE)} with a one hour minimum; billed for the time actually worked.`,
+}
 
 const STATUS_TONE: Record<string, 'ok' | 'warn' | 'bad' | 'info' | 'coral'> = { draft: 'info', approved: 'coral', completed: 'ok', declined: 'bad', cancelled: 'bad', superseded: 'info', expired: 'warn' }
 
@@ -362,13 +377,15 @@ function Estimates({ ledger, openElsewhere, ended, tz, onRecord, onEdit, onRevis
               </div>
               <div className="care-muted" style={{ marginTop: 4 }}>{e.scope}</div>
               <div className="care-muted"><b style={{ color: 'var(--text2)' }}>Deliverables:</b> {e.deliverables}{e.schedule ? ` · ${e.schedule}` : ''}</div>
-              <div className="care-calc" style={{ marginTop: 6 }}>
-                {e.standard_minutes} standard minutes (with testing) · {e.included_minutes} from included time · {e.additional_minutes} additional
-                {e.additional_minutes > 0 && <> · additional price <b>{money(e.additional_price_cents)}</b> <span className="care-muted">({e.price_explanation || 'no explanation yet'})</span></>}
-              </div>
+              <ul className="care-calc care-facts">
+                <li>{e.standard_minutes} standard minutes (with testing)</li>
+                <li>{e.included_minutes} from included time</li>
+                <li>{e.additional_minutes} additional</li>
+                {e.additional_minutes > 0 && <li>Additional price <b>{money(e.additional_price_cents)}</b> <span className="care-muted">({e.price_explanation || 'no explanation yet'})</span></li>}
+              </ul>
               {e.status === 'approved' && <div className="care-muted">Approved: {e.approval_note} · {e.reserved_minutes} minutes reserved</div>}
               {e.close_reason && <div className="care-muted">{e.close_reason}</div>}
-              <div className="care-row" style={{ marginTop: 8 }}>
+              <div className="care-actions" style={{ marginTop: 8 }}>
                 {e.status === 'draft' && <>
                   <button className="care-btn small" onClick={() => onEdit(e)}>Edit</button>
                   <ReasonAction label="Record client approval" field="How the client approved" placeholder="Email reply, Oct 30" tone="primary" run={(note) => careApi(`estimates/${e.id}/approve`, { method: 'POST', json: { note } })} done={reload} />
@@ -397,8 +414,8 @@ function ReasonAction({ label, field, placeholder, run, done, tone }: { label: s
   const [text, setText] = useState('')
   if (!open) return <button className={`care-btn small ${tone || ''}`} onClick={() => setOpen(true)}>{label}</button>
   return (
-    <span className="care-row">
-      <input aria-label={field} value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} style={{ width: 240 }} />
+    <span className="care-actions" style={{ flexBasis: '100%' }}>
+      <input className="care-fluid" aria-label={field} value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
       <Action small tone={tone} label={label} disabled={text.trim().length < 3} run={() => run(text)} done={done} />
       <button className="care-btn small" onClick={() => setOpen(false)}>Back</button>
     </span>
@@ -411,11 +428,11 @@ function InvoiceAction({ id, amount, done }: { id: string; amount: string; done:
   const [due, setDue] = useState('')
   if (!open) return <button className="care-btn small" onClick={() => setOpen(true)}>Create invoice for {amount}</button>
   return (
-    <span className="care-row">
-      <input aria-label="Invoice number" value={num} onChange={(e) => setNum(e.target.value)} placeholder="INV-2026-210" style={{ width: 150 }} />
-      <input aria-label="Due date" type="date" value={due} onChange={(e) => setDue(e.target.value)} style={{ width: 160 }} />
+    <span className="care-actions" style={{ flexBasis: '100%' }}>
+      <input className="care-fluid" aria-label="Invoice number" value={num} onChange={(e) => setNum(e.target.value)} placeholder="INV-2026-210" />
+      <input className="care-fluid" aria-label="Due date" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
       <Action small tone="primary" label={`Save ${amount} invoice`} disabled={num.trim().length < 2} run={() => careApi(`estimates/${id}/invoice`, { method: 'POST', json: { invoice_number: num, due_date: due } })} done={done} />
-      <span className="care-muted">Saved as pending in Revenue. Not sent, nothing charged.</span>
+      <span className="care-muted" style={{ flexBasis: '100%' }}>Saved as pending in Revenue. Not sent, nothing charged.</span>
     </span>
   )
 }
@@ -440,7 +457,7 @@ function EstimateForm({ siteId, cycleId, available, planHasTime, initial, revisi
   return (
     <section className="care-panel" style={{ borderColor: 'var(--coral)', margin: 0 }} aria-labelledby="est-h">
       <div className="care-between"><h3 id="est-h">{revisionOf ? `Revise: ${revisionOf.title}` : initial ? 'Edit estimate' : 'New estimate'}</h3><button className="care-btn small" onClick={onCancel}>Close</button></div>
-      <p className="care-muted" style={{ margin: '4px 0 12px' }}>A draft reserves nothing. When you record the client’s approval, the included minutes are reserved in this billing period. Plan time is standard minutes; the additional price is your own quote, separate from any hourly billing.{revisionOf ? ' Approving this revision replaces the earlier version and releases its unused reservation.' : ''}</p>
+      <p className="care-muted" style={{ margin: '4px 0 12px' }}>A draft reserves nothing. When you record the client’s approval, the included minutes are reserved in this billing period. Plan time is counted in standard minutes, which don’t set a price. Additional work is priced at the standard rate ({ADDITIONAL_RATE}) or as a fixed quote the client agrees to.{revisionOf ? ' Approving this revision replaces the earlier version and releases its unused reservation.' : ''}</p>
       <div className="care-grid">
         <Field label="Title" id="e-title"><input id="e-title" value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Team section rebuild" /></Field>
         <div className="care-two">
@@ -455,8 +472,14 @@ function EstimateForm({ siteId, cycleId, available, planHasTime, initial, revisi
         <p className="care-calc"><b>{additional}</b> minutes of additional work beyond the included time.</p>
         {additional > 0 && (
           <div className="care-two">
-            <Field label="Additional price ($)" id="e-price" hint="Entered by you. Nothing is charged automatically."><input id="e-price" type="number" min={0} step="0.01" value={f.additional_price} onChange={(e) => set('additional_price', e.target.value)} /></Field>
-            <Field label="How the price was calculated" id="e-why"><input id="e-why" value={f.price_explanation} onChange={(e) => set('price_explanation', e.target.value)} placeholder="Fixed quote for the work beyond your included time" /></Field>
+            <Field label="Additional price ($)" id="e-price" hint={`Your quote: hourly at ${ADDITIONAL_RATE}, or an agreed fixed amount. Entered by you; nothing is charged automatically.`}><input id="e-price" type="number" min={0} step="0.01" value={f.additional_price} onChange={(e) => set('additional_price', e.target.value)} /></Field>
+            <div className="care-field">
+              <Field label="How the price was calculated" id="e-why"><input id="e-why" value={f.price_explanation} onChange={(e) => set('price_explanation', e.target.value)} placeholder="Fixed quote for the work beyond your included time" /></Field>
+              <div className="care-actions">
+                <button type="button" className="care-btn small" onClick={() => set('price_explanation', PRICE_WORDING.fixed)}>Use fixed quote wording</button>
+                <button type="button" className="care-btn small" onClick={() => set('price_explanation', PRICE_WORDING.hourly)}>Use hourly wording</button>
+              </div>
+            </div>
           </div>
         )}
         {problems.length > 0 && <ul className="care-sub care-muted" style={{ paddingLeft: 30 }}>{problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}

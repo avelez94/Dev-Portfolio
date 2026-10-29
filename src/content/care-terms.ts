@@ -6,6 +6,8 @@
  * Earlier issued agreements are kept as they were.
  * Copy rule: no dashes in client facing text.
  */
+import { STANDARD_HOURLY_RATE } from '@/lib/terms'
+
 export const CARE_TERMS_VERSION = 'care-flex-2026-11'
 
 export const CARE_FLEXIBLE_TIME =
@@ -13,6 +15,10 @@ export const CARE_FLEXIBLE_TIME =
 
 export const CARE_STANDARD_MINUTES =
   'Work is counted in standard minutes from an agreed schedule of common tasks, and each task includes a set allowance for testing. It isn’t timed with a stopwatch, so you know in advance how much plan time a request uses.'
+
+/** The approved additional work rate. Standard minutes measure plan time only; they never set this price. */
+export const CARE_ADDITIONAL_PRICING =
+  `Additional work is $${STANDARD_HOURLY_RATE} an hour with a one hour minimum, or a fixed quote we agree on. Standard minutes measure your included plan time; they don’t set the price of additional work.`
 
 export type CareTermsSection = { title: string; body: string[] }
 
@@ -44,6 +50,7 @@ export const CARE_TERMS: CareTermsSection[] = [
     title: 'Larger requests',
     body: [
       'Larger work gets an agreed scope and schedule first. I’ll show the standard minutes it needs, how much of your available time applies, and the price of any additional work.',
+      CARE_ADDITIONAL_PRICING,
       'Approving an estimate holds your included minutes for that work in the current billing period only. Any additional cost needs your approval before that additional work starts, and a change in scope needs a revised estimate. Nothing is charged automatically.',
     ],
   },

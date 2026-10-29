@@ -28,7 +28,7 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-main{max-width:1180px;margin:0 auto;padding:20px}
 .care-banner{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
 .care-panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;margin:0 0 16px}
-.care-sub{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
+.care-sub{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;min-width:0;overflow-wrap:anywhere}
 .care-grid{display:grid;gap:12px}
 .care-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:0 0 16px}
 .care-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
@@ -57,7 +57,6 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-table th{text-align:left;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--text2);padding:8px;border-bottom:1px solid var(--border2)}
 .care-table td{padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:top}
 .care-table tr.click{cursor:pointer}.care-table tr.click:hover td{background:var(--surface)}
-.care-scroll{overflow-x:auto}
 .care-err{background:var(--red);color:var(--redText);border-radius:12px;padding:10px 14px;margin:0 0 12px}
 .care-okmsg{background:var(--green);color:var(--greenText);border-radius:12px;padding:10px 14px;margin:0 0 12px}
 .care-who{background:var(--surface2);border:2px solid var(--coral);border-radius:16px;padding:14px 16px;margin:0 0 16px}
@@ -86,7 +85,7 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 @media (prefers-reduced-motion:reduce){.care-skel{animation:none}}
 /* Plan time: task catalog, Quick add work, allowance */
 .care-allow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.care-allow>div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+.care-allow>div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;min-width:0;overflow-wrap:anywhere}
 .care-allow b{display:block;font-family:${ADMIN_FONTS.display};font-size:24px;line-height:1.15}
 .care-allow small{color:var(--text2);font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .care-allow .hl{border-color:var(--coral);background:var(--accentBg)}
@@ -94,15 +93,23 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-stepper button{width:38px;min-height:38px;border:0;background:var(--surface2);color:var(--text);font:inherit;font-size:18px;cursor:pointer}
 .care-stepper button:disabled{opacity:.4;cursor:not-allowed}
 .care-stepper input{width:56px;min-height:38px;border:0;border-radius:0;text-align:center;background:var(--surface)}
-.care-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.care-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:8px}
 .care-pick label{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;cursor:pointer}
 .care-pick label.on{border-color:var(--coral);background:var(--accentBg)}
 .care-pick label.off{opacity:.65}
-.care-line{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:10px}
+.care-line{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:10px;min-width:0;overflow-wrap:anywhere}
+.care-grid>*,.care-two>*{min-width:0}
+.care .care-fluid{flex:1 1 160px;min-width:0;width:auto}
+.care-facts{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px}
+.care-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}
+.care-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.care-scroll>table{min-width:400px}
+@media (max-width:480px){.care-scroll>table.care-stack{min-width:0}.care-stack thead{display:none}.care-stack tr{display:grid;grid-template-columns:repeat(3,auto);gap:2px 12px;padding:8px 0;border-bottom:1px solid var(--border)}.care-stack td{border:0;padding:0}.care-stack td:first-child{grid-column:1/-1}.care-stack td.n{text-align:left}.care-stack td[data-label]::before{content:attr(data-label);display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text2)}}
 .care-calc{font-variant-numeric:tabular-nums}
 .care-sum td,.care-sum th{font-variant-numeric:tabular-nums}
 .care-sum td.n,.care-sum th.n{text-align:right;white-space:nowrap}
-@media (max-width:760px){.care-two{grid-template-columns:1fr}.care-main{padding:14px}.care-hide-sm{display:none}.care-allow{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.care-two{grid-template-columns:1fr}.care-main{padding:14px}.care-hide-sm{display:none}.care-allow{grid-template-columns:1fr 1fr}.care-panel{padding:14px}.care-sect-body{padding:0 12px 14px}.care-sect>summary{padding:12px}}
+@media (max-width:420px){.care-allow{grid-template-columns:1fr}.care-allow>div{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}.care-allow b{font-size:22px}.care-sub{padding:12px}.care-btn{white-space:normal;text-align:center}}
 `
 
 export async function careApi<T = Record<string, unknown>>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {

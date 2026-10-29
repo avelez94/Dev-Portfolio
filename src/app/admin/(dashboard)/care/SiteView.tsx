@@ -34,7 +34,7 @@ const blankSite = {
 function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () => void }) {
   const tpl = useLoad<Row>('template')
   const cl = useLoad<{ clients: Row[] }>('clients')
-  const [f, setF] = useState<Row>(() => site ? { ...site, approved_domains: (site.approved_domains || []).join(', '), review_window_days: site.review_window_days ?? '', agreed_monthly_price: site.agreed_monthly_price ?? '' } : blankSite)
+  const [f, setF] = useState<Row>(() => site ? { ...site, approved_domains: (site.approved_domains || []).join(', '), features: site.features ?? '', recipient_name: site.recipient_name ?? '', recipient_email: site.recipient_email ?? '', review_window_days: site.review_window_days ?? '', agreed_monthly_price: site.agreed_monthly_price ?? '' } : blankSite)
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

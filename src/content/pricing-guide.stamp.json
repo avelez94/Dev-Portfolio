@@ -1,7 +1,7 @@
 {
-  "sourcesFingerprint": "abb8f9e463f178c377d30a23b5faad0ce72549dc73a989c63b68df64b7c17d81",
-  "pdfSha256": "33a80567d44232173173c4b03d00d5102ad7ab8fdc81640864f8fd2dee238410",
-  "generatedAt": "2026-10-29T15:28:37.222Z",
+  "sourcesFingerprint": "adfa23609dd49664773001b52d9880d59ce89929120fd87d1e2ce2a71717924f",
+  "pdfSha256": "8273e6f80400cc8fcebe249ea4aa71efafd1163e01e35b58a8454ddde996b865",
+  "generatedAt": "2026-10-29T16:41:36.655Z",
   "sources": [
     "src/content/offers.ts",
     "src/content/care-terms.ts",
