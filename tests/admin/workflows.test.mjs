@@ -1,0 +1,181 @@
+/**
+ * Regression tests for the admin dashboard's existing workflows. They only use
+ * what a person sees (labels, buttons, the sidebar) and what would be sent to
+ * the server, so they run the same before and after the dashboard was split
+ * into separate pages.
+ */
+import { test, before, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { start, stop, adminPage, nav, waitFor, BASE } from './harness.mjs'
+
+before(start, { timeout: 180000 })
+after(stop)
+
+const details = (page) => page.locator('aside[aria-label="Details"]')
+
+test('signed out visitors are sent to the login page, and the data API refuses them', async () => {
+  const { page, close } = await adminPage({ signedIn: false })
+  await page.goto(BASE + '/admin')
+  assert.match(page.url(), /\/admin\/login\?from=%2Fadmin/)
+  const res = await fetch(BASE + '/api/admin/data/rest/v1/clients?select=*')
+  assert.equal(res.status, 401)
+  const care = await fetch(BASE + '/api/care/admin/status')
+  assert.ok([401, 404].includes(care.status), 'care API stays closed')
+  await close()
+})
+
+test('home shows calls, leads, overdue invoices, and marks an invoice paid', async () => {
+  const { page, api, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await page.getByText(/Good (morning|afternoon|evening), Alante\./).waitFor()
+  await page.getByText('Dana Booker').first().waitFor()
+  await page.getByText('Lee Pending').click()
+  await details(page).getByText('Details Completed, No Call Yet').waitFor()
+  const row = page.locator('.alert-row', { hasText: 'INV-OVERDUE' })
+  await row.getByRole('button', { name: 'Mark Paid' }).click()
+  const call = await waitFor(() => api.calls.find((c) => c.kind === 'update' && c.table === 'invoices'))
+  assert.deepEqual(call.ids, ['iv-1'])
+  assert.equal(call.patch.status, 'paid')
+  assert.equal(await page.locator('nav[aria-label="Admin"]').getByText('Care', { exact: true }).count(), 0, 'Care link hidden while the feature is off')
+  await close()
+})
+
+test('pipeline: an invoice is created and sent for the selected client only', async () => {
+  const { page, api, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await nav(page, 'Pipeline')
+  await page.locator('.client-row', { hasText: 'Avery Alpha' }).click()
+  await details(page).getByText('avery@example.com').waitFor()
+  await details(page).getByRole('button', { name: 'Create Invoice' }).click()
+  await details(page).getByRole('button', { name: 'Fixed Fee Invoice' }).click()
+  await details(page).getByPlaceholder('INV-164').fill('INV-T1')
+  await details(page).getByPlaceholder('650').fill('400')
+  await details(page).getByRole('button', { name: 'Send to Client' }).click()
+  const ins = await waitFor(() => api.calls.find((c) => c.kind === 'insert' && c.table === 'invoices'))
+  assert.equal(ins.rows[0].client_id, 'cl-a')
+  assert.equal(ins.rows[0].total_fee, 400)
+  const sent = await waitFor(() => api.calls.find((c) => c.path === '/api/invoices/send'))
+  assert.equal(sent.body.clientEmail, 'avery@example.com')
+  assert.equal(sent.body.invoiceNumber, 'INV-T1')
+  await close()
+})
+
+test('pipeline: switching clients closes a half filled invoice so it cannot go to the wrong person', async () => {
+  const { page, api, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await nav(page, 'Pipeline')
+  await page.locator('.client-row', { hasText: 'Avery Alpha' }).click()
+  await details(page).getByRole('button', { name: 'Create Invoice' }).click()
+  await details(page).getByRole('button', { name: 'Fixed Fee Invoice' }).click()
+  await details(page).getByPlaceholder('INV-164').fill('INV-WRONG')
+  await page.locator('.client-row', { hasText: 'Blake Beta' }).click()
+  await details(page).getByText('blake@example.com').waitFor()
+  assert.equal(await details(page).getByPlaceholder('INV-164').count(), 0)
+  assert.equal(await details(page).getByText('Invoice for', { exact: false }).count(), 0)
+  await details(page).getByRole('button', { name: 'Email Blake' }).click()
+  const dlg = page.getByRole('dialog', { name: 'Email client' })
+  await dlg.getByPlaceholder('Project update, quick question...').fill('Hello')
+  await dlg.locator('textarea').fill('Checking in')
+  await dlg.getByRole('button', { name: 'Send Email' }).click()
+  const sent = await waitFor(() => api.calls.find((c) => c.path === '/api/email/send'))
+  assert.equal(sent.body.clientEmail, 'blake@example.com')
+  assert.equal(api.calls.filter((c) => c.kind === 'insert' && c.table === 'invoices').length, 0)
+  await close()
+})
+
+test('pipeline: advancing a stage updates only that client', async () => {
+  const { page, api, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await nav(page, 'Pipeline')
+  await page.locator('.client-row', { hasText: 'Avery Alpha' }).getByRole('button', { name: 'Advance' }).click()
+  const call = await waitFor(() => api.calls.find((c) => c.kind === 'update' && c.table === 'clients'))
+  assert.deepEqual(call.ids, ['cl-a'])
+  assert.equal(call.patch.pipeline_stage, 'proposal_sent')
+  await close()
+})
+
+test('revenue: totals, tables, and a saved invoice downloads its own PDF', async () => {
+  const { page, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await nav(page, 'Revenue')
+  await page.locator('.stat-card', { hasText: 'Total earned' }).getByText('$1,200').waitFor()
+  await page.locator('.stat-card', { hasText: 'Outstanding' }).getByText('$500').waitFor()
+  await page.locator('.dt-row', { hasText: 'Gamma site' }).waitFor()
+  await page.locator('.dt-row', { hasText: 'INV-PAID' }).getByRole('button', { name: 'view' }).click()
+  const dlg = page.getByRole('dialog', { name: 'Invoice details' })
+  await dlg.getByText('Paid in Full').waitFor()
+  const [dl] = await Promise.all([page.waitForEvent('download'), dlg.getByRole('button', { name: 'Download PDF' }).click()])
+  assert.match(dl.suggestedFilename(), /^Invoice_INV-PAID_Casey_Gamma\.pdf$/)
+  await close()
+})
+
+test('documents: a proposal and a contract go only to the client shown as the recipient', async () => {
+  const { page, api, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await nav(page, 'Docs')
+  await page.getByText('Landing page').first().waitFor()
+  await page.getByRole('button', { name: 'Fill out Proposal' }).click()
+  await page.locator('.fill-form-wrap select').first().selectOption({ label: 'Avery Alpha — Alpha Co' })
+  await page.getByTestId('doc-context').getByText('avery@example.com').waitFor()
+  await page.getByPlaceholder('Beyond the Horizon Website').fill('Alpha Site')
+  await page.getByPlaceholder('Landing page, Scheduling integration...').fill('Design')
+  await page.locator('.fill-form-wrap input[type=number]').first().fill('1500')
+  await page.getByRole('button', { name: 'Send to Client' }).click()
+  const prop = await waitFor(() => api.calls.find((c) => c.path === '/api/proposals'))
+  assert.equal(prop.body.clientEmail, 'avery@example.com')
+  assert.equal(prop.body.total, 1500)
+
+  await page.getByRole('button', { name: 'Close form' }).click()
+  await page.getByRole('button', { name: 'Fill out contract' }).click()
+  await page.getByLabel('Select from accepted proposals').selectOption({ label: 'Blake Beta — Beta Website' })
+  await page.getByTestId('doc-context').getByText('blake@example.com').waitFor()
+  await page.getByRole('button', { name: 'Send for Signature' }).click()
+  const ct = await waitFor(() => api.calls.find((c) => c.path === '/api/contracts'))
+  assert.equal(ct.body.clientEmail, 'blake@example.com')
+  assert.equal(ct.body.totalFee, 2000)
+  assert.match(ct.body.invoiceNumber, /^INV-\d{4}-\d{4}-BLAKE$/)
+  await close()
+})
+
+test('schedule: availability and day blocks are saved', async () => {
+  const { page, api, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await nav(page, 'Schedule')
+  await page.getByText('Next 14 days').waitFor()
+  // Styled switch: the real checkbox is visually hidden, so use it from the keyboard.
+  await page.getByLabel('Open on Sunday').focus()
+  await page.keyboard.press('Space')
+  const up = await waitFor(() => api.calls.find((c) => c.kind === 'update' && c.table === 'availability'))
+  assert.deepEqual(up.ids, ['av-0'])
+  assert.equal(up.patch.is_active, true)
+  const target = new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10)
+  await page.getByLabel('Date to block').fill(target)
+  await page.getByRole('button', { name: 'Block Day' }).click()
+  const ins = await waitFor(() => api.calls.find((c) => c.kind === 'insert' && c.table === 'blocked_dates'))
+  assert.equal(ins.rows[0].blocked_date, target)
+  await close()
+})
+
+test('an expired session shows the sign in prompt', async () => {
+  const { page, api, close } = await adminPage()
+  await page.goto(BASE + '/admin')
+  await nav(page, 'Pipeline')
+  await page.locator('.client-row', { hasText: 'Avery Alpha' }).waitFor()
+  api.failOnce(/rest\/v1\/clients/, 401)
+  await page.locator('.client-row', { hasText: 'Avery Alpha' }).getByRole('button', { name: 'Advance' }).click()
+  await page.getByRole('alertdialog').getByText('Your session has ended').waitFor()
+  await close()
+})
+
+test('phone width: bottom navigation works and pages fit the screen', async () => {
+  const { page, close } = await adminPage({ width: 390, height: 844 })
+  await page.goto(BASE + '/admin')
+  await page.getByText(/Good (morning|afternoon|evening)/).waitFor()
+  for (const label of ['Pipeline', 'Revenue', 'Docs', 'Schedule', 'Home']) {
+    await nav(page, label)
+    await page.waitForTimeout(300)
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    assert.ok(over <= 1, `${label} overflows by ${over}px`)
+  }
+  await close()
+})
