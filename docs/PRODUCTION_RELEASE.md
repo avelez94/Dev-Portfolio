@@ -37,7 +37,7 @@ Don't continue until one of these is confirmed.
 
 In the SQL editor, run and save the output of:
 1. `supabase/audit/20261029_release_precheck.sql` (record counts, columns, types, booking conflicts, status values)
-2. `supabase/audit/20261029_access_audit.sql` (current access rules; the lockdown rollback restores from this)
+2. `supabase/audit/20261029_access_audit.sql` (current access rules, kept as a record)
 
 Stop and send me the output if any of these happen:
 - section 4 returns rows (duplicate bookings);
@@ -91,7 +91,8 @@ Afterwards: in admin, cancel the TEST booking, delete the Zoom meeting, and mark
 
 | Problem | Recovery |
 |---|---|
-| New site has a problem | Vercel, Deployments: promote the previous Production deployment (`04dac15`) with Instant Rollback. If the lockdown already ran, also run `supabase/rollback/20261029_lockdown_rollback.sql`, because the old admin needs the public key. |
+| New site has a problem **before** the lockdown | Vercel, Deployments: Instant Rollback to `04dac15`. |
+| New site has a problem **after** the lockdown | Don't roll back to `04dac15`: its admin only works with the public key open. Fix forward, or roll back the public pages only by reverting the specific commit. The admin stays on the protected routes. |
 | A migration fails | Stop and send me the error. Partial runs only add columns or indexes; rerun the file after the fix. |
 | Data looks wrong after migrating | The migrations only add columns and indexes. Compare the precheck counts. If needed, restore the backup from step 1. |
-| Lockdown breaks something | Run the rollback script, then send me what broke. |
+| Lockdown breaks something | Send me what broke and fix forward (for example, a missing table in the admin allowlist). `supabase/rollback/20261029_lockdown_rollback.sql` reopens private client data to the public key; it is not a routine recovery step. Use it only as a deliberate, short emergency decision, then lock down again. |

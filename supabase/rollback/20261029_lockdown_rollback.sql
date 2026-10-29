@@ -1,4 +1,4 @@
--- EMERGENCY ONLY. Reopens the private tables to the public key, the way they were
+-- NOT A ROUTINE RECOVERY STEP. EMERGENCY ONLY. Reopens the private tables to the public key, the way they were
 -- before 20261029_lock_down_private_tables.sql.
 --
 -- Use this only if production is rolled back to the OLD site code (whose admin
