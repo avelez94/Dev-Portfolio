@@ -12,7 +12,7 @@ import { useTheme } from './theme'
 export function PageFrame({ children, panel }: { children: ReactNode; panel?: ReactNode }) {
   const { d } = useTheme()
   return (
-    <div className={panel ? 'main' : 'main no-panel'} style={{ display: 'grid', gridTemplateColumns: panel ? '1fr 320px' : '1fr', height: '100vh', overflow: 'hidden', minWidth: 0 }}>
+    <div className={panel ? 'main' : 'main no-panel'} style={{ display: 'grid', gridTemplateColumns: panel ? '1fr 320px' : '1fr', height: '100%', overflow: 'hidden', minWidth: 0 }}>
       <main id="admin-main" tabIndex={-1} className="center" style={{ background: d.bg, minWidth: 0 }}>
         <div className="admin-topbar" style={{ display: 'none', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <div className="tb-logo" aria-hidden="true">AV</div>

@@ -12,9 +12,11 @@
     "guide:stamp": "node scripts/pricing-guide.mjs stamp",
     "guide:check": "node scripts/pricing-guide.mjs check",
     "test:admin": "node --test --test-concurrency=1 'tests/admin/*.test.mjs'",
-    "test:care": "node --test --test-concurrency=1 'tests/care/*.test.mjs'"
+    "test:care": "node --test --test-concurrency=1 'tests/care/*.test.mjs'",
+    "test:demo": "node --test --test-concurrency=1 tests/demo/mode.test.mjs tests/demo/demo.test.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "0.5.10",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "jspdf": "^4.2.1",

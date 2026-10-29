@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { careEnabled } from '@/lib/care/config'
+import { demoDeployment } from '@/lib/demo/mode'
 import { ADMIN_THEMES, ADMIN_FONTS } from '@/lib/admin-theme'
 import CareApp from './CareApp'
 
@@ -7,7 +8,8 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Website Care' }
 
 export default function CarePage() {
-  if (!careEnabled()) {
+  // The demo runs Website Care on its own fictional data; the real feature stays off.
+  if (!careEnabled() && !demoDeployment()) {
     const t = ADMIN_THEMES.teal
     return (
       <main id="admin-main" className="care-frame" style={{ minHeight: '100vh', background: t.bg, color: t.text, fontFamily: ADMIN_FONTS.body, display: 'grid', placeItems: 'center', padding: 20 }}>

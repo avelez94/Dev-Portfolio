@@ -11,8 +11,9 @@ export const adminCss = (d: Theme) => `
         html,body{height:100%;overflow:hidden}
         body{font-family:${ADMIN_FONTS.body};font-weight:400;font-size:14px;background:${d.bg};color:${d.text}}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{border-radius:2px}
-        .shell{display:grid;grid-template-columns:80px 1fr;height:100vh;overflow:hidden}
-        .main{display:grid;grid-template-columns:1fr 320px;height:100vh;overflow:hidden;min-width:0}
+        .admin-frame{display:flex;flex-direction:column;height:100vh}
+        .shell{display:grid;grid-template-columns:80px 1fr;flex:1 1 auto;min-height:0;overflow:hidden}
+        .main{display:grid;grid-template-columns:1fr 320px;height:100%;overflow:hidden;min-width:0}
         .center{overflow-y:auto;padding:28px 24px;min-width:0}
         .panel{border-left-width:1px;border-left-style:solid;overflow-y:auto}
         .panel-inner{padding:24px 20px}
@@ -249,6 +250,7 @@ export const adminCss = (d: Theme) => `
         /* Phones and small tablets: bottom navigation, single column */
         @media (max-width:900px){
           html,body{height:auto;overflow:auto}
+          .admin-frame{display:block;height:auto}
           .shell{display:block!important;height:auto!important;overflow:visible!important;padding-bottom:84px}
           .sidebar{position:fixed;left:0;right:0;bottom:0;z-index:900;flex-direction:row;height:74px;padding:6px 8px;border-right:none!important;border-top:1px solid ${d.border}}
           .sb-logo,.sb-admin-wrap,.sb-divider{display:none!important}
@@ -275,6 +277,6 @@ export const adminCss = (d: Theme) => `
         /* Pages without a details panel use the full width */
         .main.no-panel{grid-template-columns:1fr!important}
         /* Website Care pages scroll inside the shell like the other pages */
-        .care-frame{height:100vh;overflow-y:auto;min-width:0}
+        .care-frame{height:100%;overflow-y:auto;min-width:0}
         @media (max-width:900px){.care-frame{height:auto;overflow:visible}}
 `

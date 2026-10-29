@@ -13,6 +13,7 @@ import { adminFetch } from '../_lib/api'
 import { adminCss } from './styles'
 import { ThemeContext, themeFor } from './theme'
 import { confirmLeave, useBeforeUnloadGuard } from './unsaved'
+import DemoBar from '../../_demo/DemoBar'
 
 const icon = (path: ReactNode) => <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">{path}</svg>
 export const NAV_ITEMS = [
@@ -27,7 +28,7 @@ const CARE_ITEM = { href: '/admin/care', label: 'Care', icon: icon(<><path d="M9
 /** True when the link is the current page (Home only matches exactly). */
 export const isActive = (href: string, path: string) => (href === '/admin' ? path === '/admin' : path === href || path.startsWith(href + '/'))
 
-export default function AdminShell({ children }: { children: ReactNode }) {
+export default function AdminShell({ children, demo = false }: { children: ReactNode; demo?: boolean }) {
   const path = usePathname() || '/admin'
   const [dark, setDark] = useState(true)
   // Website Care link shows only where the feature is switched on (its API answers 404 otherwise).
@@ -91,7 +92,9 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   return (
     <ThemeContext.Provider value={theme}>
       <style>{adminCss(d)}</style>
-      <div className="shell" style={{ background: d.bg, color: d.text, display: 'grid', gridTemplateColumns: '80px 1fr', height: '100vh', overflow: 'hidden' }}>
+      <div className="admin-frame">
+      {demo && <DemoBar />}
+      <div className="shell" style={{ background: d.bg, color: d.text, display: 'grid', gridTemplateColumns: '80px 1fr' }}>
         <a href="#admin-main" className="admin-skip">Skip to content</a>
         <nav className="sidebar" aria-label="Admin" style={{ background: d.white, borderColor: d.border }}>
           <div className="sb-admin-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -122,6 +125,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           </button>
         </nav>
         {children}
+      </div>
       </div>
       {sessionExpired && (
         <div className="admin-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,5,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300, padding: 16 }}>

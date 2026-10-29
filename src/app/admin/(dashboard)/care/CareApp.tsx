@@ -10,6 +10,7 @@ type View = 'overview' | 'queue' | 'sites' | 'catalog' | 'settings' | 'activity'
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
 type Status = {
+  demo?: boolean
   stripe: { mode: string; webhook: boolean; prices: Record<string, boolean> }
   runner: { token: boolean; dispatch: boolean }
   email: { provider: boolean; clientEmailsLive: boolean; allowlist: string[] }
@@ -83,6 +84,15 @@ export default function CareApp() {
 
 function EnvBanner({ s }: { s: Status }) {
   const prices = Object.values(s.stripe.prices).filter(Boolean).length
+  if (s.demo) {
+    return (
+      <div className="care-banner" aria-label="Environment">
+        <Badge tone="coral">Demo: Stripe, client and admin emails, and the check runner are simulated</Badge>
+        <Badge tone="ok">Calendar: admin Schedule</Badge>
+        <Badge tone={s.policyApproved ? 'ok' : 'warn'}>Billing policy: {s.policyApproved ? 'approved' : 'proposed, needs approval'}</Badge>
+      </div>
+    )
+  }
   return (
     <div className="care-banner" aria-label="Environment">
       <Badge tone={s.stripe.mode === 'live' ? 'bad' : s.stripe.mode === 'test' ? 'ok' : 'warn'}>Stripe: {s.stripe.mode === 'missing' ? 'not configured' : `${s.stripe.mode} mode`}{s.stripe.mode !== 'missing' && ` (${prices}/3 prices${s.stripe.webhook ? ', webhook set' : ', no webhook secret'})`}</Badge>

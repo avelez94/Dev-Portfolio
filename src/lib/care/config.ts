@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { SITE_URL } from '@/content/site'
+import { inDemoScope } from '@/lib/demo/context'
 
 export function careEnabled(): boolean {
   return process.env.WEBSITE_CARE_ENABLED === 'true'
@@ -39,6 +40,8 @@ export function secretMatches(given: string | null | undefined, expected: string
  */
 export function clientEmailAllowed(email: string): { ok: boolean; reason?: string } {
   if (process.env.CARE_CLIENT_EMAIL_LIVE === 'true') return { ok: true }
+  // The demo simulates every email, so nothing leaves the server either way.
+  if (inDemoScope()) return { ok: true }
   const list = (process.env.CARE_EMAIL_ALLOWLIST || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
   const e = email.trim().toLowerCase()
   const hit = list.some((p) => {

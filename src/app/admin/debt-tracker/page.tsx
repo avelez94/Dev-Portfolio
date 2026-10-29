@@ -1,9 +1,14 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import DebtTracker from "./DebtTracker";
+import { demoDeployment } from "@/lib/demo/mode";
+import DemoDebtTracker from "./DemoDebtTracker";
 
 export const dynamic = "force-dynamic";
 
 export default async function DebtTrackerPage() {
+  // Demo mode: fictional debts from the demo session, never the real table.
+  if (demoDeployment()) return <DemoDebtTracker />;
+
   const { data: debts, error } = await supabaseAdmin
     .from("debt_payoff")
     .select("*")

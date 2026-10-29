@@ -1,6 +1,8 @@
 /**
  * Website Care admin API. Every request needs the admin cookie, and the whole
- * feature answers 404 unless WEBSITE_CARE_ENABLED is "true".
+ * feature answers 404 unless WEBSITE_CARE_ENABLED is "true". The preview demo
+ * (src/lib/demo) also runs these handlers, inside its own scope and against
+ * its own fictional data.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
@@ -20,6 +22,7 @@ import { validTimeZone, zonedToUtc, localDate } from '@/lib/care/schedule'
 import { isPlanId, plan as planInfo, priceIdFor, PLAN_IDS } from '@/lib/care/plans'
 import * as work from '@/lib/care/work-server'
 import { CARE_TERMS_VERSION } from '@/content/care-terms'
+import { inDemoScope } from '@/lib/demo/context'
 
 export const maxDuration = 60
 
@@ -554,7 +557,7 @@ const routes: [string, string, Handler][] = [
 ]
 
 async function dispatch(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
-  if (!careEnabled()) return careOff()
+  if (!careEnabled() && !inDemoScope()) return careOff()
   const denied = requireAdmin(req)
   if (denied) return denied
   const { path } = await ctx.params
