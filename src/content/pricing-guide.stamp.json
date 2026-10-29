@@ -1,7 +1,7 @@
 {
-  "sourcesFingerprint": "e8be36fe444b7b6aa50e6fa203bc4ebb2b2f527aad2b34968327dc5b663d9cbc",
-  "pdfSha256": "351c4f5bc9d9a4124d5d5da2496974b81ed37db22e46fcf26544ca71bd9799ee",
-  "generatedAt": "2026-10-28T23:45:45.219Z",
+  "sourcesFingerprint": "9fd9f06285aba93d785e109280f412a0fd78c44a86435dc53d38f5fd4c56c19c",
+  "pdfSha256": "dca0e5d754b1f28abeda2311c844332fac94f9e47d24a5f06e66aafb4a3236f6",
+  "generatedAt": "2026-10-29T12:16:39.707Z",
   "sources": [
     "src/content/offers.ts",
     "src/content/guide.ts",

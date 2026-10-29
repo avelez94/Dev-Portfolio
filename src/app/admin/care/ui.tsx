@@ -18,10 +18,10 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care h1,.care h2,.care h3{font-family:${ADMIN_FONTS.display};font-weight:600;margin:0;letter-spacing:-0.01em}
 .care h1{font-size:26px}.care h2{font-size:20px}.care h3{font-size:16px}
 .care p{margin:0}
-.care a{color:var(--accent)}
+.care a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 .care :focus-visible{outline:3px solid var(--coral);outline-offset:2px;border-radius:8px}
 .care-top{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-.care-mark{width:34px;height:34px;border-radius:12px;background:var(--coral);color:var(--ink);display:grid;place-items:center;font-family:${ADMIN_FONTS.display};font-style:italic;font-weight:700;border:2px solid var(--ink)}
+.care .care-mark{text-decoration:none;color:var(--ink);width:34px;height:34px;border-radius:12px;background:var(--coral);color:var(--ink);display:grid;place-items:center;font-family:${ADMIN_FONTS.display};font-style:italic;font-weight:700;border:2px solid var(--ink)}
 .care-nav{display:flex;gap:4px;flex-wrap:wrap}
 .care-nav button{background:none;border:1px solid transparent;color:var(--text2);padding:7px 12px;border-radius:999px;font:inherit;cursor:pointer;min-height:36px}
 .care-nav button[aria-current=page]{background:var(--accentBg);color:var(--text);border-color:var(--border2)}
@@ -63,7 +63,8 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-who{background:var(--surface2);border:2px solid var(--coral);border-radius:16px;padding:14px 16px;margin:0 0 16px}
 .care-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0 0}
 .care-step{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px}
-.care-step span{display:block;font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+.care-step>span:first-child{display:block;font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:4px}
+.care-step .care-badge{white-space:normal;margin:0 4px 4px 0}
 .care-finding{border:1px solid var(--border);border-left:4px solid var(--border2);border-radius:12px;padding:12px;background:var(--surface)}
 .care-finding.failed{border-left-color:var(--redText)}.care-finding.needs_review{border-left-color:var(--amberText)}
 .care-finding.could_not_check{border-left-color:var(--text3)}.care-finding.passed{border-left-color:var(--greenText)}

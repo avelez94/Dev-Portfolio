@@ -39,7 +39,8 @@ async function api(path, body, opts = {}) {
 }
 
 async function processRun(run) {
-  console.log(`Run ${run.id}: ${run.config.site_url} (attempt ${run.attempts})`)
+  // The repository is public, so Actions logs are public: never log client URLs or results.
+  console.log(`Run ${run.id.slice(0, 8)}: attempt ${run.attempts}`)
   const proxy = await startProxy()
   let lastBeat = 0
   let lost = false
@@ -54,7 +55,7 @@ async function processRun(run) {
         if (!r.ok) { lost = true; return { lost: true } }
         return { cancel: r.cancel }
       } catch (e) {
-        console.warn('heartbeat failed:', e.message)
+        console.warn('heartbeat failed')
         return {}
       }
     },
@@ -69,10 +70,10 @@ async function processRun(run) {
     if (lost || stopped === 'lease lost') { console.warn('Lease lost; not reporting.'); return }
     const outcome = stopped === 'canceled' ? 'canceled' : stopped ? 'partial' : 'succeeded'
     const res = await api(`runs/${run.id}/complete`, { owner: OWNER, outcome, findings, error: stopped ? `Stopped: ${stopped}` : null, notes: `${findings.length} results` }, { timeout: 60000 })
-    console.log(`Run ${run.id}: ${res.status}`, JSON.stringify(res.summary?.counts || {}))
+    console.log(`Run ${run.id.slice(0, 8)}: ${res.status}`)
   } catch (e) {
-    console.error(`Run ${run.id} crashed:`, e.message)
-    await api(`runs/${run.id}/complete`, { owner: OWNER, outcome: 'failed', retryable: true, error: `Runner error: ${String(e.message).slice(0, 300)}`, findings: [] }).catch((x) => console.error('could not report failure:', x.message))
+    console.error(`Run ${run.id.slice(0, 8)} stopped with an error (details are saved in the app).`)
+    await api(`runs/${run.id}/complete`, { owner: OWNER, outcome: 'failed', retryable: true, error: `Runner error: ${String(e.message).slice(0, 300)}`, findings: [] }).catch(() => console.error('could not report the failure to the app'))
   } finally {
     await proxy.close()
   }
@@ -84,7 +85,7 @@ while (n < MAX_RUNS) {
   try {
     claim = await api('claim', { owner: OWNER })
   } catch (e) {
-    console.error('claim failed:', e.message)
+    console.error(`claim failed (HTTP ${e.status || 'error'})`)
     process.exitCode = 1
     break
   }

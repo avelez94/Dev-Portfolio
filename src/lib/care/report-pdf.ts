@@ -38,7 +38,7 @@ export async function reportPdf(s: Snapshot): Promise<Buffer> {
   if (!s.sections.attention.length && !s.sections.outstanding) pdf.text('Nothing from this month’s checks needs attention.')
   for (const a of s.sections.attention) {
     pdf.ensure(24)
-    pdf.text(`${a.label}${a.viewport ? ` (${a.viewport})` : ''}: ${STATUS_LABEL[a.status] || a.status}`, { bold: true, color: 'ink', gap: 1 })
+    pdf.text(`${a.label}${a.viewport && a.label !== 'Secure connection (HTTPS)' ? ` (${a.viewport})` : ''}: ${STATUS_LABEL[a.status] || a.status}`, { bold: true, color: 'ink', gap: 1 })
     if (a.url) pdf.text(a.url, { size: 9, color: 'muted', gap: 1 })
     pdf.text(`What I saw: ${a.observed}`, { size: 10, gap: 1 })
     if (a.explanation) pdf.text(`What it means: ${a.explanation}`, { size: 10, gap: 1 })

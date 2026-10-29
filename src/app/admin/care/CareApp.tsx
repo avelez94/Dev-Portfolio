@@ -123,7 +123,7 @@ function Overview({ go, queueOnly }: { go: (n: { view?: View; site?: string | nu
     <section className="care-panel" aria-labelledby="queue-h">
       <div className="care-between"><h2 id="queue-h">Review queue</h2><span className="care-muted">{open.length} open, {overdue.length} overdue</span></div>
       {open.length === 0 ? <Empty>No open reviews. New ones appear when a paid period starts.</Empty> : (
-        <div className="care-scroll"><table className="care-table">
+        <div className="care-scroll" tabIndex={0}><table className="care-table">
           <thead><tr><th>Due</th><th>Client and website</th><th>Work</th><th className="care-hide-sm">Billing</th><th className="care-hide-sm">Period</th></tr></thead>
           <tbody>
             {open.map((c: Row) => {
@@ -203,17 +203,17 @@ export function SitesTable({ data, go }: { data: Row; go: (n: { site?: string | 
   const tz = data.timezone
   if (!data.sites.length) return <Empty>No websites enrolled yet. Choose Enroll a website to add the first one.</Empty>
   return (
-    <div className="care-scroll"><table className="care-table">
+    <div className="care-scroll" tabIndex={0}><table className="care-table">
       <thead><tr><th>Client and website</th><th>Plan</th><th>Subscription</th><th>Setup</th><th className="care-hide-sm">Next review due</th><th className="care-hide-sm">Last sent report</th></tr></thead>
       <tbody>
         {data.sites.map((s: Row) => {
           const c = data.clients.find((x: Row) => x.id === s.client_id)
           return (
             <tr key={s.id} className="click" onClick={() => go({ site: s.id })}>
-              <td><b>{c?.business || c?.name || 'Unknown client'}</b><div className="care-muted">{s.label} · {s.site_url}</div></td>
+              <td><button className="care-btn small" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textAlign: 'left', minHeight: 0 }} onClick={(e) => { e.stopPropagation(); go({ site: s.id }) }}><b>{c?.business || c?.name || 'Unknown client'}</b></button><div className="care-muted">{s.label} · {s.site_url}</div></td>
               <td style={{ textTransform: 'capitalize' }}>{s.plan}</td>
               <td><BillingBadge state={s.billing_state} />{s.paid_through && <div className="care-muted">Paid through {fmt(s.paid_through, tz, false)}</div>}</td>
-              <td><Badge tone={s.enrollment_status === 'confirmed' ? 'ok' : s.enrollment_status === 'draft' ? 'warn' : 'info'}>{s.enrollment_status === 'confirmed' ? 'Confirmed' : s.enrollment_status === 'draft' ? 'Needs confirmation' : s.enrollment_status}</Badge></td>
+              <td><Badge tone={s.enrollment_status === 'confirmed' ? 'ok' : s.enrollment_status === 'draft' ? 'warn' : 'info'}>{s.enrollment_status === 'confirmed' ? 'Confirmed' : s.enrollment_status === 'draft' ? 'Needs confirmation' : s.enrollment_status === 'ended' ? 'Care ended' : 'Paused'}</Badge></td>
               <td className="care-hide-sm">{fmt(s.next_review_due, tz)}</td>
               <td className="care-hide-sm">{s.last_completed_review_at ? fmt(s.last_completed_review_at, tz, false) : <span className="care-muted">None yet</span>}</td>
             </tr>
@@ -232,7 +232,7 @@ function Activity() {
     <section className="care-panel">
       <h2 style={{ marginBottom: 10 }}>Activity</h2>
       {data.activity.length === 0 ? <Empty>Nothing yet.</Empty> : (
-        <div className="care-scroll"><table className="care-table"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th></tr></thead><tbody>
+        <div className="care-scroll" tabIndex={0}><table className="care-table"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th></tr></thead><tbody>
           {data.activity.map((a) => (
             <tr key={a.id}><td>{new Date(a.created_at).toLocaleString()}</td><td>{a.actor}</td><td>{a.action.replace(/_/g, ' ')}</td><td className="care-muted" style={{ fontSize: 12, wordBreak: 'break-word' }}>{JSON.stringify(a.detail)}</td></tr>
           ))}

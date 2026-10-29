@@ -106,7 +106,7 @@ function ScanPanel({ data, reload }: { data: Row; reload: () => void }) {
         </div>
       )}
       {runs.length === 0 ? <Empty>No checks have run for this period yet.</Empty> : (
-        <div className="care-scroll"><table className="care-table">
+        <div className="care-scroll" tabIndex={0}><table className="care-table">
           <thead><tr><th>Started</th><th>Why</th><th>Result</th><th>Details</th></tr></thead>
           <tbody>{runs.map((r: Row) => (
             <tr key={r.id}>
@@ -254,7 +254,7 @@ function ReportPreview({ s }: { s: Row }) {
       <div className="sec">1. What was checked</div>{list(s.sections.checked) || <p>No checks were completed.</p>}
       <div className="sec">2. What needs attention</div>
       {s.sections.attention.length === 0 && !s.sections.outstanding ? <p>Nothing from this month’s checks needs attention.</p> : (
-        <ul>{s.sections.attention.map((a: Row, i: number) => <li key={i}><b>{a.label}{a.viewport ? ` (${a.viewport})` : ''}: {STATUS_TEXT[a.status]}</b>{a.url && <div className="muted" style={{ wordBreak: 'break-all' }}>{a.url}</div>}<div>What I saw: {a.observed}</div>{a.explanation && <div>What it means: {a.explanation}</div>}{a.possible_cause && <div>Possible cause (not confirmed): {a.possible_cause}</div>}{a.next_action && <div>Suggested next step: {a.next_action}</div>}</li>)}</ul>
+        <ul>{s.sections.attention.map((a: Row, i: number) => <li key={i}><b>{a.label}{a.viewport && a.label !== 'Secure connection (HTTPS)' ? ` (${a.viewport})` : ''}: {STATUS_TEXT[a.status]}</b>{a.url && <div className="muted" style={{ wordBreak: 'break-all' }}>{a.url}</div>}<div>What I saw: {a.observed}</div>{a.explanation && <div>What it means: {a.explanation}</div>}{a.possible_cause && <div>Possible cause (not confirmed): {a.possible_cause}</div>}{a.next_action && <div>Suggested next step: {a.next_action}</div>}</li>)}</ul>
       )}
       {s.sections.outstanding && <p style={{ whiteSpace: 'pre-wrap' }}><b>Still open:</b> {s.sections.outstanding}</p>}
       <div className="sec">3. What I fixed</div><p style={{ whiteSpace: 'pre-wrap' }}>{s.sections.fixed || 'No fixes were made this month.'}</p>
@@ -354,7 +354,7 @@ function SendPanel({ data, reload }: { data: Row; reload: () => void }) {
       )}
       {report.status === 'sent' && <p className="care-okmsg" style={{ marginTop: 10 }}>Sent. The email provider accepted it; that confirms hand off, not inbox delivery.</p>}
       {sends.length > 0 && (
-        <div className="care-scroll" style={{ marginTop: 12 }}><table className="care-table">
+        <div className="care-scroll" tabIndex={0} style={{ marginTop: 12 }}><table className="care-table">
           <thead><tr><th>When</th><th>To</th><th>Version</th><th>Result</th></tr></thead>
           <tbody>{sends.map((s: Row) => {
             const v = data.approvals.find((a: Row) => a.id === s.approval_id)?.version

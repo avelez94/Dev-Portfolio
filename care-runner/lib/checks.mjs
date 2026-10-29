@@ -188,9 +188,9 @@ export async function runChecks(config, ctx) {
     }
     add({ ...base, check_key: 'page_load', status: 'passed', observed: `Loaded in ${(v.ms / 1000).toFixed(1)} seconds (HTTP ${status}).`, explanation: 'The page opened.', evidence: ev })
 
-    // HTTPS
+    // HTTPS (same answer on every screen size, so recorded once, on desktop)
     const final = v.finalUrl || target.url
-    if (target.url.startsWith('https:') && final.startsWith('http:')) add({ ...base, check_key: 'https', status: 'needs_review', observed: 'The page ended on an insecure http address.', explanation: 'Visitors may see a “not secure” label.', possible_cause: 'A redirect sends visitors from https to http.', next_action: 'Check redirect and HTTPS settings.', evidence: ev })
+    if (kind !== 'desktop') { /* skip */ } else if (target.url.startsWith('https:') && final.startsWith('http:')) add({ ...base, check_key: 'https', status: 'needs_review', observed: 'The page ended on an insecure http address.', explanation: 'Visitors may see a “not secure” label.', possible_cause: 'A redirect sends visitors from https to http.', next_action: 'Check redirect and HTTPS settings.', evidence: ev })
     else if (final.startsWith('https:')) add({ ...base, check_key: 'https', status: 'passed', observed: 'The secure connection worked and the certificate was accepted.', explanation: 'The browser trusted the site’s certificate.', evidence: { final_url: final } })
     else add({ ...base, check_key: 'https', status: 'needs_review', observed: 'The page uses http, not https.', explanation: 'Browsers label http pages as not secure.', next_action: 'Consider turning on HTTPS for the site.', evidence: ev })
 

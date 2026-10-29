@@ -275,7 +275,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
       <section className="care-panel" aria-labelledby="hist-h">
         <h2 id="hist-h" style={{ marginBottom: 10 }}>Monthly reviews</h2>
         {cycles.length === 0 ? <Empty>No service periods yet. The first appears when the first payment succeeds.</Empty> : (
-          <div className="care-scroll"><table className="care-table">
+          <div className="care-scroll" tabIndex={0}><table className="care-table">
             <thead><tr><th>Period</th><th>Work</th><th>Report</th><th>Due</th><th></th></tr></thead>
             <tbody>{cycles.map((c: Row) => {
               const r = reports.find((x: Row) => x.cycle_id === c.id)
