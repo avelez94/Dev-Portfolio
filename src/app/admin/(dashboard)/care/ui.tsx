@@ -84,7 +84,25 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-skel{height:14px;border-radius:6px;background:var(--surface2);animation:carepulse 1.2s infinite}
 @keyframes carepulse{50%{opacity:.5}}
 @media (prefers-reduced-motion:reduce){.care-skel{animation:none}}
-@media (max-width:760px){.care-two{grid-template-columns:1fr}.care-main{padding:14px}.care-hide-sm{display:none}}
+/* Plan time: task catalog, Quick add work, allowance */
+.care-allow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.care-allow>div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+.care-allow b{display:block;font-family:${ADMIN_FONTS.display};font-size:24px;line-height:1.15}
+.care-allow small{color:var(--text2);font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.care-allow .hl{border-color:var(--coral);background:var(--accentBg)}
+.care-stepper{display:inline-flex;align-items:center;border:1.5px solid var(--border2);border-radius:999px;overflow:hidden}
+.care-stepper button{width:38px;min-height:38px;border:0;background:var(--surface2);color:var(--text);font:inherit;font-size:18px;cursor:pointer}
+.care-stepper button:disabled{opacity:.4;cursor:not-allowed}
+.care-stepper input{width:56px;min-height:38px;border:0;border-radius:0;text-align:center;background:var(--surface)}
+.care-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.care-pick label{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:10px 12px;cursor:pointer}
+.care-pick label.on{border-color:var(--coral);background:var(--accentBg)}
+.care-pick label.off{opacity:.65}
+.care-line{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;display:grid;gap:10px}
+.care-calc{font-variant-numeric:tabular-nums}
+.care-sum td,.care-sum th{font-variant-numeric:tabular-nums}
+.care-sum td.n,.care-sum th.n{text-align:right;white-space:nowrap}
+@media (max-width:760px){.care-two{grid-template-columns:1fr}.care-main{padding:14px}.care-hide-sm{display:none}.care-allow{grid-template-columns:1fr 1fr}}
 `
 
 export async function careApi<T = Record<string, unknown>>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {

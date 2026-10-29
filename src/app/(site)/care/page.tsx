@@ -1,15 +1,16 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import s from '@/components/site/site.module.css'
-import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, PageHeader, SubNav } from '@/components/site/blocks'
+import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, FaqList, PageHeader, SubNav } from '@/components/site/blocks'
 import { inquiryHref } from '@/content/site'
-import { careBenefits, careSubscribeNote, occasionalSupport } from '@/content/offers'
+import { careBenefits, careFaqs, careSubscribeNote, occasionalSupport } from '@/content/offers'
+import { CARE_FLEXIBLE_TIME, CARE_STANDARD_MINUTES, CARE_TERMS } from '@/content/care-terms'
 import { CARE_SAMPLES } from '@/content/care-samples'
 import CareSample from '@/components/site/CareSample'
 
 const title = 'Website Care'
 const description =
-  'Optional monthly care plans from $59 a month: monthly website checks, a monthly health report, and time for content updates or troubleshooting. Occasional support is also available.'
+  'Optional monthly care plans from $59 a month: monthly website checks, a monthly health report, and flexible time for updates, fixes, new pages, or features. Occasional support is also available.'
 
 export const metadata: Metadata = {
   title,
@@ -33,6 +34,7 @@ export default function CarePage() {
             { href: '#plans', label: 'Plans' },
             { href: '#sample', label: 'Sample report' },
             { href: '#time', label: 'How time works' },
+            { href: '#terms', label: 'Care terms' },
             { href: '#support', label: 'Occasional support' },
           ]}
         />
@@ -64,8 +66,8 @@ export default function CarePage() {
             Pick the pace <em>that fits.</em>
           </h2>
           <p className={s.sectionLede}>
-            Every plan includes monthly website checks and a monthly health report. Business and Premium Care add monthly time for content updates or
-            troubleshooting. Care plans are optional.
+            Every plan includes monthly website checks and a monthly health report. Business and Premium Care add flexible time you can use on any
+            website work. Care plans are optional.
           </p>
         </div>
         <CarePlanCards />
@@ -98,12 +100,40 @@ export default function CarePage() {
           <h2 id="time-title" className={s.sectionTitle}>
             Clear time, <em>no surprises.</em>
           </h2>
-          <p className={s.sectionLede}>
-            Business and Premium Care include a set amount of time each month instead of a count of edits, so small changes and quick fixes fit
-            naturally.
-          </p>
+          <p className={s.sectionLede}>{CARE_FLEXIBLE_TIME}</p>
+          <p className={s.sectionLede}>{CARE_STANDARD_MINUTES}</p>
         </div>
         <CareTime />
+      </section>
+
+      {/* ---------------- Care terms ---------------- */}
+      <section id="terms" className={s.section} aria-labelledby="terms-title">
+        <div className={s.sectionHead} data-reveal>
+          <p className={s.eyebrow}>Care terms</p>
+          <h2 id="terms-title" className={s.sectionTitle}>
+            Know how it works <em>before you start.</em>
+          </h2>
+          <p className={s.sectionLede}>These terms are part of your care agreement.</p>
+        </div>
+        <div className={s.benefits}>
+          {CARE_TERMS.map((t) => (
+            <div key={t.title} className={s.benefit} data-reveal>
+              <h3 className={s.benefitTitle}>{t.title}</h3>
+              {t.body.map((b) => <p key={b}>{b}</p>)}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ---------------- Questions ---------------- */}
+      <section id="faq" className={s.section} aria-labelledby="care-faq-title">
+        <div className={s.sectionHead} data-reveal>
+          <p className={s.eyebrow}>Questions</p>
+          <h2 id="care-faq-title" className={s.sectionTitle}>
+            Plan time, <em>answered.</em>
+          </h2>
+        </div>
+        <FaqList faqs={careFaqs} />
       </section>
 
       {/* ---------------- Occasional support ---------------- */}

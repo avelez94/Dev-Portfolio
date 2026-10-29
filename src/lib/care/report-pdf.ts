@@ -8,7 +8,7 @@
  */
 import jsPDF from 'jspdf'
 import { BRAND, COLORS as C, rgb } from '@/lib/brand'
-import { STATE_LABEL, TONE, nextStepLines, planFacts, type Snapshot, type RowState } from './report-model'
+import { STATE_LABEL, TONE, nextStepLines, normalizePlanBox, planFacts, type Snapshot, type RowState } from './report-model'
 
 const PW = 215.9
 const PH = 279.4
@@ -131,17 +131,22 @@ export async function reportPdf(s: Snapshot): Promise<Buffer> {
   y += 2
 
   // ---------- Plan and included time ----------
-  if (s.plan_box) {
-    const b = s.plan_box
+  const pb = normalizePlanBox(s.plan_box)
+  if (pb) {
+    const b = pb
     const facts = planFacts(b)
     const fw = (W - 8 - 3 * 4) / 4
     set('helvetica', 'bold', 9, C.ink)
     const fl = facts.map(([, v]) => lines(v, fw))
     const factH = 3.6 + Math.max(...fl.map((l) => l.length)) * 3.8
-    const usage = b.included_minutes ? lines(`Time this period: ${b.usage_label}`, W - 8) : []
+    const mr = b.rows
+    set('helvetica', 'bold', 9, C.ink)
+    const ml = mr.map(([, v]) => lines(v, fw))
+    const minH = mr.length ? 2.5 + 3.6 + Math.max(...ml.map((l) => l.length)) * 3.8 : 0
+    const status = b.status ? lines(b.status, W - 8) : []
     set('helvetica', 'normal', 8.2, C.inkSoft)
     const rules = lines(b.rules.join(' '), W - 8)
-    const h = 4 + factH + (usage.length ? 1.5 + usage.length * 4 : 0) + 1 + rules.length * 3.5 + 2.5
+    const h = 4 + factH + minH + (status.length ? 1 + status.length * 3.8 : 0) + 1.4 + rules.length * 3.5 + 2.5
     doc.setFillColor(...rgb(C.cream))
     doc.setDrawColor(...rgb(C.line))
     doc.setLineWidth(0.3)
@@ -149,22 +154,30 @@ export async function reportPdf(s: Snapshot): Promise<Buffer> {
     doc.setFillColor(...rgb(C.teal))
     doc.rect(M, y, 1.4, h, 'F')
     let py = y + 4.6
-    facts.forEach(([k], i) => {
+    const factRow = (items: [string, string][], wrapped: string[][]) => items.forEach(([k], i) => {
       const x = M + 5 + i * (fw + 4)
       set('helvetica', 'bold', 6.8, C.tealDeep)
       doc.setCharSpace(0.4)
       doc.text(k.toUpperCase(), x, py)
       doc.setCharSpace(0)
       set('helvetica', 'bold', 9, C.ink)
-      fl[i].forEach((l, j) => doc.text(l, x, py + 4 + j * 3.8))
+      wrapped[i].forEach((l, j) => doc.text(l, x, py + 4 + j * 3.8))
     })
-    py += factH + 0.6
-    if (usage.length) {
-      py += 1.5
-      set('helvetica', 'bold', 9, C.ink)
-      for (const l of usage) { doc.text(l, M + 5, py); py += 4 }
+    factRow(facts, fl)
+    py += factH
+    if (mr.length) {
+      doc.setDrawColor(...rgb(C.line))
+      doc.line(M + 5, py - 1.2, M + W - 4, py - 1.2)
+      py += 2.5
+      factRow(mr, ml)
+      py += minH - 2.5
     }
-    py += 0.4
+    if (status.length) {
+      py += 1
+      set('helvetica', 'bold', 8.4, C.ink)
+      for (const l of status) { doc.text(l, M + 5, py); py += 3.8 }
+    }
+    py += 1
     set('helvetica', 'normal', 8.2, C.inkSoft)
     for (const l of rules) { doc.text(l, M + 5, py); py += 3.5 }
     y += h + 6
@@ -195,7 +208,24 @@ export async function reportPdf(s: Snapshot): Promise<Buffer> {
     set('helvetica', 'bold', 8.5, TONE[k].text)
     doc.text(label, x + 11.5 + numW + 2.5, y + 8.2)
   })
-  y += 19
+  y += 17
+
+  // ---------- Next step ----------
+  const nextLines = nextStepLines(s)
+  const nl = nextLines.flatMap((l, i) => { set('helvetica', i === 0 ? 'bold' : 'normal', 9.2, C.ink); return lines(l, W - 10).map((t) => ({ t, lead: i === 0 })) })
+  const nh = 8 + nl.length * 4.2
+  ensure(nh + 4)
+  doc.setFillColor(...rgb(C.tealSoft))
+  doc.setDrawColor(...rgb(C.ink))
+  doc.setLineWidth(0.35)
+  doc.roundedRect(M, y, W, nh, 2.5, 2.5, 'FD')
+  set('helvetica', 'bold', 8, C.tealDeep)
+  doc.setCharSpace(0.5)
+  doc.text('YOUR NEXT STEP', M + 5, y + 5)
+  doc.setCharSpace(0)
+  let ny = y + 9.5
+  nl.forEach((l) => { set('helvetica', l.lead ? 'bold' : 'normal', 9.2, C.ink); doc.text(l.t, M + 5, ny); ny += 4.2 })
+  y += nh + 6
 
   if (s.summary) para(s.summary, { size: 9.5, color: C.ink, gap: 2 })
 
@@ -288,31 +318,42 @@ export async function reportPdf(s: Snapshot): Promise<Buffer> {
     for (const n of s.not_verified) para(`${n.label}${n.pages.length ? ` (${n.pages.join(', ')})` : ''}: ${n.why}`, { size: 8.8, indent: 6.5, gap: 0.8 })
   }
 
-  // ---------- Work this month ----------
-  if (s.work.fixes || s.work.investigated || s.work.outstanding) {
-    heading('What I did')
-    if (s.work.fixes) para(`Fixed: ${s.work.fixes}`, { size: 8.8, gap: 1 })
+  // ---------- Work completed (from the ledger) ----------
+  if (s.work_done?.length || s.work.fixes || s.work.investigated || s.work.outstanding) {
+    heading('Work completed')
+    for (const w of s.work_done || []) para(`${w.what} (${w.minutes})`, { size: 8.8, indent: 3, gap: 0.6 })
+    if (s.work.fixes) para(s.work.fixes, { size: 8.8, gap: 1 })
     if (s.work.investigated) para(`Looked into: ${s.work.investigated}`, { size: 8.8, gap: 1 })
     if (s.work.outstanding) para(`Still open: ${s.work.outstanding}`, { size: 8.8, gap: 1 })
   }
 
-  // ---------- Next step ----------
-  const nextLines = nextStepLines(s)
-  const nl = nextLines.flatMap((l, i) => { set('helvetica', i === 0 ? 'bold' : 'normal', 9.2, C.ink); return lines(l, W - 10).map((t) => ({ t, lead: i === 0 })) })
-  const nh = 8 + nl.length * 4.2
-  ensure(nh + 4)
-  y += 2
-  doc.setFillColor(...rgb(C.tealSoft))
-  doc.setDrawColor(...rgb(C.ink))
-  doc.setLineWidth(0.35)
-  doc.roundedRect(M, y, W, nh, 2.5, 2.5, 'FD')
-  set('helvetica', 'bold', 8, C.tealDeep)
-  doc.setCharSpace(0.5)
-  doc.text('NEXT STEP', M + 5, y + 5)
-  doc.setCharSpace(0)
-  let ny = y + 9.5
-  nl.forEach((l) => { set('helvetica', l.lead ? 'bold' : 'normal', 9.2, C.ink); doc.text(l.t, M + 5, ny); ny += 4.2 })
-  y += nh + 4
+  // ---------- Waiting for approval ----------
+  if (s.approvals?.length) {
+    heading('Waiting for your approval')
+    for (const a of s.approvals) {
+      const body = [
+        `Scope: ${a.scope}`, `You’ll get: ${a.deliverables}`, ...(a.schedule ? [`Schedule: ${a.schedule}`] : []),
+        `Standard minutes, including testing: ${a.standard_minutes}. From your included time: ${a.included_minutes}. Additional work: ${a.additional_minutes} minutes.`,
+        ...(a.additional_minutes > 0 ? [`Additional price: ${a.price_label}. ${a.price_explanation}`] : []),
+        'Plan time is counted in standard minutes. The additional price is a separate quote, not a per minute charge.',
+      ]
+      set('helvetica', 'normal', 8.8, C.inkSoft)
+      const bl = body.flatMap((t) => lines(t, W - 10))
+      const h = 7 + bl.length * 3.9 + 2
+      ensure(h + 2)
+      doc.setFillColor(...rgb('#F7FBFA'))
+      doc.setDrawColor(...rgb(C.teal))
+      doc.setLineWidth(0.3)
+      doc.roundedRect(M, y - 1, W, h, 2, 2, 'FD')
+      set('helvetica', 'bold', 9.5, C.ink)
+      doc.text(a.title, M + 5, y + 3.6)
+      let yy = y + 8
+      set('helvetica', 'normal', 8.8, C.inkSoft)
+      for (const l of bl) { doc.text(l, M + 5, yy); yy += 3.9 }
+      y += h + 2.5
+    }
+  }
+  if (s.approved_work?.length) para(`Approved and in progress: ${s.approved_work.map((a) => `${a.title} (${a.reserved_minutes} plan minutes reserved)`).join('; ')}.`, { size: 8.8, gap: 1.5 })
 
   if (s.notes) para(s.notes, { size: 8.8, gap: 2 })
   para(s.disclaimer, { size: 7.6, color: C.muted, gap: 0 })

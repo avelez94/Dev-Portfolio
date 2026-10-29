@@ -12,6 +12,7 @@
  * Copy rule: no dashes in client facing text.
  */
 import { CHECK_ROWS, DESTINATION_NOTE, issueText } from './issue-catalog'
+import { EXCLUDED_LABEL, estimateProblems, money, type Allowance, type ExcludedReason } from './work'
 
 export type FindingIn = {
   run_id?: string
@@ -39,8 +40,8 @@ export type ModelInput = {
   site: { label: string; url: string }
   /** monthlyPrice is the client's agreed price (null when not recorded), never the advertised one. */
   plan: { id: string; name: string; includedMinutes: number; monthlyPrice: number | null }
-  /** Recorded update or troubleshooting minutes this period; null when not recorded. */
-  minutesUsed: number | null
+  /** The period's work ledger and estimates; null when there is no ledger (old data or a sample without one). */
+  work: WorkIn | null
   period: { start: string; end: string; label: string; range?: string }
   reviewDate: string | null
   scanStatus: string | null
@@ -52,6 +53,33 @@ export type ModelInput = {
   notes: IssueNoteIn[]
   content: Record<string, string | undefined>
 }
+
+export type WorkEntryIn = {
+  client_description: string
+  name: string
+  quantity: number
+  total_minutes: number
+  applied_minutes: number
+  additional_minutes: number
+  excluded_reason: string | null
+  estimate_id?: string | null
+}
+export type EstimateIn = {
+  id: string
+  title: string
+  scope: string
+  deliverables: string
+  schedule: string
+  standard_minutes: number
+  included_minutes: number
+  additional_minutes: number
+  additional_price_cents: number | null
+  price_explanation: string
+  status: string
+  reserved_minutes: number
+}
+/** Allowance as of the report date, plus whether you confirmed every completed task is recorded. */
+export type WorkIn = Allowance & { confirmed: boolean; entries: WorkEntryIn[]; estimates: EstimateIn[] }
 
 export type RowState = 'passed' | 'issue' | 'unverified' | 'fixed'
 export const STATE_LABEL: Record<RowState, string> = { passed: 'Passed', issue: 'Issue found', unverified: 'Not verified', fixed: 'Fixed and verified' }
@@ -232,20 +260,20 @@ export function buildReport(i: ModelInput) {
       : 'Everything agreed for this month was checked and passed.'
 
   const c = i.content
+  const drafts = (i.work?.estimates || []).filter((e) => e.status === 'draft')
   const sendItems = attention.filter((a) => a.kind === 'client_input' && a.note).map((a) => a.note)
-  const approveItems = [...attention.filter((a) => a.kind === 'approval' && a.note).map((a) => a.note), ...(c.proposed_work ? [c.proposed_work] : [])]
-  const estimate = (c.estimate || '').trim()
+  const issueApprovals = attention.filter((a) => a.kind === 'approval' && a.note).map((a) => a.note)
+  const approveItems = [
+    ...issueApprovals,
+    // An issue that already points to this estimate isn't listed twice.
+    ...drafts.filter((e) => !issueApprovals.some((n) => n.toLowerCase().includes(e.title.toLowerCase()))).map((e) => `the estimate for ${e.title.toLowerCase()} (details below)`),
+  ]
   const nextStep = {
     send: sendItems,
     approve: approveItems,
-    estimate,
-    // Required whenever a report asks for payment beyond the plan (see modelProblems).
-    estimate_scope: estimate ? (c.estimate_scope || '').trim() : '',
-    estimate_allowance: estimate && i.plan.includedMinutes ? (c.estimate_allowance || '').trim() : '',
     none: !sendItems.length && !approveItems.length,
     more: c.next_steps || '',
   }
-
   const scopeParts = [`${i.pages.length} page${i.pages.length === 1 ? '' : 's'}`]
   for (const kind of ['booking', 'checkout', 'contact', 'other']) {
     const n = i.destinations.filter((d) => (d.kind || 'other') === kind).length
@@ -276,6 +304,13 @@ export function buildReport(i: ModelInput) {
     not_applicable: notApplicable,
     not_verified: notVerified,
     work: { fixes: (c.fixes || '').trim(), investigated: (c.investigated || '').trim(), outstanding: (c.outstanding || '').trim() },
+    work_done: workDone(i.work),
+    approvals: drafts.map((e) => ({
+      title: e.title, scope: e.scope, deliverables: e.deliverables, schedule: e.schedule,
+      standard_minutes: e.standard_minutes, included_minutes: e.included_minutes, additional_minutes: e.additional_minutes,
+      price_label: e.additional_minutes > 0 ? money(e.additional_price_cents) : 'None', price_explanation: e.price_explanation,
+    })),
+    approved_work: (i.work?.estimates || []).filter((e) => e.status === 'approved').map((e) => ({ title: e.title, reserved_minutes: e.reserved_minutes, standard_minutes: e.standard_minutes })),
     next_step: nextStep,
     notes: (c.client_notes || '').trim(),
     plan_box: planBox(i),
@@ -288,34 +323,55 @@ export type PlanBox = ReturnType<typeof planBox>
 
 const mins = (n: number) => `${n} minute${n === 1 ? '' : 's'}`
 
+/** Completed work from the ledger, in the client's words, with the standard minutes it applied. */
+function workDone(w: WorkIn | null) {
+  return (w?.entries || []).map((e) => {
+    const what = `${e.client_description}${e.quantity > 1 ? ` (quantity ${e.quantity})` : ''}`
+    const minutesText = e.excluded_reason
+      ? `${mins(e.total_minutes)}, ${EXCLUDED_LABEL[e.excluded_reason as ExcludedReason]?.toLowerCase() || 'not counted'}`
+      : e.additional_minutes
+        ? `${mins(e.applied_minutes)} of plan time, ${mins(e.additional_minutes)} as approved additional work`
+        : `${mins(e.total_minutes)} of plan time`
+    return { what, minutes: minutesText, counted: !e.excluded_reason }
+  })
+}
+
 /**
- * The plan and allowance block shown near the top of every report and email.
- * Uses the client's agreed price and the time recorded for this period only;
- * nothing is assumed when either is missing.
+ * The plan and allowance block near the top of every report and email: the
+ * client's agreed price, the billing period, and plan time in standard
+ * minutes from the ledger. When you haven't confirmed the period's work
+ * records, it says so instead of showing an available balance.
  */
-export function planBox(i: Pick<ModelInput, 'plan' | 'minutesUsed' | 'period'>) {
+export function planBox(i: Pick<ModelInput, 'plan' | 'work' | 'period' | 'reviewDate'>) {
   const included = i.plan.includedMinutes
   const price = i.plan.monthlyPrice
-  const used = included ? i.minutesUsed : null
-  const remaining = used === null ? null : Math.max(0, included - used)
-  const over = used === null ? 0 : Math.max(0, used - included)
+  const w = i.work
+  const asOf = i.reviewDate ? i.reviewDate.replace(/^\w+, /, '').replace(/, \d{4}$/, '') : ''
+  const rows: [string, string][] = []
+  let status = ''
+  if (included) {
+    if (!w) {
+      rows.push(['Plan time used', 'Not recorded'])
+      status = 'Plan time records aren’t available for this period.'
+    } else {
+      rows.push(['Plan time used', `${w.applied} standard minutes`])
+      if (w.reserved > 0) rows.push(['Reserved', `${mins(w.reserved)} for approved work`])
+      rows.push(['Available', w.confirmed ? `${mins(Math.max(w.available, 0))}${asOf ? ` as of ${asOf}` : ''}` : 'Not confirmed yet'])
+      if (!w.confirmed) status = 'Work records for this period aren’t complete yet, so the time available may change.'
+    }
+  }
   return {
     name: i.plan.name,
     price,
     price_label: price === null ? 'Not recorded' : `$${price.toLocaleString('en-US')}`,
     period_label: i.period.range || i.period.label,
     included_minutes: included,
-    included_label: included ? `${mins(included)} for updates or troubleshooting` : 'No update or troubleshooting time included',
-    used,
-    remaining,
-    usage_label: !included
-      ? 'Updates and fixes are quoted separately.'
-      : used === null
-        ? 'Time usage not recorded'
-        : `${mins(used)} used, ${mins(remaining!)} remaining${over ? ` (${mins(over)} beyond your included time)` : ''}`,
+    included_label: included ? `${mins(included)}, flexible` : 'None. Work is quoted separately.',
+    rows,
+    status,
     rules: included
-      ? ['Monthly checks and preparing this report don’t use your included time.', 'Unused time doesn’t roll over to the next period.']
-      : ['Monthly checks and this report are included in your plan.', 'Updates and fixes aren’t included. Each one is quoted separately, and nothing starts until you approve it.'],
+      ? ['Plan time is counted in standard minutes from an agreed task schedule, including testing, not with a stopwatch.', 'Monthly checks, this report, and covered defect fixes don’t use it, and unused time doesn’t roll over.']
+      : ['Monthly checks and this report are included. Any work on your site is quoted separately and starts only after you approve.'],
   }
 }
 
@@ -333,15 +389,12 @@ export function modelProblems(i: ModelInput, s: Snapshot): string[] {
     if (n?.resolution === 'not_an_issue' && !(n.internal_note || '').trim()) p.push(`Add a private note explaining why “${g.title}” isn’t an issue.`)
   }
   if (i.plan.monthlyPrice === null) p.push('Record the client’s agreed monthly price for this period under Plan and time.')
-  // Any request for payment beyond the plan has to say why it's outside the plan and how included time applies.
-  const c = i.content
-  const estimate = (c.estimate || '').trim()
-  const askedMoney = /\$\s?\d/.test([...s.next_step.approve, s.next_step.more, s.work.outstanding, s.notes].join(' '))
-  if (askedMoney && !estimate) p.push('A price appears outside the Estimate field. Put it in Estimate so it carries the required explanation.')
-  if (estimate) {
-    if (!s.next_step.approve.length) p.push('The estimate needs the work it covers: fill in “Additional work needing approval” or mark an issue as needing approval.')
-    if (!(c.estimate_scope || '').trim()) p.push('Explain why the estimated work is outside the included care scope.')
-    if (i.plan.includedMinutes && !(c.estimate_allowance || '').trim()) p.push('Say whether the remaining included time applies to the estimate.')
+  // Prices belong in an estimate, which shows the minutes and how the price was calculated.
+  if (/\$\s?\d/.test([...s.next_step.approve, s.next_step.more, s.work.outstanding, s.work.fixes, s.work.investigated, s.notes, s.summary].join(' '))) {
+    p.push('A price appears in the report text. Put it in an estimate instead, so the client sees the minutes and how the price was calculated.')
+  }
+  for (const e of (i.work?.estimates || []).filter((x) => x.status === 'draft')) {
+    for (const q of estimateProblems(e, null, i.plan.includedMinutes > 0)) p.push(`Estimate “${e.title}”: ${q}`)
   }
   if (s.summary && (s.counts.issues || s.counts.unverified) && ALL_CLEAR.test(s.summary)) {
     p.push('The summary reads as if everything is fine, but some checks found issues or weren’t verified. Adjust the wording.')
@@ -355,14 +408,26 @@ export function nextStepLines(s: Snapshot): string[] {
   const out: string[] = []
   if (n.none) out.push('No action needed.')
   for (const t of n.send) out.push(`Please send: ${t}`)
-  for (const t of n.approve) out.push(`Approval needed for: ${t}`)
-  if (n.estimate && n.approve.length) {
-    out.push(`Estimate: ${n.estimate}. Nothing starts until you approve it.`)
-    if (n.estimate_scope) out.push(`Why it’s outside your plan: ${n.estimate_scope}`)
-    if (n.estimate_allowance) out.push(`Your included time: ${n.estimate_allowance}`)
-  }
+  for (const t of n.approve) out.push(`Approval needed for ${t}. Nothing starts until you approve.`)
   if (n.more) out.push(n.more)
   return out
+}
+
+/**
+ * Reports approved before the work ledger stored an older plan block (one usage
+ * line, no minute rows). Approved and sent snapshots are never rewritten, so
+ * every output reads the plan block through this.
+ */
+export function normalizePlanBox(b: PlanBox | (Partial<PlanBox> & { usage_label?: string }) | null | undefined): PlanBox | null {
+  if (!b) return null
+  if (Array.isArray(b.rows)) return b as PlanBox
+  const legacy = b as Partial<PlanBox> & { usage_label?: string; included_minutes?: number }
+  return {
+    ...(legacy as PlanBox),
+    rows: legacy.included_minutes ? [['Time this period', legacy.usage_label || 'Not recorded']] : [],
+    status: '',
+    rules: legacy.rules || [],
+  }
 }
 
 /** Plan facts in display order, shared by every output. */
@@ -370,7 +435,7 @@ export function planFacts(b: PlanBox): [string, string][] {
   return [
     ['Plan', b.name],
     ['Monthly plan price', b.price_label],
-    ['Service period', b.period_label],
-    ['Included time', b.included_minutes ? b.included_label : 'None. Updates and fixes are quoted separately.'],
+    ['Billing period', b.period_label],
+    ['Included time', b.included_label],
   ]
 }

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
+import WorkPanel from './WorkPanel'
 import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus } from './ui'
 import { SitesTable } from './CareApp'
 
@@ -296,6 +297,11 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             })}</tbody>
           </table></div>
         )}
+      </section>
+
+      <section className="care-panel" aria-labelledby="work-h">
+        <h2 id="work-h" style={{ marginBottom: 10 }}>Plan time and work</h2>
+        <WorkPanel siteId={id} tz={tz} />
       </section>
 
       {!ended && <SiteEditor go={go} site={site} onSaved={reload} />}

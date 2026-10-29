@@ -18,6 +18,8 @@ import { diffFindings, type FindingRow } from '@/lib/care/findings'
 import { checkUrlResolves } from '@/lib/care/url-safety'
 import { validTimeZone, zonedToUtc, localDate } from '@/lib/care/schedule'
 import { isPlanId, plan as planInfo, priceIdFor, PLAN_IDS } from '@/lib/care/plans'
+import * as work from '@/lib/care/work-server'
+import { CARE_TERMS_VERSION } from '@/content/care-terms'
 
 export const maxDuration = 60
 
@@ -59,7 +61,8 @@ async function overview() {
   const failedEvents = (await db.from('care_stripe_events').select('id, type, error, received_at, attempts').eq('status', 'failed').order('received_at', { ascending: false }).limit(20)).data || []
   const stuckSends = (await db.from('care_report_sends').select('id, report_id, recipient_email, created_at, status, error').in('status', ['sending', 'failed']).order('created_at', { ascending: false }).limit(20)).data || []
   const settings = await getSettings()
-  return ok({ sites, clients, cycles, reports, failedRuns, activeRuns, failedNotes, failedEvents, stuckSends, timezone: settings.timezone, policyApproved: !!settings.policy_approved_at })
+  const workFlags = await work.workFlags()
+  return ok({ sites, clients, cycles, reports, failedRuns, activeRuns, failedNotes, failedEvents, stuckSends, workFlags, timezone: settings.timezone, policyApproved: !!settings.policy_approved_at })
 }
 
 /* ------------------------------ settings ------------------------------ */
@@ -151,7 +154,8 @@ async function createSite({ body }: Ctx) {
   if (errors.length) throw new CareError(errors.join(' '), 422)
   await assertClient(value.client_id)
   await assertSitePricing(value)
-  const ins = await db.from('care_sites').insert({ ...value, enrollment_status: 'draft' }).select('*').single()
+  // New enrollments use the current care agreement terms (flexible plan time).
+  const ins = await db.from('care_sites').insert({ ...value, enrollment_status: 'draft', care_terms_version: CARE_TERMS_VERSION, care_terms_note: 'Enrolled under the current care terms', care_terms_reviewed_at: new Date().toISOString() }).select('*').single()
   const site = must(ins, 'Website')
   await logActivity({ site_id: site.id, actor: ACTOR, action: 'enrollment_created', detail: { plan: value.plan } })
   return ok({ site }, 201)
@@ -465,6 +469,29 @@ async function activity({ req }: Ctx) {
   return ok({ activity: (await q).data || [] })
 }
 
+/* ------------------------------ plan time: catalog, ledger, estimates ------------------------------ */
+
+const presetsList = async () => ok({ presets: await work.listPresets() })
+const presetCreate = async ({ body }: Ctx) => ok({ preset: await work.createPreset(body, ACTOR) }, 201)
+const presetUpdate = async ({ seg, body }: Ctx) => ok({ preset: await work.updatePreset(id(seg[1]), body, ACTOR) })
+const presetConfirm = async ({ seg, body }: Ctx) => ok({ preset: await work.confirmPreset(id(seg[1]), Number(body.version), ACTOR) })
+const siteWork = async ({ seg }: Ctx) => ok(await work.siteWork(id(seg[1])))
+const cycleWork = async ({ seg }: Ctx) => {
+  const cycle = must(await db.from('care_cycles').select('site_id').eq('id', id(seg[1])).single(), 'Billing period')
+  const site = await work.siteWork(cycle.site_id)
+  return ok({ ...site, ledger: await work.ledgerFor(id(seg[1])) })
+}
+const recordWork = async ({ seg, body }: Ctx) => ok(await work.recordWork(id(seg[1]), body, ACTOR))
+const voidWork = async ({ body }: Ctx) => ok(await work.voidWork(body.entries, body.reason, ACTOR))
+const workLog = async ({ seg, body }: Ctx) => { await work.confirmWorkLog(id(seg[1]), body.confirmed === true, ACTOR); return ok({ ok: true }) }
+const estimateCreate = async ({ seg, body }: Ctx) => ok({ estimate: await work.createEstimate(id(seg[1]), body, ACTOR) }, 201)
+const estimateUpdate = async ({ seg, body }: Ctx) => ok({ estimate: await work.updateEstimate(id(seg[1]), body, ACTOR) })
+const estimateApprove = async ({ seg, body }: Ctx) => ok(await work.approveEstimate(id(seg[1]), body.note, ACTOR))
+const estimateClose = async ({ seg, body }: Ctx) => ok(await work.closeEstimate(id(seg[1]), body.status, body.reason, ACTOR))
+const estimateCarry = async ({ seg }: Ctx) => ok({ estimate: await work.carryEstimate(id(seg[1]), ACTOR) }, 201)
+const estimateInvoice = async ({ seg, body }: Ctx) => ok(await work.invoiceEstimate(id(seg[1]), body, ACTOR))
+const termsReview = async ({ seg, body }: Ctx) => { await work.reviewTerms(id(seg[1]), body.note, ACTOR); return ok({ ok: true }) }
+
 /* ------------------------------ router ------------------------------ */
 
 const routes: [string, string, Handler][] = [
@@ -508,6 +535,22 @@ const routes: [string, string, Handler][] = [
   ['POST', 'sends/:id/mark-failed', markSend],
   ['POST', 'notifications/:id/retry', retryNotification],
   ['GET', 'evidence', evidence],
+  ['GET', 'presets', presetsList],
+  ['POST', 'presets', presetCreate],
+  ['PUT', 'presets/:id', presetUpdate],
+  ['POST', 'presets/:id/confirm', presetConfirm],
+  ['GET', 'sites/:id/work', siteWork],
+  ['POST', 'sites/:id/terms', termsReview],
+  ['POST', 'sites/:id/estimates', estimateCreate],
+  ['GET', 'cycles/:id/work', cycleWork],
+  ['POST', 'cycles/:id/work', recordWork],
+  ['PUT', 'cycles/:id/work-log', workLog],
+  ['POST', 'work/void', voidWork],
+  ['PUT', 'estimates/:id', estimateUpdate],
+  ['POST', 'estimates/:id/approve', estimateApprove],
+  ['POST', 'estimates/:id/close', estimateClose],
+  ['POST', 'estimates/:id/carry', estimateCarry],
+  ['POST', 'estimates/:id/invoice', estimateInvoice],
 ]
 
 async function dispatch(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {

@@ -98,7 +98,7 @@ test('leaving a page with unsaved input asks first, and staying keeps the input'
   page.removeAllListeners('dialog')
   let asked = 0
   let answer = false
-  page.on('dialog', (d) => { asked++; answer ? d.accept() : d.dismiss() })
+  page.on('dialog', (d) => { asked++; if (answer) d.accept(); else d.dismiss() })
   await page.goto(BASE + '/admin/pipeline?client=cl-a')
   await details(page).getByRole('button', { name: 'Create Invoice' }).click()
   await details(page).getByRole('button', { name: 'Fixed Fee Invoice' }).click()

@@ -4,7 +4,7 @@
  * match exactly what clients receive. Nothing here reads client data.
  * Copy rule: no dashes in client facing text.
  */
-import { buildReport, type FindingIn, type ModelInput } from '@/lib/care/report-model'
+import { buildReport, type EstimateIn, type FindingIn, type ModelInput, type WorkEntryIn, type WorkIn } from '@/lib/care/report-model'
 import { plan } from '@/lib/care/plans'
 
 const pass = (check_key: string, url: string, viewport: string | null = 'desktop'): FindingIn => ({ check_key, status: 'passed', url, viewport, issue_code: 'ok' })
@@ -13,14 +13,23 @@ const pageSet = (url: string) => [
   pass('images', url, 'desktop'), pass('images', url, 'mobile'), pass('overflow', url, 'desktop'), pass('overflow', url, 'mobile'),
 ]
 
-function base(p: Pick<ModelInput, 'client' | 'recipient' | 'site' | 'pages' | 'destinations' | 'minutesUsed'> & { planId: 'essential' | 'business' | 'premium' }): Omit<ModelInput, 'findings' | 'earlierFindings' | 'manual' | 'notes' | 'content'> {
+const entry = (client_description: string, minutes: number, name = client_description): WorkEntryIn => ({ client_description, name, quantity: 1, total_minutes: minutes, applied_minutes: minutes, additional_minutes: 0, excluded_reason: null })
+
+/** A confirmed work ledger: included time minus recorded work and approved reservations. */
+function ledger(included: number, entries: WorkEntryIn[], estimates: EstimateIn[] = []): WorkIn {
+  const applied = entries.reduce((s, e) => s + e.applied_minutes, 0)
+  const reserved = estimates.filter((e) => e.status === 'approved').reduce((s, e) => s + e.reserved_minutes, 0)
+  return { included, applied, reserved, available: included - applied - reserved, confirmed: true, entries, estimates }
+}
+
+function base(p: Pick<ModelInput, 'client' | 'recipient' | 'site' | 'pages' | 'destinations' | 'work'> & { planId: 'essential' | 'business' | 'premium' }): Omit<ModelInput, 'findings' | 'earlierFindings' | 'manual' | 'notes' | 'content'> {
   const pl = plan(p.planId)
   return {
     reportId: 'sample', cycleId: 'sample', version: 1, sample: true,
     client: p.client, recipient: p.recipient, site: p.site, pages: p.pages, destinations: p.destinations,
     // Fictional clients on the current published price.
     plan: { id: pl.id, name: pl.name, includedMinutes: pl.includedMinutes, monthlyPrice: pl.monthly },
-    minutesUsed: p.minutesUsed,
+    work: p.work,
     period: { start: 'Thu, October 1, 2026', end: 'Sun, November 1, 2026', label: 'October 2026', range: 'October 1 to November 1, 2026' },
     reviewDate: 'Thu, October 2, 2026',
     scanStatus: 'succeeded',
@@ -45,7 +54,8 @@ const bakery = buildReport({
     site: { label: 'Harbor Street Bakery', url: 'https://www.example.com' },
     pages: bakeryPages,
     destinations: [{ label: 'Catering order form', url: 'https://orders.example.com/catering', kind: 'booking' }],
-    minutesUsed: 10,
+    // Standard minutes from the task schedule: hours or contact details, 8 work + 2 testing.
+    work: ledger(30, [{ ...entry('Updated your holiday hours on the home and visit pages.', 10, 'Business hours or contact details') }]),
   }),
   findings: [
     ...bakeryPages.flatMap((p) => pageSet(p.url)),
@@ -62,7 +72,6 @@ const bakery = buildReport({
   notes: [],
   content: {
     summary: 'Your site is in good shape this month. Every agreed check passed, and the contact form test message reached your inbox.',
-    fixes: 'Updated the holiday hours on the home and visit pages (10 minutes of your included time).',
   },
 })
 
@@ -85,7 +94,15 @@ const physio = buildReport({
     site: { label: 'Northside Physio', url: 'https://physio.example.com' },
     pages: physioPages,
     destinations: [{ label: 'Online booking', url: 'https://booking.example.com/northside', kind: 'booking' }],
-    minutesUsed: 5,
+    work: ledger(30, [entry('Fixed a broken link on the services page that pointed to the old pricing page.', 5, 'Troubleshoot and fix a broken link')], [{
+      id: 'sample-estimate', title: 'Team section rebuild', status: 'draft', reserved_minutes: 0,
+      scope: 'Rebuild the team section so photos and names resize to fit phone screens, without changing the content.',
+      deliverables: 'A responsive team section, checked on phones, tablets, and desktop.',
+      schedule: 'Done within a week of your approval.',
+      standard_minutes: 90, included_minutes: 25, additional_minutes: 65,
+      // Illustrative fixed quote for this fictional sample; real prices are set for each request.
+      additional_price_cents: 11000, price_explanation: 'A fixed quote for the 65 minutes beyond your included time.',
+    }]),
   }),
   findings: [
     ...physioPages.flatMap((p) => pageSet(p.url).filter((f) => !(p.url === team && f.check_key === 'overflow' && f.viewport === 'mobile'))),
@@ -101,17 +118,13 @@ const physio = buildReport({
     { item_id: 'booking', label: 'Booking shows open times and the steps make sense', status: 'not_checked', reason: 'The booking service was unavailable during my manual review. I’ll recheck next week.' },
   ],
   notes: [
-    { group_key: 'overflow:overflow', resolution: 'approval', client_note: 'Rebuilding the team section so photos resize on phones' },
+    { group_key: 'overflow:overflow', resolution: 'approval', client_note: 'the team section rebuild (estimate below)' },
     { group_key: 'internal_links:link_broken', resolution: 'fixed', verification_note: 'Rechecked automatically: no longer found.', client_note: '' },
     // Crawler blocking, not a confirmed visitor problem: stays under "Not verified".
     { group_key: 'destination:blocked_by_site', resolution: null, client_note: 'The automated check was blocked. The booking service was also unavailable during my manual review, so I couldn’t verify booking. I’ll recheck next week.' },
   ],
   content: {
     summary: 'One issue needs your approval: the team page doesn’t fit phone screens. I couldn’t verify booking this month: the automated check was blocked, and the booking service was unavailable during my manual review. I’ll recheck next week.',
-    fixes: 'Fixed a broken link on the services page that pointed to the old pricing page (5 minutes of your included time).',
-    estimate: 'about 1.5 hours, $150',
-    estimate_scope: 'Rebuilding the team section is a larger fix, not a small update or quick troubleshooting, and your plan estimates larger fixes separately.',
-    estimate_allowance: 'This estimate doesn’t use your remaining 25 minutes. They stay available for small updates until this period ends on November 1.',
   },
 })
 

@@ -5,7 +5,7 @@
  * Copy rule: no dashes in client facing text.
  */
 import { COLORS as C, FONTS } from '@/lib/brand'
-import { STATE_LABEL, TONE, nextStepLines, planFacts, type Snapshot, type RowState, type PlanBox } from '@/lib/care/report-model'
+import { STATE_LABEL, TONE, nextStepLines, normalizePlanBox, planFacts, type Snapshot, type RowState, type PlanBox } from '@/lib/care/report-model'
 import css from './ReportView.module.css'
 
 export function StateIcon({ state, size = 18 }: { state: RowState; size?: number }) {
@@ -51,7 +51,7 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
         {[s.recipient.name, s.client.business].filter(Boolean).join(', ')}{s.recipient.name || s.client.business ? ' • ' : ''}{s.site.url}
       </p>
       <p style={{ margin: '2px 0 0', fontSize: 14, color: C.inkSoft }}>Reviewed {s.review_date || 'not yet'} • Checked: {s.scope.line}</p>
-      {s.plan_box && <PlanSummary b={s.plan_box} />}
+      {normalizePlanBox(s.plan_box) && <PlanSummary b={normalizePlanBox(s.plan_box)!} />}
 
       <p style={{ fontFamily: FONTS.display, fontWeight: 700, fontSize: 19, margin: '16px 0 10px', lineHeight: 1.3 }}>{s.headline}</p>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
@@ -63,6 +63,10 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
           </li>
         ))}
       </ul>
+      <section aria-label="Your next step" style={{ marginTop: 12, background: C.tealSoft, border: `1.5px solid ${C.ink}`, borderRadius: 14, padding: '12px 14px' }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.tealDeep }}>Your next step</p>
+        {next.map((t, i) => <p key={i} style={{ margin: '4px 0 0', fontSize: i === 0 ? 15 : 14, fontWeight: i === 0 ? 700 : 400 }}>{t}</p>)}
+      </section>
       {s.summary && <p style={{ margin: '14px 0 0', fontSize: 15, whiteSpace: 'pre-wrap' }}>{s.summary}</p>}
 
       {s.attention.length > 0 && (
@@ -125,41 +129,68 @@ export default function ReportView({ s, sampleLabel }: { s: Snapshot; sampleLabe
         </section>
       )}
 
-      {(s.work.fixes || s.work.investigated || s.work.outstanding) && (
-        <section aria-label="What I did">
-          <h4 style={sec}>What I did</h4>
-          {s.work.fixes && <p style={{ margin: '0 0 4px', fontSize: 14, whiteSpace: 'pre-wrap' }}><strong>Fixed:</strong> {s.work.fixes}</p>}
+      {(s.work_done?.length > 0 || s.work.fixes || s.work.investigated || s.work.outstanding) && (
+        <section aria-label="Work completed">
+          <h4 style={sec}>Work completed</h4>
+          {s.work_done?.length > 0 && (
+            <ul style={{ margin: '0 0 6px', paddingLeft: 20, fontSize: 14 }}>
+              {s.work_done.map((w, i) => <li key={i}>{w.what} <span style={{ color: C.inkSoft }}>({w.minutes})</span></li>)}
+            </ul>
+          )}
+          {s.work.fixes && <p style={{ margin: '0 0 4px', fontSize: 14, whiteSpace: 'pre-wrap' }}>{s.work.fixes}</p>}
           {s.work.investigated && <p style={{ margin: '0 0 4px', fontSize: 14, whiteSpace: 'pre-wrap' }}><strong>Looked into:</strong> {s.work.investigated}</p>}
           {s.work.outstanding && <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap' }}><strong>Still open:</strong> {s.work.outstanding}</p>}
         </section>
       )}
 
-      <section aria-label="Next step" style={{ marginTop: 18, background: C.tealSoft, border: `1.5px solid ${C.ink}`, borderRadius: 14, padding: '12px 14px' }}>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.tealDeep }}>Next step</p>
-        {next.map((t, i) => <p key={i} style={{ margin: '4px 0 0', fontSize: i === 0 ? 15 : 14, fontWeight: i === 0 ? 700 : 400 }}>{t}</p>)}
-      </section>
+      {s.approvals?.length > 0 && (
+        <section aria-label="Waiting for your approval">
+          <h4 style={sec}>Waiting for your approval</h4>
+          {s.approvals.map((a, i) => <EstimateCard key={i} a={a} />)}
+        </section>
+      )}
+      {s.approved_work?.length > 0 && (
+        <p style={{ margin: '10px 0 0', fontSize: 14 }}><strong>Approved and in progress:</strong> {s.approved_work.map((a) => `${a.title} (${a.reserved_minutes} plan minutes reserved)`).join('; ')}.</p>
+      )}
+
       {s.notes && <p style={{ margin: '12px 0 0', fontSize: 14, whiteSpace: 'pre-wrap' }}>{s.notes}</p>}
       <p style={{ margin: '14px 0 0', fontSize: 12.5, color: C.inkSoft }}>{s.disclaimer}</p>
     </article>
   )
 }
 
-/** Plan, price, period, and included time, near the top of the report. */
+/** Plan, price, period, and plan time in standard minutes, near the top of the report. */
 function PlanSummary({ b }: { b: PlanBox }) {
+  const fact = (k: string, v: string) => (
+    <div key={k}>
+      <dt style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.tealDeep }}>{k}</dt>
+      <dd style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: C.ink }}>{v}</dd>
+    </div>
+  )
   return (
     <section aria-label="Your plan" style={{ margin: '14px 0 0', background: C.cream, border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.teal}`, borderRadius: 12, padding: '12px 14px' }}>
-      <dl className={css.facts}>
-        {planFacts(b).map(([k, v]) => (
-          <div key={k}>
-            <dt style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.tealDeep }}>{k}</dt>
-            <dd style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: C.ink }}>{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {b.included_minutes > 0 && (
-        <p style={{ margin: '10px 0 0', fontSize: 14.5, color: C.ink }}><strong>Time this period:</strong> {b.usage_label}</p>
-      )}
-      <p style={{ margin: '4px 0 0', fontSize: 13.5, color: C.inkSoft }}>{b.rules.join(' ')}</p>
+      <dl className={css.facts}>{planFacts(b).map(([k, v]) => fact(k, v))}</dl>
+      {b.rows.length > 0 && <dl className={css.facts} style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>{b.rows.map(([k, v]) => fact(k, v))}</dl>}
+      {b.status && <p style={{ margin: '8px 0 0', fontSize: 13.5, color: C.ink, fontWeight: 700 }}>{b.status}</p>}
+      <p style={{ margin: '6px 0 0', fontSize: 13.5, color: C.inkSoft }}>{b.rules.join(' ')}</p>
     </section>
+  )
+}
+
+/** One estimate waiting for approval: scope, minutes, and any additional price with how it was set. */
+function EstimateCard({ a }: { a: Snapshot['approvals'][number] }) {
+  const row = (k: string, v: string) => <p style={{ margin: '2px 0 0', fontSize: 14 }}><strong>{k}:</strong> {v}</p>
+  return (
+    <div style={{ background: '#F7FBFA', border: `1.5px solid ${C.teal}`, borderRadius: 14, padding: '12px 14px', marginBottom: 10 }}>
+      <strong style={{ fontSize: 15 }}>{a.title}</strong>
+      {row('Scope', a.scope)}
+      {row('You’ll get', a.deliverables)}
+      {a.schedule && row('Schedule', a.schedule)}
+      {row('Standard minutes, including testing', String(a.standard_minutes))}
+      {row('From your included time', `${a.included_minutes} minutes`)}
+      {row('Additional work', `${a.additional_minutes} minutes`)}
+      {a.additional_minutes > 0 && row('Additional price', `${a.price_label}. ${a.price_explanation}`)}
+      <p style={{ margin: '6px 0 0', fontSize: 12.5, color: C.inkSoft }}>Plan time is counted in standard minutes. The additional price is a separate quote, not a per minute charge. Nothing starts until you approve.</p>
+    </div>
   )
 }

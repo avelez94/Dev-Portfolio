@@ -109,8 +109,6 @@ create table if not exists public.care_cycles (
   currency text,
   -- Agreed monthly price for this period, copied from the website when the cycle is created.
   agreed_price int check (agreed_price is null or agreed_price between 0 and 100000),
-  -- Recorded update or troubleshooting time for this period. null = not recorded.
-  minutes_used int check (minutes_used is null or minutes_used between 0 and 1440),
   scan_after timestamptz,
   review_start_at timestamptz,
   review_due_at timestamptz not null,
@@ -420,7 +418,6 @@ end $$;
 -- Columns added after the first local test build; safe on a database that already has the tables.
 alter table public.care_sites add column if not exists agreed_monthly_price int check (agreed_monthly_price is null or agreed_monthly_price between 0 and 100000);
 alter table public.care_cycles add column if not exists agreed_price int check (agreed_price is null or agreed_price between 0 and 100000);
-alter table public.care_cycles add column if not exists minutes_used int check (minutes_used is null or minutes_used between 0 and 1440);
 
 do $$
 declare t text;

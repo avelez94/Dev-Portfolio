@@ -1,9 +1,10 @@
 {
-  "sourcesFingerprint": "9fd9f06285aba93d785e109280f412a0fd78c44a86435dc53d38f5fd4c56c19c",
-  "pdfSha256": "dca0e5d754b1f28abeda2311c844332fac94f9e47d24a5f06e66aafb4a3236f6",
-  "generatedAt": "2026-10-29T12:16:39.707Z",
+  "sourcesFingerprint": "abb8f9e463f178c377d30a23b5faad0ce72549dc73a989c63b68df64b7c17d81",
+  "pdfSha256": "33a80567d44232173173c4b03d00d5102ad7ab8fdc81640864f8fd2dee238410",
+  "generatedAt": "2026-10-29T15:28:37.222Z",
   "sources": [
     "src/content/offers.ts",
+    "src/content/care-terms.ts",
     "src/content/guide.ts",
     "src/app/pricing-guide/page.tsx",
     "src/app/pricing-guide/guide.module.css"

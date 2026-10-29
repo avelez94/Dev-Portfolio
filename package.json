@@ -11,7 +11,8 @@
     "guide:pdf": "node scripts/pricing-guide.mjs generate",
     "guide:stamp": "node scripts/pricing-guide.mjs stamp",
     "guide:check": "node scripts/pricing-guide.mjs check",
-    "test:admin": "node --test --test-concurrency=1 'tests/admin/*.test.mjs'"
+    "test:admin": "node --test --test-concurrency=1 'tests/admin/*.test.mjs'",
+    "test:care": "node --test --test-concurrency=1 'tests/care/*.test.mjs'"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

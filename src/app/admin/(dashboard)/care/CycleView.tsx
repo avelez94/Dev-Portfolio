@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, STATUS_TEXT, statusTone } from './ui'
 import ReportView from '@/components/care/ReportView'
+import WorkPanel from './WorkPanel'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Go = (n: { view?: 'sites'; site?: string | null; cycle?: string | null }) => void
@@ -12,13 +13,9 @@ const CHECK_TEXT: Record<string, string> = {
 }
 const FIELDS: [string, string, string][] = [
   ['summary', 'Client summary (required)', 'Two or three sentences. Don’t say everything is fine while issues or unverified items remain.'],
-  ['fixes', 'What I fixed', 'Only fixes you made and confirmed.'],
+  ['fixes', 'Other notes on work (optional)', 'Work recorded with Quick add is listed in the report automatically. Use this only for anything else.'],
   ['investigated', 'What I looked into', ''],
   ['outstanding', 'Still open', 'Anything unresolved that isn’t already an issue above.'],
-  ['proposed_work', 'Additional work needing approval', 'Outside the plan. Nothing starts until the client approves.'],
-  ['estimate', 'Estimate (optional)', 'For example: about 2 hours, $200'],
-  ['estimate_scope', 'Why this is outside the included care scope (required with an estimate)', 'Name the plan boundary it falls under, for example a larger fix or a redesign.'],
-  ['estimate_allowance', 'Does the remaining included time apply? (required with an estimate)', 'Say plainly whether any remaining time is used for this work. Nothing is deducted automatically.'],
   ['next_steps', 'Anything else for next month', ''],
   ['client_notes', 'Note for the client', ''],
 ]
@@ -127,8 +124,9 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
         )}
       </Section>
 
-      <Section id="sec-plan" title="Plan and time" open={data.snapshot.plan_box.price === null} counts={<><span className="care-muted">{data.snapshot.plan_box.price === null ? 'Price not recorded' : `${data.snapshot.plan_box.price_label} a month`}</span>{data.plan.includedMinutes > 0 && <Badge tone={data.snapshot.plan_box.used === null ? 'warn' : 'ok'}>{data.snapshot.plan_box.usage_label}</Badge>}</>}>
+      <Section id="sec-plan" title="Plan time and work" open={data.snapshot.plan_box.price === null} counts={<><span className="care-muted">{data.snapshot.plan_box.price === null ? 'Price not recorded' : `${data.snapshot.plan_box.price_label} a month`}</span>{data.snapshot.plan_box.rows.map(([k, v]: [string, string]) => <Badge key={k} tone={v.startsWith('Not') ? 'warn' : 'info'}>{k}: {v}</Badge>)}</>}>
         <PlanTime data={data} reload={reload} />
+        <div style={{ marginTop: 14 }}><WorkPanel cycleId={cycle.id} tz={tz} /></div>
       </Section>
 
       <Section id="sec-text" title="Report text" open={report.status === 'draft' && !report.content?.summary} counts={<span className="care-muted">version {report.version} · {report.status}</span>}>
@@ -355,34 +353,20 @@ function ManualItem({ m, cycleId, reload }: { m: Row; cycleId: string; reload: (
   )
 }
 
-/** The agreed price and the time recorded for this period, both shown at the top of the report. */
+/** The agreed monthly price for this period, shown at the top of the report. Plan time comes from the work ledger below. */
 function PlanTime({ data, reload }: { data: Row; reload: () => void }) {
   const { cycle, site, plan } = data
-  const init = () => ({ agreed_price: cycle.agreed_price ?? '', minutes_used: cycle.minutes_used ?? '' })
-  const [v, setV] = useState<Row>(init)
-  useEffect(() => { setV(init()) }, [cycle.agreed_price, cycle.minutes_used]) // eslint-disable-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  const digits = (x: string) => x.replace(/[^\d]/g, '')
-  const dirty = String(v.agreed_price) !== String(cycle.agreed_price ?? '') || String(v.minutes_used) !== String(cycle.minutes_used ?? '')
-  const box = data.snapshot.plan_box
+  const [price, setPrice] = useState<string>(cycle.agreed_price ?? '')
+  useEffect(() => { setPrice(cycle.agreed_price ?? '') }, [cycle.agreed_price]) // eslint-disable-line react-hooks/set-state-in-effect
+  const dirty = String(price) !== String(cycle.agreed_price ?? '')
   return (
-    <div>
-      <p className="care-muted" style={{ marginBottom: 10 }}>
-        {plan.name}: {box.price === null ? 'agreed price not recorded' : `${box.price_label} a month`}. {plan.includedMinutes ? `${plan.includedMinutes} minutes included for updates or troubleshooting. Checks and the report never use this time, and unused time doesn’t roll over.` : 'No update time included; fixes are quoted separately.'}
-      </p>
-      <div className="care-two">
-        <Field label="Agreed monthly price for this period (whole dollars)" id="pt-price" hint={site.plan === cycle.plan && site.agreed_monthly_price != null ? `Leave empty to use the website’s agreed price ($${site.agreed_monthly_price}).` : 'Required. Use the price this client agreed to, not the advertised one.'}>
-          <input id="pt-price" inputMode="numeric" value={v.agreed_price} onChange={(e) => setV({ ...v, agreed_price: digits(e.target.value) })} placeholder="Not recorded" />
+    <div className="care-row" style={{ alignItems: 'flex-end' }}>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <Field label={`${plan.name}: agreed monthly price for this period (whole dollars)`} id="pt-price" hint={site.plan === cycle.plan && site.agreed_monthly_price != null ? `Leave empty to use the website’s agreed price ($${site.agreed_monthly_price}).` : 'Required. Use the price this client agreed to, not the advertised one.'}>
+          <input id="pt-price" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ''))} placeholder="Not recorded" />
         </Field>
-        {plan.includedMinutes > 0 && (
-          <Field label="Update and troubleshooting time used (minutes)" id="pt-min" hint="Only time spent on updates or fixes. Leave empty if you haven’t recorded it; the report then says “Time usage not recorded”.">
-            <input id="pt-min" inputMode="numeric" value={v.minutes_used} onChange={(e) => setV({ ...v, minutes_used: digits(e.target.value) })} placeholder="Not recorded" />
-          </Field>
-        )}
       </div>
-      <div className="care-row" style={{ marginTop: 6 }}>
-        <Action small tone={dirty ? 'primary' : undefined} disabled={!dirty} label="Save plan and time" run={() => careApi(`cycles/${cycle.id}/plan-time`, { method: 'PUT', json: { agreed_price: v.agreed_price === '' ? null : Number(v.agreed_price), ...(plan.includedMinutes ? { minutes_used: v.minutes_used === '' ? null : Number(v.minutes_used) } : {}) } })} done={reload} />
-        <span className="care-muted">Report shows: {box.usage_label}</span>
-      </div>
+      <Action small tone={dirty ? 'primary' : undefined} disabled={!dirty} label="Save price" run={() => careApi(`cycles/${cycle.id}/plan-time`, { method: 'PUT', json: { agreed_price: price === '' ? null : Number(price) } })} done={reload} />
     </div>
   )
 }
@@ -400,9 +384,9 @@ function ReportEditor({ data, reload }: { data: Row; reload: () => void }) {
       {msg && <div className="care-okmsg" role="status">{msg}</div>}
       <div className="care-grid">
         <div className="care-two">
-          {FIELDS.filter(([k]) => k !== 'estimate_allowance' || data.plan.includedMinutes).map(([k, label, hint]) => (
+          {FIELDS.map(([k, label, hint]) => (
             <Field key={k} label={label} id={`rc-${k}`} hint={hint || undefined}>
-              {k === 'estimate' ? <input id={`rc-${k}`} value={c[k] || ''} onChange={(e) => setC({ ...c, [k]: e.target.value })} /> : <textarea id={`rc-${k}`} value={c[k] || ''} onChange={(e) => setC({ ...c, [k]: e.target.value })} style={{ minHeight: k === 'summary' ? 96 : 70 }} />}
+              {<textarea id={`rc-${k}`} value={c[k] || ''} onChange={(e) => setC({ ...c, [k]: e.target.value })} style={{ minHeight: k === 'summary' ? 96 : 70 }} />}
             </Field>
           ))}
         </div>

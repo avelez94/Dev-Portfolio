@@ -8,10 +8,11 @@
 import { createHash } from 'node:crypto'
 import { db, must, CareError, logActivity, getSettings, putObject, REPORTS_BUCKET, type Row } from './db'
 import { plan as planInfo, type PlanId } from './plans'
-import { buildReport, modelProblems, type Snapshot, type ModelInput, type FindingIn, type ManualIn, type IssueNoteIn } from './report-model'
+import { buildReport, modelProblems, type Snapshot, type ModelInput, type FindingIn, type ManualIn, type IssueNoteIn, type WorkEntryIn, type EstimateIn } from './report-model'
 import { formatDateOnly } from './schedule'
 
-export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'proposed_work', 'estimate', 'estimate_scope', 'estimate_allowance', 'client_notes'] as const
+// Larger work and its prices live in estimates (care_estimates), and completed work in the ledger, not in report text.
+export const CONTENT_FIELDS = ['summary', 'investigated', 'fixes', 'outstanding', 'next_steps', 'client_notes'] as const
 export type ContentField = (typeof CONTENT_FIELDS)[number]
 export type ReportContent = Partial<Record<ContentField, string>>
 
@@ -44,7 +45,11 @@ export async function loadBundle(cycleId: string) {
   const report = must(await db.from('care_reports').select('*').eq('cycle_id', cycleId).single(), 'Report')
   const approvals = (await db.from('care_report_approvals').select('id, version, snapshot_hash, pdf_path, pdf_sha256, approved_by, approved_at, invalidated_at, invalidated_reason').eq('report_id', report.id).order('version', { ascending: false })).data || []
   const sends = (await db.from('care_report_sends').select('*').eq('report_id', report.id).order('created_at', { ascending: false })).data || []
-  return { cycle, site, client, runs, latest, findings, earlierFindings, previousRun, manual, notes, report, approvals, sends }
+  // The period's work ledger and estimates: recorded work appears in the report without retyping it.
+  const workEntries = (await db.from('care_work_entries').select('*').eq('cycle_id', cycleId).is('voided_at', null).order('recorded_at').order('line_no')).data || []
+  const estimates = (await db.from('care_estimates').select('*').eq('cycle_id', cycleId).in('status', ['draft', 'approved', 'completed']).order('created_at')).data || []
+  const allowance = ((await db.rpc('care_period_allowance', { p_cycle: cycleId })).data || [])[0] || null
+  return { cycle, site, client, runs, latest, findings, earlierFindings, previousRun, manual, notes, report, approvals, sends, workEntries, estimates, allowance }
 }
 
 export type Bundle = Awaited<ReturnType<typeof loadBundle>>
@@ -73,8 +78,8 @@ async function modelInput(b: Bundle): Promise<ModelInput> {
     client: { name: b.client?.name || '', business: b.client?.business || '' },
     recipient: { name: b.site.recipient_name || b.client?.name || '', email: b.site.recipient_email || '' },
     site: { label: b.site.label, url: b.site.site_url },
-    plan: { id: p.id, name: p.name, includedMinutes: p.includedMinutes, monthlyPrice: agreedPrice(b) },
-    minutesUsed: typeof b.cycle.minutes_used === 'number' ? b.cycle.minutes_used : null,
+    plan: { id: p.id, name: p.name, includedMinutes: typeof b.cycle.included_minutes === 'number' ? b.cycle.included_minutes : p.includedMinutes, monthlyPrice: agreedPrice(b) },
+    work: b.allowance ? { ...b.allowance, confirmed: !!b.cycle.work_log_confirmed_at, entries: b.workEntries as WorkEntryIn[], estimates: b.estimates as EstimateIn[] } : null,
     period: {
       start: formatDateOnly(b.cycle.period_start, tz), end: formatDateOnly(b.cycle.period_end, tz),
       label: new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'long', year: 'numeric' }).format(new Date(b.cycle.period_start)),
@@ -183,23 +188,17 @@ export async function updateContent(reportId: string, body: { content?: Record<s
   return must(await db.from('care_reports').select('*').eq('id', reportId).single(), 'Report')
 }
 
-/** The agreed price and recorded time for one period. Both appear in the report, so a change clears an approval. */
+/** The agreed price for one period. It appears in the report, so a change clears an approval. */
 export async function updatePlanTime(cycleId: string, body: Record<string, unknown>, actor: string) {
-  const c = must(await db.from('care_cycles').select('id, site_id, agreed_price, minutes_used').eq('id', cycleId).single(), 'Cycle')
-  const num = (v: unknown, max: number, what: string) => {
-    if (v === null || v === '') return null
-    const n = Number(v)
-    if (!Number.isInteger(n) || n < 0 || n > max) throw new CareError(`${what} must be a whole number from 0 to ${max}.`, 422)
-    return n
-  }
-  const patch: Record<string, unknown> = {}
-  if ('agreed_price' in body) patch.agreed_price = num(body.agreed_price, 100000, 'The agreed monthly price')
-  if ('minutes_used' in body) patch.minutes_used = num(body.minutes_used, 1440, 'Recorded minutes')
-  const changed = Object.entries(patch).filter(([k, v]) => v !== (c as Row)[k])
-  if (!changed.length) return
-  await db.from('care_cycles').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', cycleId)
-  await logActivity({ cycle_id: cycleId, site_id: c.site_id, actor, action: 'plan_time_changed', detail: Object.fromEntries(changed) })
-  await invalidateApproval(cycleId, 'The plan price or recorded time changed after approval.', actor)
+  const c = must(await db.from('care_cycles').select('id, site_id, agreed_price').eq('id', cycleId).single(), 'Cycle')
+  if (!('agreed_price' in body)) return
+  const v = body.agreed_price
+  const n = v === null || v === '' ? null : Number(v)
+  if (n !== null && (!Number.isInteger(n) || n < 0 || n > 100000)) throw new CareError('The agreed monthly price must be a whole number from 0 to 100000.', 422)
+  if (n === c.agreed_price) return
+  await db.from('care_cycles').update({ agreed_price: n, updated_at: new Date().toISOString() }).eq('id', cycleId)
+  await logActivity({ cycle_id: cycleId, site_id: c.site_id, actor, action: 'plan_price_changed', detail: { agreed_price: n } })
+  await invalidateApproval(cycleId, 'The plan price changed after approval.', actor)
 }
 
 export async function updateManual(cycleId: string, itemId: string, body: Record<string, unknown>, actor: string) {

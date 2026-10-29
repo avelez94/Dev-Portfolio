@@ -1,4 +1,5 @@
 import 'server-only'
+import { CARE_FLEXIBLE_TIME, CARE_STANDARD_MINUTES } from './care-terms'
 
 /**
  * Offers and policies. SERVER ONLY.
@@ -161,7 +162,7 @@ export const projectTerms = [
 export const costs = [
   { name: 'Project fee', body: 'Design, development, testing, and launch of your site.' },
   { name: 'Provider costs', body: 'Your domain, hosting, booking tools, email delivery, and any other services the project needs.' },
-  { name: 'Optional care fee', body: 'Agreed checks, content updates, and support after launch, if you choose a care plan.' },
+  { name: 'Optional care fee', body: 'Agreed checks, a monthly report, and plan time for website work, if you choose a care plan.' },
 ]
 
 export const costsNote =
@@ -180,7 +181,7 @@ export type CarePlan = {
   name: string
   forWho: string
   monthly: number
-  /** Monthly time for content updates or troubleshooting. null = none included. */
+  /** Included plan time per billing period, usable for any website work. null = none included. */
   minutes: number | null
   items: string[]
   cta: string
@@ -197,7 +198,7 @@ export const carePlans: CarePlan[] = [
     items: [
       'Scheduled monthly checks of agreed pages, contact forms, and booking links, where applicable',
       'A brief monthly health report, reviewed by me',
-      'Content changes and fixes you request are quoted separately',
+      'Work on your site is quoted separately and starts only after you approve',
     ],
     cta: 'Ask About Essential Care',
   },
@@ -205,38 +206,40 @@ export const carePlans: CarePlan[] = [
     id: 'business',
     interest: 'care-business',
     name: 'Business Care',
-    forWho: 'Checks plus time each month for small updates.',
+    forWho: 'Checks plus flexible time each month for website work.',
     monthly: 129,
     minutes: 30,
-    items: ['Everything in Essential Care', 'Up to 30 minutes a month for content updates or troubleshooting'],
+    items: ['Everything in Essential Care', '30 minutes each billing period for any website work: updates, fixes, new pages, or features'],
     cta: 'Ask About Business Care',
   },
   {
     id: 'premium',
     interest: 'care-premium',
     name: 'Premium Care',
-    forWho: 'Checks plus more time for sites that change often.',
+    forWho: 'Checks plus more flexible time for sites that change often.',
     monthly: 249,
     minutes: 90,
-    items: ['Everything in Essential Care', 'Up to 90 minutes a month for content updates or troubleshooting'],
+    items: ['Everything in Essential Care', '90 minutes each billing period for any website work: updates, fixes, new pages, or features'],
     cta: 'Ask About Premium Care',
   },
 ]
 
+/** What included plan time can go toward (approved flexible time policy). */
 export const updateExamples = [
-  'Changing business hours or contact details',
-  'Replacing an existing photo',
-  'Updating posted prices',
-  'Editing existing text or links',
+  'Updating hours, contact details, prices, text, or links',
+  'Replacing photos or documents you send',
+  'Fixing something that stopped working',
+  'Adding a new page or a new feature',
+  'Part of a larger project, with an estimate for the rest',
 ]
 
 export const careBoundaries = [
-  'For 30 days after launch, defects in the work I delivered are fixed without using any care time.',
-  'Included time renews each month and doesn’t roll over.',
-  'Troubleshooting and diagnosis count toward your included time.',
-  'Larger fixes are estimated, and you approve them before any extra work begins.',
-  'New pages, new features, redesigns, large content changes, and emergency recovery are quoted separately.',
-  'Hosting, domains, provider subscriptions, and transaction fees are separate.',
+  CARE_FLEXIBLE_TIME,
+  'Work is counted in standard minutes from an agreed schedule of common tasks, including testing, not with a stopwatch.',
+  'Monthly checks, your report, and defects covered by the 30 day launch guarantee don’t use plan time.',
+  'Included time renews each billing period and doesn’t roll over.',
+  'Any additional cost needs your approval before that work starts. Nothing is charged automatically.',
+  'Hosting, domains, subscriptions, licenses, and other provider costs are separate.',
   'There’s no round the clock emergency service or guaranteed fix deadline.',
   'Care plans are optional.',
 ]
@@ -257,7 +260,7 @@ export const careUpdatesNote =
 export const careBenefits = [
   { title: 'Monthly website checks', body: 'The pages, forms, and booking links we agree on get checked every month.' },
   { title: 'A monthly health report', body: 'A clear report each month, reviewed by me: what was checked, what needs attention, and what I fixed.' },
-  { title: 'Time for updates', body: 'Business and Premium Care include monthly time for small changes and troubleshooting.' },
+  { title: 'Flexible plan time', body: 'Business and Premium Care include time each month for any website work, counted in standard minutes.' },
   { title: 'Approval first', body: 'Anything beyond your plan is estimated first, and nothing starts until you approve it.' },
 ]
 
@@ -315,5 +318,32 @@ export const projectFaqs: Faq[] = [
     a: approved(
       'Ownership of the completed website and custom work created for your project transfers to you once final payment is received and handoff is complete. Until then, that work remains my property. Third party software, fonts, images, and services remain subject to their respective licenses and terms.'
     ),
+  },
+]
+
+/* ------------------------------------------------------------------ */
+/* Website Care FAQs (approved flexible time policy, November 2026)     */
+/* ------------------------------------------------------------------ */
+
+export const careFaqs: Faq[] = [
+  {
+    q: 'What can I use my included time for?',
+    a: approved('Any website work: updates, fixes, new pages, or new features. For larger requests, I’ll explain how your available time applies and quote any additional work before we begin.'),
+  },
+  {
+    q: 'How is the time counted?',
+    a: approved(CARE_STANDARD_MINUTES + ' Your monthly report shows the plan time used, anything reserved for approved work, and what’s still available.'),
+  },
+  {
+    q: 'What if a request needs more time than I have?',
+    a: approved('You get an estimate first: the scope, the standard minutes it needs, how much of your available time applies, and the price of any additional work. Nothing beyond your included time starts until you approve it, and a change in scope gets a revised estimate.'),
+  },
+  {
+    q: 'Does unused time carry over?',
+    a: approved('No. Included time renews each billing period. Approving an estimate holds your available minutes for that work in the current period only.'),
+  },
+  {
+    q: 'What doesn’t use plan time?',
+    a: approved('Monthly checks, preparing your report, and fixing defects covered by your 30 day launch guarantee. Hosting, domains, subscriptions, licenses, and other provider costs are always separate.'),
   },
 ]

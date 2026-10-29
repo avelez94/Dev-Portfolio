@@ -277,10 +277,10 @@ export function CareCompare() {
     { label: 'Monthly website checks', cells: carePlans.map(() => 'Agreed pages, forms, and booking links') },
     { label: 'Monthly health report', cells: carePlans.map(() => 'Included, reviewed by me') },
     {
-      label: 'Time for content updates or troubleshooting',
+      label: 'Included plan time, for any website work',
       cells: carePlans.map((p) =>
         p.minutes ? (
-          `Up to ${p.minutes} minutes a month`
+          `${p.minutes} minutes each billing period`
         ) : (
           <span key={p.id} className={s.cellNone}>
             Quoted separately
@@ -324,7 +324,7 @@ export function CareTime() {
   return (
     <div className={s.scope}>
       <div className={s.scopeCol} data-reveal>
-        <h3 className={s.scopeTitle}>What a content update looks like</h3>
+        <h3 className={s.scopeTitle}>What your included time can go toward</h3>
         <ul className={s.checkList}>
           {updateExamples.map((x) => (
             <li key={x}>

@@ -204,8 +204,8 @@ export const services: Service[] = [
   {
     id: 'care',
     name: 'Website Maintenance',
-    short: 'Updates, checks, and help after launch.',
-    body: 'Small updates, regular checks, and a real person to reach when something looks off.',
+    short: 'Checks, updates, and help after launch.',
+    body: 'Regular checks, a monthly report, flexible time for updates, fixes, or new features, and a real person to reach when something looks off.',
   },
 ]
 

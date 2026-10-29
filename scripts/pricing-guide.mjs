@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SOURCES = [
   'src/content/offers.ts',
+  'src/content/care-terms.ts',
   'src/content/guide.ts',
   'src/app/pricing-guide/page.tsx',
   'src/app/pricing-guide/guide.module.css',
@@ -65,6 +66,10 @@ async function generate(baseUrl = 'http://localhost:3000') {
   try {
     ;({ chromium } = await import('playwright'))
   } catch {
+    // A global install (as in CI images) isn't visible to import(); require can find it.
+    try { ({ chromium } = (await import('node:module')).createRequire(import.meta.url)('playwright')) } catch { /* not installed */ }
+  }
+  if (!chromium) {
     console.error('Playwright is not installed. Either run: npm i -D playwright && npx playwright install chromium')
     console.error(`or print ${baseUrl}/pricing-guide to PDF by hand and then run: npm run guide:stamp`)
     process.exit(1)

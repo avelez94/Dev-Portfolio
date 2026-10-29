@@ -10,7 +10,7 @@ import { after } from 'next/server'
 import { db, must, CareError, getSettings, logActivity, type Row } from './db'
 import { cycleDates } from './schedule'
 import { scanConfig } from './sites'
-import type { PlanId } from './plans'
+import { plan as planInfo, type PlanId } from './plans'
 
 type CycleInput = {
   siteId: string
@@ -45,6 +45,8 @@ export async function createCycle(i: CycleInput): Promise<{ cycle: Row; created:
     currency: i.currency ?? null,
     // The agreed price only carries over while the plan matches; otherwise it's recorded on the review.
     agreed_price: site.plan === i.plan && typeof site.agreed_monthly_price === 'number' ? site.agreed_monthly_price : null,
+    // The period's included plan time, fixed when the period starts.
+    included_minutes: planInfo(i.plan).includedMinutes,
     scan_after: dates.scanAfter.toISOString(),
     review_start_at: dates.reviewStartAt.toISOString(),
     review_due_at: dates.reviewDueAt.toISOString(),

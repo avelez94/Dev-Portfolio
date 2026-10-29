@@ -5,7 +5,7 @@
  */
 import { esc, escLines, renderEmail } from '@/lib/email/layout'
 import { COLORS as C, FONTS } from '@/lib/brand'
-import { STATE_LABEL, TONE, nextStepLines, planFacts, type Snapshot, type RowState } from './report-model'
+import { STATE_LABEL, TONE, nextStepLines, normalizePlanBox, planFacts, type Snapshot, type RowState } from './report-model'
 
 export type Email = { subject: string; html: string; text: string }
 const oneLine = (s: unknown) => String(s ?? '').replace(/[\r\n]+/g, ' ').trim()
@@ -139,8 +139,9 @@ export function clientReport(p: { subject: string; message: string; snap: Snapsh
   T.push(`MONTHLY HEALTH REPORT, ${s.period.label}`, s.site.label, `${who ? `${who}, ` : ''}${s.site.url}`, `Reviewed ${s.review_date || 'not yet'}. Checked: ${s.scope.line}`)
 
   // Plan and included time
-  if (s.plan_box) {
-    const b = s.plan_box
+  const pb = normalizePlanBox(s.plan_box)
+  if (pb) {
+    const b = pb
     const facts = planFacts(b)
     const cell = ([k, v]: [string, string]) =>
       `<div style="font-size:11px;line-height:15px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${C.tealDeep};">${esc(k)}</div><div style="font-size:15px;line-height:21px;font-weight:700;color:${C.ink};">${esc(v)}</div>`
@@ -148,10 +149,11 @@ export function clientReport(p: { subject: string; message: string; snap: Snapsh
       `<tr><td class="rv-stack" width="50%" valign="top" style="padding:${first ? 0 : 10}px 12px 0 0;font-family:${F};">${cell(a)}</td><td class="rv-stack rv-stack-next" width="50%" valign="top" style="padding:${first ? 0 : 10}px 0 0;font-family:${F};">${cell(c)}</td></tr>`
     H.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 4px;border-collapse:separate;"><tr><td style="background:${C.cream};border:1px solid ${C.line};border-left:4px solid ${C.teal};border-radius:12px;padding:14px 16px;font-family:${F};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${pairRow(facts[0], facts[1], true)}${pairRow(facts[2], facts[3], false)}</table>
-${b.included_minutes ? `<div style="margin:12px 0 0;font-size:15px;line-height:22px;color:${C.ink};"><strong>Time this period:</strong> ${esc(b.usage_label)}</div>` : ''}
+${b.rows.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:12px 0 0;border-top:1px solid ${C.line};"><tr><td style="height:10px;line-height:10px;">&nbsp;</td></tr>${b.rows.map((r, i) => (i % 2 ? '' : pairRow(r, b.rows[i + 1] || ['', ''], i === 0))).join('')}</table>` : ''}
+${b.status ? `<div style="margin:10px 0 0;font-size:14px;line-height:21px;font-weight:700;color:${C.ink};">${esc(b.status)}</div>` : ''}
 <div style="margin:6px 0 0;font-size:14px;line-height:21px;color:${C.inkSoft};">${esc(b.rules.join(' '))}</div>
 </td></tr></table>`)
-    T.push('', 'YOUR PLAN', ...facts.map(([k, v]) => `${k}: ${v}`), ...(b.included_minutes ? [`Time this period: ${b.usage_label}`] : []), b.rules.join(' '))
+    T.push('', 'YOUR PLAN', ...facts.map(([k, v]) => `${k}: ${v}`), ...b.rows.map(([k, v]) => `${k}: ${v}`), ...(b.status ? [b.status] : []), b.rules.join(' '))
   }
 
   // Headline and counts
@@ -165,7 +167,13 @@ ${b.included_minutes ? `<div style="margin:12px 0 0;font-size:15px;line-height:2
     .map(([k, n, label], i) => `<td class="rv-stack${i ? ' rv-tile-next' : ''}" width="33%" valign="middle" style="padding:0 ${i < 2 ? 8 : 0}px 0 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;"><tr><td style="background:${TONE[k].fill};border:1.5px solid ${TONE[k].line};border-radius:12px;padding:10px 12px;font-family:${F};color:${TONE[k].text};">${badge(k, 20)}&nbsp; <span style="font-family:${FONTS.display};font-size:24px;line-height:28px;font-weight:700;vertical-align:middle;">${n}</span>&nbsp; <span style="font-size:14px;font-weight:700;vertical-align:middle;">${esc(label)}</span></td></tr></table></td>`)
     .join('')}</tr></table>`)
   T.push('', s.headline, tiles.map(([, n, l]) => `${l}: ${n}`).join(' | '))
-  if (s.summary) { H.push('<div style="height:12px;line-height:12px;">&nbsp;</div>'); para(escLines(s.summary), s.summary) }
+  const next = nextStepLines(s)
+  H.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 4px;border-collapse:separate;"><tr><td style="background:${C.tealSoft};border:1.5px solid ${C.ink};border-radius:12px;padding:12px 14px;font-family:${F};color:${C.ink};">
+<div style="font-size:12px;line-height:16px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${C.tealDeep};">Your next step</div>
+${next.map((t, i) => `<div style="margin:4px 0 0;font-size:${i ? 14 : 15}px;line-height:${i ? 21 : 23}px;${i ? '' : 'font-weight:700;'}">${esc(t)}</div>`).join('')}
+</td></tr></table>`)
+  T.push('', 'YOUR NEXT STEP', ...next)
+  if (s.summary) { H.push('<div style="height:10px;line-height:10px;">&nbsp;</div>'); para(escLines(s.summary), s.summary) }
 
   // Needs attention, full width
   if (s.attention.length) {
@@ -208,19 +216,35 @@ ${lines.map(([k, v]) => `<div><strong>${esc(k)}:</strong> ${esc(v)}</div>`).join
     }
   }
 
-  if (s.work.fixes || s.work.investigated || s.work.outstanding) {
-    sect('What I did')
-    if (s.work.fixes) para(`<strong>Fixed:</strong> ${escLines(s.work.fixes)}`, `Fixed: ${s.work.fixes}`, 14)
+  if (s.work_done?.length || s.work.fixes || s.work.investigated || s.work.outstanding) {
+    sect('Work completed')
+    for (const w of s.work_done || []) para(`&bull; ${esc(w.what)} <span style="color:${C.inkSoft};">(${esc(w.minutes)})</span>`, `- ${w.what} (${w.minutes})`, 14)
+    if (s.work.fixes) para(escLines(s.work.fixes), s.work.fixes, 14)
     if (s.work.investigated) para(`<strong>Looked into:</strong> ${escLines(s.work.investigated)}`, `Looked into: ${s.work.investigated}`, 14)
     if (s.work.outstanding) para(`<strong>Still open:</strong> ${escLines(s.work.outstanding)}`, `Still open: ${s.work.outstanding}`, 14)
   }
 
-  const next = nextStepLines(s)
-  H.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 8px;border-collapse:separate;"><tr><td style="background:${C.tealSoft};border:1.5px solid ${C.ink};border-radius:12px;padding:12px 14px;font-family:${F};color:${C.ink};">
-<div style="font-size:12px;line-height:16px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${C.tealDeep};">Next step</div>
-${next.map((t, i) => `<div style="margin:4px 0 0;font-size:${i ? 14 : 15}px;line-height:${i ? 21 : 23}px;${i ? '' : 'font-weight:700;'}">${esc(t)}</div>`).join('')}
+  if (s.approvals?.length) {
+    sect('Waiting for your approval')
+    for (const a of s.approvals) {
+      const rows: [string, string][] = [
+        ['Scope', a.scope], ['You’ll get', a.deliverables], ...(a.schedule ? [['Schedule', a.schedule] as [string, string]] : []),
+        ['Standard minutes, including testing', String(a.standard_minutes)], ['From your included time', `${a.included_minutes} minutes`], ['Additional work', `${a.additional_minutes} minutes`],
+        ...(a.additional_minutes > 0 ? [['Additional price', `${a.price_label}. ${a.price_explanation}`] as [string, string]] : []),
+      ]
+      H.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px;border-collapse:separate;"><tr><td style="background:#F7FBFA;border:1.5px solid ${C.teal};border-radius:12px;padding:12px 14px;font-family:${F};font-size:14px;line-height:21px;color:${C.ink};">
+<div style="margin:0 0 4px;"><strong style="font-size:15px;">${esc(a.title)}</strong></div>
+${rows.map(([k, v]) => `<div><strong>${esc(k)}:</strong> ${esc(v)}</div>`).join('')}
+<div style="margin:6px 0 0;font-size:12.5px;line-height:19px;color:${C.inkSoft};">Plan time is counted in standard minutes. The additional price is a separate quote, not a per minute charge. Nothing starts until you approve.</div>
 </td></tr></table>`)
-  T.push('', 'NEXT STEP', ...next)
+      T.push(`[Approval] ${a.title}`, ...rows.map(([k, v]) => `  ${k}: ${v}`), '  Plan time is counted in standard minutes. The additional price is a separate quote, not a per minute charge. Nothing starts until you approve.')
+    }
+  }
+  if (s.approved_work?.length) {
+    const t = `Approved and in progress: ${s.approved_work.map((a) => `${a.title} (${a.reserved_minutes} plan minutes reserved)`).join('; ')}.`
+    para(esc(t), t, 14)
+  }
+
   if (s.notes) para(escLines(s.notes), s.notes, 14)
   H.push(`<p style="margin:10px 0 16px;font-family:${F};font-size:12.5px;line-height:19px;color:${C.muted};">${esc(s.disclaimer)}</p>`)
   T.push('', s.disclaimer)

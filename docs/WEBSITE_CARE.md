@@ -51,7 +51,7 @@ What I could verify from here, and what you need to check in each account. Nothi
 ## Setup (in this order, test mode first)
 
 ### 1. Database (staging or a Supabase branch first, never straight to production)
-Run `supabase/pending/website-care/20261030_website_care.sql` in the SQL editor. It only creates new `care_*` tables, four functions, and two private buckets (`care-evidence`, `care-reports`). It doesn't change any existing table. It's safe to run twice. Production and preview share one database today, so applying it there is a production change: do it only with the release, after a backup.
+Run `supabase/pending/website-care/20261030_website_care.sql`, then `20261031_care_work_ledger.sql`, in the SQL editor. They only create new `care_*` tables, functions, and two private buckets (`care-evidence`, `care-reports`), and seed the proposed task catalog. They don't change any existing table; the one function that writes outside `care_*` (`care_invoice_estimate`) inserts a pending row into `invoices` only when you ask it to. Both are safe to run twice. Production and preview share one database today, so applying it there is a production change: do it only with the release, after a backup.
 
 ### 2. Stripe (test mode)
 1. In test mode, create one product, "Website Care", with three monthly prices: $59, $129, $249. No trial.
@@ -94,6 +94,10 @@ Optional: in Resend, Webhooks, add `https://<deployment>/api/care/resend/webhook
 10. **Public "Starting a plan" note** (`careSubscribeNote.approved` in `src/content/offers.ts`) stays hidden until you approve.
 11. **Ownership clause** from the earlier release is still pending and untouched.
 
+12. **Proposed task durations** in the starter catalog (Task catalog): confirm or change each before it deducts plan time.
+13. **Additional work pricing rules**: how an additional price is calculated (hourly rate, rounding, minimums, fixed quotes) isn't defined; each estimate's price and explanation are entered by hand. The public sample's $110 is illustrative.
+14. **Updated care agreement**: have existing clients accept the flexible plan time terms (`care-flex-2026-11`) before using Quick add or estimates for them.
+
 Record approval in admin settings once the policy is written into your care agreement. Changing a policy value clears the approval.
 
 ## Retention
@@ -111,27 +115,53 @@ Reports, approvals, sent versions, send records, findings, and activity are neve
 
 A short report built from one frozen snapshot. The preview, the PDF, and the email body all come from the same approved version:
 - **Top:** client, website, review date, and a short scope ("4 pages, 1 booking page, 3 hand checks").
-- **Your plan** (right under the top, never in small print): plan name, the client's **agreed** monthly price, the service period, and the included update or troubleshooting time. Where time is included, it shows the time recorded for this period and what's left, or **"Time usage not recorded"** if you haven't recorded it (it never assumes the full allowance is left). It says monthly checks and preparing the report don't use that time and unused time doesn't roll over. Essential Care says updates and fixes are quoted separately.
-- An accurate headline and three counts with icon and text: **Passed** (agreed checks), **Issues found**, **Not verified**.
+- **Your plan** (right under the top, never in small print): plan name, the client's **agreed** monthly price, the billing period, and included time. Where time is included: **Plan time used** (standard minutes applied to completed work), **Reserved** for approved work (when there is any), and **Available** as of the report date. Until you tick "All completed work for this period is recorded", Available reads **Not confirmed yet** with a note that records aren't complete; it never assumes the full allowance remains. Essential Care says work is quoted separately.
+- An accurate headline and three counts with icon and text: **Passed** (agreed checks), **Issues found**, **Not verified**, then **Your next step** right under them (on the first PDF page too).
 - **Needs attention** (full width): one entry per kind of problem, with all affected pages and devices listed once. Each says what's wrong, why it matters, and what happens next (I'm looking into it, needs your input, needs your approval, or fixed and verified).
 - **Fixed and verified** only when you mark it fixed **and** either a recheck no longer finds it or you record how you verified it.
 - **This month's checks**: two columns on desktop with thin row dividers and a thin divider between the columns, one column on phones. Every row has the icon, the label, and the status in the same positions. A check is "Passed" only with an automated pass or your recorded manual pass. A booking, checkout, or contact page row says the page opens but the booking, payment, or message itself wasn't tested. Not applicable items are listed separately.
 - **Not verified this month** with reasons. A site blocking the automated checker is listed here, never as an issue, and the wording never claims visitors are fine or affected; your note on the item explains what you found by hand.
-- A short "What I did" and a **Next step** box ("No action needed", "Please send…", "Approval needed for…").
-- **Estimates:** a report that asks for payment needs the price in the Estimate field, the work it covers, **why it's outside the included care scope**, and (on plans with included time) **whether the remaining included time applies**. Readiness refuses the report until all of these are filled in, and also refuses a price typed anywhere else. Nothing is deducted automatically; you decide case by case and say so in the report.
+- **Work completed**: every task recorded with Quick add for that period, in its client facing words, with the standard minutes it applied (excluded work is labeled, for example "covered defect correction, not counted"). Nothing is typed twice.
+- **Waiting for your approval**: each draft estimate with its scope, deliverables, schedule, total standard minutes (with testing), included minutes proposed, additional minutes, and the additional price with how it was calculated. Readiness refuses incomplete estimates and any price typed in the report text.
 - The headline is computed, and readiness refuses a summary that reads as all clear while issues or unverified items remain. Every red issue needs a decision before the report can be marked ready.
 - Technical detail (error codes per result, redirect chains, screenshots, every individual result), private notes, and logs stay in admin. They're never part of the snapshot, so they can't reach the PDF or the email.
 
-### Plan price and recorded time
-- **Agreed monthly price**: set it on the website (Website settings). Each new review period copies it, so a later price change doesn't rewrite an old report. You can also set it on a single review under **Plan and time**. A report can't be marked ready without it.
-- **Time used**: record update and troubleshooting minutes on the review under **Plan and time**. Changing the price or time after approval returns the report to draft.
+### Plan price
+**Agreed monthly price**: set it on the website (Website settings). Each new billing period copies it, so a later price change doesn't rewrite an old report. You can also set it on a single review under **Plan time and work**. A report can't be marked ready without it.
 
 ### The client email
 The email has your message, then the complete report (plan and time, counts, issues and next actions, the checklist, unverified items, work completed, approval requests and estimate explanations), then a note that the PDF is attached for their records. It uses tables with inline styles; the two column parts stack on phones (Gmail, Apple Mail, and other clients that honor the media query; others keep two columns). The plain text version carries the same content. Review, approval, and sending stay separate steps.
 
 Public samples: two fictional reports (no outstanding issues; an issue plus unverified items) on example.com addresses are on the public Website Care page with PDF downloads. Every PDF page says "Sample report • Illustrative findings". They are static content built with the real report template and never read the database. They appear publicly only when this branch is merged.
 
+## Plan time: approved flexible time policy and work tracking
+
+**Policy (approved):** Business Care includes 30 minutes and Premium Care 90 minutes per billing period, usable for any website work (updates, troubleshooting, fixes, new pages, new features, redesigns, larger projects). Essential Care includes checks and reports, with work quoted separately. Unused time doesn't roll over. Monthly checks, report preparation, and covered defect corrections don't use plan time. Provider costs stay separate. Larger work needs an agreed scope and schedule, and any additional cost needs the client's approval before that work starts. The public wording, plan cards, comparison table, care terms, FAQs, homepage, services copy, pricing guide, samples, reports, and emails all say this (`src/content/care-terms.ts`, `src/content/offers.ts`).
+
+**Standard minutes, not timers.** Nothing measures time. Work is counted from the **Task catalog** (Admin, Care, Task catalog): each task has a name, category, what one unit is and includes, standard work minutes per unit, testing minutes applied once per batch or to each unit, a client facing description, optional private instructions, and an active switch.
+- Line total = quantity × work minutes + testing. Example: two supplied images at 5 minutes plus 3 minutes of batch testing = 13.
+- Testing is never counted twice: batch testing counts once per task, the same task can't appear twice in one record, and "Tested together with another task here" sets a line's testing to 0.
+- The starter catalog is **proposed** (replace a supplied image, supplied text, hours or contact details, a listed price, a link, a supplied document; plus finding or preparing an image and writing or editing text, kept separate from replacing supplied content). Proposed tasks deduct nothing until you press **Confirm minutes**. Changing minutes, testing, or the unit makes a task proposed again. Recorded work keeps its own copy of the task, so edits never change history.
+- **Custom task** for anything else (including new features): you set its agreed standard minutes; it is not a time entry.
+
+**Quick add work** (website page and review screen, under **Plan time and work**): choose tasks, set quantities (number field or minus and plus), see task, testing, and total minutes, the current allowance and the balance after recording, tick "The work and its testing are complete", then **Record completed work**. Choosing a task or receiving a request deducts nothing. Each line has a client facing description and a private note (never in reports). Mark a line as not counted for monthly checks, report preparation, or a covered defect correction; it is still recorded and shown to the client with that label.
+
+**Ledger rules** (enforced in PostgreSQL, `care_record_work` and friends): one ledger per website and billing period; included, applied, reserved, available. Every save locks the billing period, so simultaneous requests can't double allocate or go negative; a form's save key makes a double click or retry save once. Work beyond the available minutes is refused (it needs an estimate). **Undo** voids entries with a reason and restores the minutes; **Correct** voids and replaces in one step. Voided entries stay visible with their reason; every change is in the activity log.
+
+**Estimates for larger requests:** scope, deliverables, agreed schedule, total standard minutes with testing, included minutes proposed, additional minutes, and the additional price with how it was calculated (entered by you; nothing about hourly billing or rounding is assumed). A draft reserves nothing. **Record client approval** (with how they approved) reserves the included minutes in that billing period only. Recording the work against the estimate takes the reservation first and counts the rest as approved additional work, without counting anything twice; "This finishes the estimate" releases unused reserved minutes. Cancel or decline releases them too. Work beyond the approved standard minutes is refused until a **revised estimate** is approved (which replaces the earlier one). An approved estimate whose period ended is flagged on the Overview; **Carry to current period** closes it and creates a draft that needs approval again, so no expired or future allowance is used silently. **Create invoice** saves a pending fixed fee invoice for the approved additional price, once, in the existing invoices (Revenue); it isn't sent and nothing is charged. Stripe is never charged for overages.
+
+**Agreements:** new enrollments are stamped with the current care terms (`care-flex-2026-11`). Websites enrolled earlier are flagged on the Overview and on their page ("Review this client's care agreement first"); Quick add and estimates stay off for them until you record how the client accepted the current terms. Earlier issued agreements and sent report snapshots are never rewritten.
+
+**Approved earlier reports:** snapshots approved before this change keep their original plan block and render unchanged.
+
 ## Verification
+
+**Plan time and admin pages (third pass, all local, no shared database):**
+- `npm run test:care`: 25 ledger tests on a throwaway PostgreSQL 16 with both pending migrations (quantities, batch and per unit testing, preset edits and reconfirmation, duplicate saves including 6 at once, 5 simultaneous allocations against one allowance, overdraw refusal, excluded work, undo, correction, draft vs approved reservations, conversion on completion, early finish, cancellation, revised estimates, period renewal, cross period refusal, terms review, invoice amount and single invoice, browser roles refused); 11 report and email tests; 9 end to end tests that run the real Next.js routes and screens against that database through a local REST stand in (`tests/care/local-stack.mjs`).
+- `npm run test:admin`: 22 browser tests for the admin pages (see docs/ADMIN_STRUCTURE.md).
+- Typecheck, lint on changed files, production build, pricing guide regenerated (`npm run guide:check` passes), sample PDFs and emails regenerated.
+- Not verified: the REST stand in covers what this code uses but isn't Supabase itself; run the migrations and one Quick add on a Supabase branch before release.
+
 
 **Refinements verified locally (Oct 29, second pass):** typecheck and lint clean; production build; 11 report logic checks (Essential Care quoted separately, "Time usage not recorded", recorded and over allowance time, missing agreed price blocks readiness, estimate explanations required, prices outside the Estimate field refused, crawler blocking stays "Not verified" with no visitor claim, private notes never in the snapshot or email, email escaping, no dashes in client text); the pending migration applied twice on a fresh local Postgres 16 with the new price and time limits enforced; the public Care page, both samples, and both emails at desktop and phone width with no horizontal overflow; both sample PDFs (the no issues sample is one page; the issue sample runs to two, with the Next step box kept whole). The admin screens weren't driven in a browser this pass because they need the care tables, and the only database here is the shared one.
 
@@ -159,6 +189,6 @@ Public samples: two fictional reports (no outstanding issues; an issue plus unve
 5. **Billing:** Create Stripe checkout link, then send it to the client yourself. When Stripe reports the paid invoice, a review appears in the queue with its due date. (Billed by invoice instead? Use "Add a paid service period by hand".)
 6. **Check:** the scan starts automatically and the review appears in your Schedule calendar. You get an email with grouped results and a link. Open the review: each issue is one card with its pages; choose what happens next for every red issue, and open individual results or screenshots only when you need them.
 7. **Manual review:** record each checklist item. Use Not checked with a reason when needed.
-8. **Plan and time, then write:** check the agreed price and record the minutes you spent on updates or fixes. Then write a short summary, what you fixed (only confirmed fixes), and anything needing approval with an estimate, why it's outside the plan, and whether the remaining time applies. If you fix something, run the check again or record how you verified it, and it shows as Fixed and verified.
+8. **Record work and write:** as you finish work during the period, use **Quick add work** on the website page (it shows up in the report automatically). For anything larger, create an estimate and record the client's approval before starting. At review time, check the agreed price, tick that all completed work is recorded, and write a short summary.
 9. **Approve:** Mark ready for review, open the client report and PDF preview, tick sign off, type your name, and approve.
 10. **Send:** check the name and exact email, adjust the subject and message, type the address to confirm, then Send Report. Or download the PDF without sending. The review counts as complete only once sent.

@@ -4,8 +4,9 @@ import { CARE_CSS, useLoad, Badge, BillingBadge, workStatus, fmt, Loading, Error
 import SiteView from './SiteView'
 import CycleView from './CycleView'
 import SettingsView from './SettingsView'
+import TaskCatalog from './TaskCatalog'
 
-type View = 'overview' | 'queue' | 'sites' | 'settings' | 'activity'
+type View = 'overview' | 'queue' | 'sites' | 'catalog' | 'settings' | 'activity'
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
 type Status = {
@@ -52,7 +53,7 @@ export default function CareApp() {
 
   const status = useLoad<Status>('status')
 
-  const nav: [View, string][] = [['overview', 'Overview'], ['queue', 'Review queue'], ['sites', 'Websites'], ['settings', 'Settings'], ['activity', 'Activity']]
+  const nav: [View, string][] = [['overview', 'Overview'], ['queue', 'Review queue'], ['sites', 'Websites'], ['catalog', 'Task catalog'], ['settings', 'Settings'], ['activity', 'Activity']]
   return (
     <div className="care care-frame">
       <style>{CARE_CSS}</style>
@@ -71,6 +72,7 @@ export default function CareApp() {
         {status.data && <EnvBanner s={status.data} />}
         {cycle ? <CycleView id={cycle} go={go} /> :
           view === 'sites' ? <SiteView id={site} go={go} /> :
+          view === 'catalog' ? <TaskCatalog /> :
           view === 'settings' ? <SettingsView /> :
           view === 'activity' ? <Activity /> :
           <Overview go={go} queueOnly={view === 'queue'} />}
@@ -157,6 +159,25 @@ function Overview({ go, queueOnly }: { go: (n: { view?: View; site?: string | nu
         <div className="care-sub" style={{ marginBottom: 16 }}>
           <b>Billing policies are still proposals.</b> Grace period, refund, dispute, and cancellation handling need your approval before production. <button className="care-btn small" onClick={() => go({ view: 'settings' })}>Review in settings</button>
         </div>
+      )}
+      {(data.workFlags?.unfinished?.length > 0 || data.workFlags?.termsReview?.length > 0) && (
+        <section className="care-panel" aria-labelledby="flags-h">
+          <h2 id="flags-h" style={{ marginBottom: 10 }}>Plan time: for your review</h2>
+          <div className="care-grid">
+            {data.workFlags.unfinished.map((e: Row) => (
+              <div key={e.id} className="care-sub care-between">
+                <div><Badge tone="warn">Unfinished approved work</Badge> <b>{name(siteOf(e.site_id))}</b>: {e.title}<div className="care-muted">{e.reserved_minutes} minutes reserved. The billing period {new Date(e.care_cycles.period_end).getTime() < now ? 'has ended' : 'ends'} {fmt(e.care_cycles.period_end, tz, false)}; reserved minutes never carry into the next period.</div></div>
+                <button className="care-btn small" onClick={() => go({ cycle: e.cycle_id })}>Review</button>
+              </div>
+            ))}
+            {data.workFlags.termsReview.map((s: Row) => (
+              <div key={s.id} className="care-sub care-between">
+                <div><Badge tone="warn">Agreement predates flexible plan time</Badge> <b>{name(s)}</b><div className="care-muted">{s.care_terms_version ? `On ${s.care_terms_version}.` : 'No terms version on file.'} Review before recording work or estimates for this client.</div></div>
+                <button className="care-btn small" onClick={() => go({ site: s.id })}>Review</button>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
       {problems > 0 && (
         <section className="care-panel" aria-labelledby="att-h">
