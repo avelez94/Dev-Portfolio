@@ -20,6 +20,9 @@
 -- (Until then the route claims times as 'scheduled' directly; the indexes still prevent double booking.)
 
 alter table public.bookings add column if not exists created_at timestamptz not null default now();
+-- If created_at already existed without a default, new claims would have no time,
+-- and an abandoned claim would never expire. Setting the default only affects new rows.
+alter table public.bookings alter column created_at set default now();
 
 create unique index if not exists bookings_one_active_per_slot
   on public.bookings (scheduled_at)
