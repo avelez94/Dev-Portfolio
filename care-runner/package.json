@@ -1,0 +1,14 @@
+{
+  "name": "website-care-runner",
+  "private": true,
+  "type": "module",
+  "description": "Read only website checks for Website Care. Runs in GitHub Actions.",
+  "scripts": {
+    "start": "node run.mjs",
+    "test": "node --test test/"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

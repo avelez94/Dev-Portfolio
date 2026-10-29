@@ -196,7 +196,7 @@ export const carePlans: CarePlan[] = [
     minutes: null,
     items: [
       'Scheduled monthly checks of agreed pages, contact forms, and booking links, where applicable',
-      'A brief monthly status update',
+      'A brief monthly health report, reviewed by me',
       'Content changes and fixes you request are quoted separately',
     ],
     cta: 'Ask About Essential Care',
@@ -241,13 +241,24 @@ export const careBoundaries = [
   'Care plans are optional.',
 ]
 
+/**
+ * Prepared for the Website Care release. Shown only once Stripe setup and the
+ * billing policies are approved (flip approved to true at that point).
+ */
+export const careSubscribeNote = {
+  approved: false,
+  title: 'Starting a plan',
+  body: 'Once we agree on your site and what gets checked each month, I’ll send you a secure Stripe link to start your plan.',
+}
+
 export const careUpdatesNote =
   'If your platform needs software updates or backup checks, they’re only part of your plan when they’re written into your agreed care scope.'
 
 export const careBenefits = [
-  { title: 'Regular checks', body: 'Agreed pages, forms, and booking links get checked every month.' },
-  { title: 'A monthly status update', body: 'A short note each month so you know where things stand.' },
+  { title: 'Monthly website checks', body: 'The pages, forms, and booking links we agree on get checked every month.' },
+  { title: 'A monthly health report', body: 'A clear report each month, reviewed by me: what was checked, what needs attention, and what I fixed.' },
   { title: 'Time for updates', body: 'Business and Premium Care include monthly time for small changes and troubleshooting.' },
+  { title: 'Approval first', body: 'Anything beyond your plan is estimated first, and nothing starts until you approve it.' },
 ]
 
 /* ------------------------------------------------------------------ */

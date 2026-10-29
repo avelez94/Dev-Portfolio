@@ -1,0 +1,66 @@
+# Website Care: read only monthly website checks.
+#
+# Runs when the app queues a check (workflow_dispatch) and every 6 hours as a
+# fallback that picks up anything missed. With nothing queued it exits in
+# seconds. Without the secrets below it does nothing at all.
+#
+# Repository secrets (Settings > Secrets and variables > Actions):
+#   CARE_APP_URL       https://alantevelez.com (or a preview URL while testing)
+#   CARE_RUNNER_TOKEN  same value as CARE_RUNNER_TOKEN in Vercel
+#
+# Scheduled runs only start from the default branch, so nothing runs from a
+# feature branch.
+name: Website Care checks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-care-checks
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARE_APP_URL: ${{ secrets.CARE_APP_URL }}
+      CARE_RUNNER_TOKEN: ${{ secrets.CARE_RUNNER_TOKEN }}
+    steps:
+      - name: Skip when not configured
+        id: cfg
+        run: |
+          if [ -z "$CARE_APP_URL" ] || [ -z "$CARE_RUNNER_TOKEN" ]; then
+            echo "Website Care runner secrets are not set. Nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.skip != 'true'
+        with:
+          sparse-checkout: care-runner
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.skip != 'true'
+        with:
+          node-version: 22
+      - name: Check for queued work
+        if: steps.cfg.outputs.skip != 'true'
+        id: peek
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CARE_APP_URL/api/care/runner/peek" -H "Authorization: Bearer $CARE_RUNNER_TOKEN")
+          echo "peek returned $code"
+          if [ "$code" = "204" ]; then echo "idle=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Install Playwright Chromium
+        if: steps.cfg.outputs.skip != 'true' && steps.peek.outputs.idle != 'true'
+        working-directory: care-runner
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Run checks
+        if: steps.cfg.outputs.skip != 'true' && steps.peek.outputs.idle != 'true'
+        working-directory: care-runner
+        run: node run.mjs

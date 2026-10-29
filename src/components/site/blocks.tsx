@@ -274,8 +274,8 @@ export function CarePlanCards() {
 export function CareCompare() {
   const rows: { label: string; cells: React.ReactNode[] }[] = [
     { label: 'Monthly price', cells: carePlans.map((p) => `${formatUSD(p.monthly)} / month`) },
-    { label: 'Monthly checks of agreed pages, forms, and booking links', cells: carePlans.map(() => 'Included') },
-    { label: 'Brief monthly status update', cells: carePlans.map(() => 'Included') },
+    { label: 'Monthly website checks', cells: carePlans.map(() => 'Agreed pages, forms, and booking links') },
+    { label: 'Monthly health report', cells: carePlans.map(() => 'Included, reviewed by me') },
     {
       label: 'Time for content updates or troubleshooting',
       cells: carePlans.map((p) =>

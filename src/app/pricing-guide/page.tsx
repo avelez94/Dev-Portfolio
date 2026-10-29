@@ -173,7 +173,7 @@ export default function PricingGuide() {
         <h1 className={s.h2}>
           Launch day <em>isn’t goodbye.</em>
         </h1>
-        <p className={s.lede}>Care plans are optional. Every plan includes scheduled checks and a brief monthly status update.</p>
+        <p className={s.lede}>Care plans are optional. Every plan includes monthly website checks and a monthly health report.</p>
         <div className={s.plans}>
           {carePlans.map((p, i) => (
             <article key={p.id} className={s.plan} data-tone={i}>

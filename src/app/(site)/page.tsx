@@ -143,8 +143,8 @@ export default function Home() {
             Need a hand after launch?
           </h2>
           <p className={s.careLede}>
-            Optional care plans start at {formatUSD(Math.min(...carePlans.map((c) => c.monthly)))} a month for scheduled checks and a monthly status
-            update, with plans that add time for updates and troubleshooting. Prefer to ask only when you need something? Occasional support works
+            Optional care plans start at {formatUSD(Math.min(...carePlans.map((c) => c.monthly)))} a month and include monthly website checks and a monthly
+            health report, with plans that add time for updates and troubleshooting. Prefer to ask only when you need something? Occasional support works
             too.
           </p>
         </div>

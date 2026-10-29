@@ -3,11 +3,11 @@ import Link from 'next/link'
 import s from '@/components/site/site.module.css'
 import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, PageHeader, SubNav } from '@/components/site/blocks'
 import { inquiryHref } from '@/content/site'
-import { careBenefits, occasionalSupport } from '@/content/offers'
+import { careBenefits, careSubscribeNote, occasionalSupport } from '@/content/offers'
 
 const title = 'Website Care'
 const description =
-  'Optional monthly care plans from $59 a month: scheduled checks, a monthly status update, and time for content updates or troubleshooting. Occasional support is also available.'
+  'Optional monthly care plans from $59 a month: monthly website checks, a monthly health report, and time for content updates or troubleshooting. Occasional support is also available.'
 
 export const metadata: Metadata = {
   title,
@@ -61,12 +61,17 @@ export default function CarePage() {
             Pick the pace <em>that fits.</em>
           </h2>
           <p className={s.sectionLede}>
-            Every plan includes scheduled checks and a monthly status update. Business and Premium Care add monthly time for content updates or
+            Every plan includes monthly website checks and a monthly health report. Business and Premium Care add monthly time for content updates or
             troubleshooting. Care plans are optional.
           </p>
         </div>
         <CarePlanCards />
         <CareCompare />
+        {careSubscribeNote.approved && (
+          <p className={s.sectionLede} data-reveal>
+            <strong>{careSubscribeNote.title}.</strong> {careSubscribeNote.body}
+          </p>
+        )}
       </section>
 
       {/* ---------------- Included time ---------------- */}

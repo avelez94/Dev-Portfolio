@@ -158,6 +158,11 @@ type ProposalFormType = {
 export default function AdminDashboard() {
   const [view, setView] = useState<'home'|'pipeline'|'revenue'|'docs'|'schedule'>('home')
   const [dark, setDark] = useState(true)
+  // Website Care link shows only where the feature is switched on (its API answers 404 otherwise).
+  const [careOn, setCareOn] = useState(false)
+  useEffect(() => {
+    fetch('/api/care/admin/status', { cache: 'no-store' }).then((r) => setCareOn(r.ok)).catch(() => {})
+  }, [])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [unbooked, setUnbooked] = useState<Submission[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -1667,6 +1672,12 @@ export default function AdminDashboard() {
                 <span className="sb-btn-label" style={{color:view===v?d.accent:d.text2}}>{label}</span>
               </button>
             ))}
+            {careOn && (
+              <a href="/admin/care" className="sb-btn" style={{color:d.text2,background:'none',textDecoration:'none'}}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M9 16s-6-3.6-6-8.2A3.3 3.3 0 019 5.6a3.3 3.3 0 016 2.2C15 12.4 9 16 9 16z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/><path d="M5.5 9h2l1-2 1.5 3.5 1-1.5h1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span className="sb-btn-label" style={{color:d.text2}}>Care</span>
+              </a>
+            )}
           </div>
           <div className="sb-divider" style={{background:d.border}}/>
           <button className="sb-toggle" style={{background:'none'}} onClick={()=>setDark(!dark)} aria-label={`Surface color: ${dark?'teal':'charcoal'}. Switch to ${dark?'charcoal':'teal'}`} title="Switch surface color">

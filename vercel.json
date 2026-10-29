@@ -7,6 +7,10 @@
     {
       "path": "/api/walks/email",
       "schedule": "0 10 * * 5"
+    },
+    {
+      "path": "/api/care/cron",
+      "schedule": "7 * * * *"
     }
   ]
 }
