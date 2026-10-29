@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import WorkPanel from './WorkPanel'
+import InvitePanel from './InvitePanel'
+import PracticePanel from './PracticePanel'
 import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus } from './ui'
 import { SitesTable } from './CareApp'
 import { CARE_TERMS_VERSION } from '@/content/care-terms'
@@ -196,6 +198,7 @@ function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () =>
 function SiteDetail({ id, go }: { id: string; go: Go }) {
   const { data, error, reload } = useLoad<Row>(`sites/${id}`)
   const settings = useLoad<Row>('settings')
+  const status = useLoad<Row>('status')
   const [link, setLink] = useState<string | null>(null)
   const [conf, setConf] = useState({ confirm_website: false, confirm_authorization: false, confirm_checklist: false, authorization_note: '', confirm_terms: false, terms_note: '' })
   const [period, setPeriod] = useState({ period_start: '', period_end: '', note: '', confirm_paid: false })
@@ -256,10 +259,12 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             <div className="care-muted">Last synced {fmt(site.stripe_synced_at, tz)}</div>
           </div>
           <div className="care-grid">
-            {!site.stripe_subscription_id && !ended && <Action label="Create Stripe checkout link" run={() => careApi<Row>(`sites/${id}/checkout`, { method: 'POST', json: {} })} done={(r) => { setLink((r as Row).url); reload() }} />}
+            {!site.stripe_subscription_id && !ended && <InvitePanel siteId={id as string} tz={tz} onSent={reload} />}
+            {!site.stripe_subscription_id && !ended && <Action label="Copy checkout link instead" run={() => careApi<Row>(`sites/${id}/checkout`, { method: 'POST', json: {} })} done={(r) => { setLink((r as Row).url); reload() }} />}
+            {!site.stripe_subscription_id && site.checkout_session_id && <div className="care-muted">Checkout link {site.checkout_expires_at && new Date(site.checkout_expires_at) > new Date() ? `open until ${fmt(site.checkout_expires_at, tz)}` : 'expired'}{site.invitation_sent_at ? `; invitation sent ${fmt(site.invitation_sent_at, tz)} to ${site.invitation_sent_to}` : ''}.</div>}
             {site.stripe_customer_id && <Action label="Create billing portal link" run={() => careApi<Row>(`sites/${id}/portal`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
             {site.stripe_subscription_id && <Action label="Refresh from Stripe" run={() => careApi(`sites/${id}/sync`, { method: 'POST', json: {} })} done={reload} />}
-            {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. Opening it doesn’t activate anything; only Stripe’s verified payment notice does.</small>{link.startsWith('/admin/care/demo-checkout') && <div style={{ marginTop: 6 }}><a className="care-btn small" href={link}>Open the simulated checkout (play the client)</a></div>}</div>}
+            {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. The same link is reused until it expires (24 hours). Opening it doesn’t activate anything; only Stripe’s verified payment notice does.</small></div>}
             {['attention', 'past_due', 'unpaid', 'refunded', 'disputed'].includes(site.billing_state) && (
               <div className="care-sub">
                 <Field label="Mark billing reviewed" id="b-note"><input id="b-note" value={billNote} onChange={(e) => setBillNote(e.target.value)} placeholder="What you did" /></Field>
@@ -268,6 +273,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             )}
           </div>
         </div>
+        {status.data?.demo && !ended && <PracticePanel site={site} onChange={reload} />}
         {!site.stripe_subscription_id && !ended && (
           <details style={{ marginTop: 12 }}>
             <summary>Billed outside Stripe? Add a paid service period by hand</summary>

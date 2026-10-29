@@ -2,7 +2,7 @@
 
 How to run Website Care day to day, using the screens and buttons as they are built. Open it from **Website Care, Help / Owner’s guide**, or read it on GitHub. The screenshots come from the preview demo (fictional data, simulated services). The technical reference is [WEBSITE_CARE.md](WEBSITE_CARE.md); how the demo works is in [ADMIN_DEMO.md](ADMIN_DEMO.md).
 
-> Each step says what is **simulated in the demo** and what is **not implemented yet**. Nothing in the demo reaches Stripe, Resend, Zoom, the check runner, or the real database.
+> Each step says what is **simulated in the demo** and what is **not implemented yet**. Nothing in the demo reaches Stripe, Resend, Zoom, the check runner, or the real database. In the demo, Stripe and email are answered by stand ins, so the real checks, notices, and records run without any real service.
 
 ## Map of the Website Care area
 
@@ -62,17 +62,50 @@ The admin **Schedule** page also shows each review’s due date (a green diamond
 
 **Fixing a mistake:** edit **Website settings** further down the website’s page and **Save changes**. If you change what gets checked, reviews pause until you confirm the setup again. Use **End care for this website** to remove one; its reports are kept.
 
-**Demo:** real behavior, run on the demo data. The address check is answered without looking up the real domain.
+**Demo:** real behavior, run on the demo data. The address check is answered without looking up the real domain (every demo address resolves to a public address).
 
-## 2. Subscription, checkout, and payment status
+## 2. Subscription invitation, checkout, and payment status
 
 **Where:** the website’s page, **Subscription and billing**.
 
-![Checkout link](website-care-guide/05-checkout-link.png)
+### Send the subscription invitation
 
-1. **Create Stripe checkout link**. A link appears under **Link to send the client yourself**.
-2. Copy it and send it to the client in your own email. **The app doesn’t email a subscription invitation**; that isn’t implemented.
-3. The client pays on Stripe’s page. Stripe’s verified payment notice then sets the billing to **Paid, active** and creates the first monthly review.
+1. Press **Send subscription invitation**. Before anything is sent, the panel shows:
+   - **To**: the report recipient’s name and email.
+   - **Plan**: the care plan and its included minutes.
+   - **Recurring amount**: the client’s **Agreed monthly price**, in USD, every month, with the Stripe price it was checked against.
+   - **Checkout link**: whether a link is open (and until when), expired, or about to be created.
+   - **Last sent**: when and to whom, if it was sent before.
+2. **Price verified** means the app read the plan’s real Stripe price and it matches the agreed amount, in US dollars, billed once a month.
+3. Type the recipient’s address exactly, then press **Send invitation**.
+
+![Invitation](website-care-guide/05-invitation.png)
+
+**The client receives:** an email titled “Start Website Care for (website)” with the website, plan, monthly price (“billed monthly until you cancel”), included minutes, a **Start My Subscription** button to Stripe’s checkout, and the date and time the link stops working.
+
+**Checkout is blocked when the price doesn’t match.** The app compares the plan’s configured Stripe price with the client’s agreed price before it creates a link or sends anything. It refuses when:
+- the Stripe price charges a different amount than the agreed price;
+- the currency isn’t USD;
+- it bills on any schedule other than once a month;
+- it is metered, tiered, archived, or starts with a free trial;
+- it is a test price on a live account, or a live price in test mode;
+- Stripe can’t be reached to confirm it.
+
+The panel lists each problem under **Can’t send yet**, and **Copy checkout link instead** shows the same message. Nothing is created or sent. To fix it, change the **Agreed monthly price** to the plan price, or have a Stripe price that matches the agreed amount set for that plan. (One custom Stripe price per client isn’t built.)
+
+![Blocked](website-care-guide/05b-invitation-blocked.png)
+
+**One link at a time, no duplicates**
+- Each website has one open checkout link, good for 24 hours. Sending again before it expires reuses the same link: **Send invitation** says it was already sent, and **Send again** resends it as a reminder.
+- When the link expires (Stripe tells the app), the page says **Checkout link expired**. The next invitation makes a new link.
+- Changing the agreed price or plan closes the open link, so the old price can’t be paid.
+- If the website already has a subscription, here or in Stripe, the invitation and checkout are refused.
+
+**Copy checkout link instead** gives you the same link to send in your own email. Nothing is emailed.
+
+### The client pays
+
+The client pays on Stripe’s page. Stripe’s verified payment notice then sets the billing to **Paid, active**, links the subscription, and creates the first monthly review.
 
 ![Simulated checkout](website-care-guide/06-simulated-checkout.png)
 
@@ -80,19 +113,17 @@ The admin **Schedule** page also shows each review’s due date (a green diamond
 
 **Automatic:** linking the subscription, **Paid through**, the current period, the first review, the check, and an email to you saying the review is ready.
 
-**You:** create and send the link. Opening the link doesn’t activate anything.
-
 **The client sees:** Stripe’s checkout page, then a “subscribed” page on your site. Stripe sends their receipt.
-
-**The price charged:** Stripe charges the plan’s Stripe price ($59, $129, or $249). If the **Agreed monthly price** is different, Stripe still charges the plan price. A custom price needs its own Stripe price; that isn’t built yet.
 
 **Clients billed outside Stripe:** open **Billed outside Stripe? Add a paid service period by hand**. Enter the start and end, a note, tick **This period is paid or agreed in writing**, and press **Add service period**. The billing badge then says **Billed outside Stripe**.
 
 **Fixing a mistake:** a paid period can’t be deleted from the app. If you added the wrong dates by hand, note it in the review and fix the next one.
 
 **Demo:**
-- **Open the simulated checkout (play the client)** stands in for Stripe’s page. **Pay (simulated)** plays Stripe’s payment notice.
-- **Create billing portal link** and **Refresh from Stripe** are acknowledged only.
+- Stripe is simulated: the same checks and notices run, answered by a stand in. The invitation email appears in **Simulated actions**.
+- Harbor Street Bakery shows a blocked price ($239 agreed, $249 Premium price).
+- On a website with an open link, **Practice billing events** has **Open the simulated checkout (play the client)** and **Let the link expire**.
+- **Create billing portal link** is acknowledged only.
 
 ## 3. Find the monthly review
 
@@ -259,7 +290,12 @@ The **Report text** section drafts the client wording for you from templates (no
 
 ![Sent](website-care-guide/25-sent.png)
 
-**The client receives:** an email with the report summary and the approved PDF attached.
+**The client receives** one email:
+- **Subject and message:** what you typed on the send screen (the default greets them by first name and says what the report covers).
+- **The complete approved report**, in the same order as the PDF: the month and website; your plan with included and used time; the headline and the Passed, Issues found, and Not verified counts; **Your next step**; the **Client summary**; **Needs attention** (what’s wrong, why it matters, where, and what happens next); **Fixed and verified**; **This month’s checks**; **Not verified this month**; **Work completed** (recorded work, **Other notes on work**, **What I looked into**, **Still open**); **Waiting for your approval** with each estimate’s minutes and price; approved work in progress; the **Note for the client**; and the note that automated checks aren’t a certification.
+- **The approved PDF attached** (“Health report (website) (month).pdf”), with a line naming its version.
+
+Both come from the frozen copy made when you approved, so the email and the PDF always say the same thing. **Private notes** are never in either.
 
 **Fixing a mistake:**
 - Editing after approval returns the report to draft.
@@ -275,7 +311,7 @@ The **Report text** section drafts the client wording for you from templates (no
 **Implemented (Stripe clients)**
 
 - **Renewal:** each paid renewal creates the next review automatically, updates **Paid through**, and runs the check.
-- **Failed payment:** the website shows **Payment failed** and counts under **Billing attention**, and you get an email. Stripe retries on its own schedule. No review starts for an unpaid period. Once the problem is handled, **Mark billing reviewed** with a note.
+- **Failed payment:** the website shows **Past due** (or **Payment failed**), the failed payment count goes up, it counts under **Billing attention**, and you get an email. Stripe retries on its own schedule. No review starts for an unpaid period. Once the problem is handled, **Mark billing reviewed** with a note.
 - **Client cancels at period end:** shows **Canceling at period end**. The paid period is still honored and no new review starts after it.
 - **Canceled immediately:** open reviews are flagged **canceled immediately** for your decision. Past reports are kept.
 - **Refund or dispute:** the website and that period are flagged (**Refund recorded** or **Disputed**) for your review.
@@ -293,9 +329,29 @@ Today these settings only control flags and reminder emails; nothing is suspende
 
 ![Billing policy](website-care-guide/27-settings-policy.png)
 
-**Demo:**
-- Renewal, failed payment, and cancellation come from Stripe events, so they can’t be triggered in the demo yet.
-- The demo website Lakeside Dental shows an active simulated subscription.
+**Repeated notices are safe.** Stripe can send the same notice more than once. Each notice is recorded by its id and processed once, and each paid invoice and each period can only create one review, so a repeat never adds a second period, review, or allowance of included minutes.
+
+### Practice them in the demo
+
+Open **Lakeside Dental** (it has a simulated subscription). Under **Subscription and billing**, **Practice billing events (demo)** has:
+
+| Button | What happens | What to look for |
+| --- | --- | --- |
+| **Renewal** | The next month is paid. | A new review in **Monthly reviews**, **Paid through** moves a month. |
+| **Failed payment** | The renewal payment fails. Press again for another failed attempt. | **Past due**, the failed payment count, **Billing attention** on the Overview, and an owner email in **Simulated actions**. No new review. |
+| **Renewal** (after a failure) | Stripe’s retry succeeds. | Back to **Paid, active**; that month’s review appears once. Then **Mark billing reviewed**. |
+| **Cancel at period end** | The client schedules cancellation. | **Canceling at period end**. The paid period continues. |
+| **Renewal** (after scheduling cancellation) | The period ends instead of renewing. | **Canceled**; no new review. |
+| **Cancel immediately** | The subscription ends now. | **Canceled**, and the open review is flagged **canceled immediately** for your decision. |
+| **Send the last notice again** | Stripe redelivers the same notice. | Each notice is listed as “already processed, ignored”. Nothing is added. |
+
+![Practice panel after a failed payment](website-care-guide/32-practice-failed.png)
+
+![Billing after a failed payment](website-care-guide/33-practice-billing.png)
+
+![The same notice again](website-care-guide/34-practice-repeat.png)
+
+Each button changes the simulated subscription the way Stripe would and runs Stripe’s notices through the same processing as real webhooks. Use **Reset demo** to start over (for example, to try **Cancel immediately** after practicing the others).
 
 ## 11. Projects: pricing, proposals, contracts, and payments
 
@@ -381,6 +437,9 @@ The cards are **Business Website**, **Booking & Payments**, **Custom Website or 
 | **Confirm setup** says the address is “private or reserved” | The address resolves to a private network, or it isn’t public. | Check the address and approved domains. Use **Check**. |
 | Review stuck on **Waiting for setup confirmation** | A paid period arrived before you confirmed the setup. | Confirm the setup on the website’s page. |
 | **Check failed: retry needed** | The checker couldn’t finish after its retries. | **Run the check again**; read the error under **Runs, due date, and history**. |
+| **Can’t send yet** or **Checkout is blocked** | The plan’s Stripe price doesn’t match the agreed price, currency, or monthly billing, or Stripe couldn’t confirm it. | Read the listed problems. Correct the agreed price, or have a matching Stripe price set for the plan. Retry if Stripe was unreachable. |
+| “This link was already sent” | The open link was already emailed. | Use **Send again** to resend it as a reminder. |
+| **Checkout link expired** | The 24 hour link ran out before the client paid. | **Send subscription invitation** again; a new link is made. |
 | **Quick add work** is greyed out | The client’s care terms aren’t current. | Record the terms (setup confirmation or **Mark agreement reviewed**). |
 | Plan time says **No paid billing period yet** | There’s no paid period for this website. | Wait for the first payment, or add a paid period by hand. |
 | “needs X standard minutes but only Y are available” | Recording would go past the allowance. | Create an estimate for the larger work. |
@@ -400,11 +459,11 @@ The cards are **Business Website**, **Booking & Payments**, **Custom Website or 
   - **Paid, active** (on the website): the Stripe subscription is in good standing.
   - **Paid** or **Billed outside Stripe** (in the queue): how the period was paid.
   - They don’t say whether the review is done; the work status does.
-- **Agreed monthly price versus the Stripe charge.** Reports show the agreed price, but Stripe charges the plan’s price. They differ for any client with a custom price. That needs a decision: a separate Stripe price per custom price, or billing those clients by hand.
+- **Agreed monthly price versus the Stripe charge.** Fixed: checkout and the invitation are now blocked unless the plan’s Stripe price charges exactly the agreed price, in USD, monthly. A client with a custom price can’t check out until a matching Stripe price exists for that plan, or you bill them by hand. Per client Stripe prices aren’t built.
 - **“(no Stripe price set)” beside a plan.** The Stripe price ID for that plan isn’t configured, so checkout would fail. The demo hides this because checkout there is simulated.
 - **“Accepted by provider” is not “Delivered”.** Delivery is confirmed only with Resend’s webhook.
 - **Revenue shorthand.** **(ms)** is a milestone schedule, **(fixed)** a fixed fee invoice, **(rev)** a revision invoice. **Awaiting Dep** means the deposit is invoiced but not paid; **Dep Paid** means the deposit is in and milestones remain.
 - **Milestone “Invoiced” is not “Paid”.** Invoiced only means the email went out.
 - **Billing policy “proposed”.** These settings flag and remind; they don’t enforce anything yet.
 
-Fixed while writing this guide: confirming a real website’s setup failed for every public IPv4 address (the private address check matched IPv4 against an IPv6 rule). Every new enrollment would have been refused at **Confirm setup and enable reviews**.
+Fixed while writing this guide: confirming a real website’s setup failed for every public IPv4 address (the private address check matched IPv4 against an IPv6 rule). Every new enrollment would have been refused at **Confirm setup and enable reviews**. After the fix, a new enrollment was run through setup confirmation locally with the real address lookup: a public address (IPv4 and IPv6) was confirmed, and a private address was refused. To check one of your own domains against real DNS, run `node scripts/check-care-address.mjs https://www.yourdomain.com/ yourdomain.com`. It only looks the name up; it writes and sends nothing.

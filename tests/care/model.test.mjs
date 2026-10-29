@@ -131,3 +131,31 @@ test('reports approved before the ledger still render as approved (snapshots are
   assert.ok(mail.text.includes('Time this period: 10 minutes used, 20 minutes remaining'))
   assert.ok((await reportPdf(s)).length > 1000)
 })
+
+test('the report email carries the complete approved report, and the attached PDF says the same things', async () => {
+  const { execFileSync } = await import('node:child_process')
+  const { writeFileSync, mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const s = structuredClone(CARE_SAMPLES.find((x) => x.slug === 'needs-attention').snapshot)
+  Object.assign(s, { summary: 'Summary sentence ALPHA.', notes: 'Client note BRAVO.', work: { fixes: 'Other work CHARLIE.', investigated: 'Looked into DELTA.', outstanding: 'Still open ECHO.' } })
+  s.next_step = { ...s.next_step, more: 'Next month FOXTROT.' }
+  const mail = clientReport({ subject: 'Your website health report', message: 'Personal message GOLF.', snap: s })
+  const dir = mkdtempSync(tmpdir() + '/care-pdf-')
+  writeFileSync(dir + '/r.pdf', await reportPdf(s))
+  const flat = (t) => t.replace(/\s+/g, ' ')
+  const pdf = flat(execFileSync('pdftotext', [dir + '/r.pdf', '-']).toString())
+  const text = flat(mail.text)
+  const parts = [
+    s.headline, 'Summary sentence ALPHA.', 'Looked into DELTA.', 'Still open ECHO.', 'Other work CHARLIE.', 'Next month FOXTROT.', 'Client note BRAVO.',
+    ...s.attention.map((a) => a.title), ...s.checklist.map((r) => r.label), ...s.not_verified.map((n) => n.label), ...(s.approvals || []).map((a) => a.title),
+    ...(s.work_done || []).map((w) => w.what),
+  ]
+  for (const p of parts) {
+    assert.ok(text.includes(flat(p)), `email has: ${p}`)
+    assert.ok(pdf.includes(flat(p)), `PDF has: ${p}`)
+  }
+  assert.ok(text.includes(flat(s.disclaimer)))
+  // Your message comes first, and the email says the PDF is attached with its version.
+  assert.ok(text.indexOf('Personal message GOLF.') < text.indexOf(s.headline))
+  assert.match(text, new RegExp(`A PDF copy of this report \\(version ${s.version}\\) is attached`))
+})

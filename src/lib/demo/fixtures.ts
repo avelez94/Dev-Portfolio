@@ -6,6 +6,7 @@
  */
 import 'server-only'
 import { TERMS_VERSION } from '@/lib/terms'
+import { seedSubscription } from './stripe-sim'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
@@ -158,6 +159,8 @@ export function careRows(): Rows {
         stripe_customer_id: 'cus_demo_000203', stripe_subscription_id: 'sub_demo_000203', subscription_status: 'active', billing_state: 'active', stripe_synced_at: at(-1),
         current_period_start: startOfDay(-1), current_period_end: startOfDay(29), paid_through: startOfDay(29) }),
     ],
+    // The simulated Stripe's side of Lakeside Dental's subscription, so the practice scenarios can renew, fail, or cancel it.
+    demo_stripe: seedSubscription({ siteId: S.dental, clientId: C.dental, plan: 'premium', customer: 'cus_demo_000203', sub: 'sub_demo_000203', invoice: 'in_demo_000203_first', start: Math.floor(Date.parse(startOfDay(-1)) / 1000), end: Math.floor(Date.parse(startOfDay(29)) / 1000) }),
     care_cycles: [
       { id: Y.physio, site_id: S.physio, source: 'manual', period_start: startOfDay(-4), period_end: startOfDay(26), plan: 'business', review_due_at: at(3), included_minutes: 30, agreed_price: 129, paid_at: at(-4), scan_state: 'queued' },
       { id: Y.bakery, site_id: S.bakery, source: 'manual', period_start: startOfDay(-10), period_end: startOfDay(20), plan: 'premium', review_due_at: at(-1), included_minutes: 90, agreed_price: 239, paid_at: at(-10), scan_state: 'queued' },

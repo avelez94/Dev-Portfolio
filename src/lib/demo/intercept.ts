@@ -8,7 +8,8 @@
  *   Zoom meetings                                                    simulated and logged
  *   starting the check runner (GitHub)                               simulated and logged
  *   DNS lookups for website addresses                                answered with example.com's address
- *   anything else, including Stripe and raw http(s) connections      refused and logged
+ *   Stripe                                                           the simulated Stripe (stripe-sim.ts)
+ *   anything else, including raw http(s) connections                 refused and logged
  *
  * Requests outside the demo scope pass through untouched. Installed once, by
  * the demo route only, and never on a production deployment.
@@ -21,6 +22,7 @@ import { randomUUID } from 'node:crypto'
 import { demoScope, type DemoLogEntry, type DemoScope } from './context'
 import { demoDeployment } from './mode'
 import { rest, storage } from './rest'
+import { installDemoStripe } from './stripe-sim'
 
 const g = globalThis as typeof globalThis & { __demoIntercept?: boolean }
 type DemoFetch = typeof fetch & { __demo?: true }
@@ -84,6 +86,8 @@ async function answer(scope: DemoScope, req: Request): Promise<Response> {
 
 export function installDemoIntercept() {
   if (!demoDeployment()) return
+  // Stripe calls in a demo request are answered by the simulated Stripe, never sent.
+  installDemoStripe()
 
   // Checked on every demo request: Next.js can put its own fetch back (development hot reload).
   if (!(globalThis.fetch as DemoFetch).__demo) {

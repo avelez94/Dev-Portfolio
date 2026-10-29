@@ -63,6 +63,17 @@ function condition(alias, col, raw) {
   return neg ? `not (${s})` : s
 }
 
+/** or=(a.eq.1,and(b.eq.2,c.is.null)) */
+function logic(alias, kind, body) {
+  const parts = splitTop(body.replace(/^\(/, '').replace(/\)$/, '')).map((p) => {
+    const g = p.match(/^(not\.)?(or|and)\((.*)\)$/)
+    if (g) { const inner = logic(alias, g[2], `(${g[3]})`); return g[1] ? `not ${inner}` : inner }
+    const dot = p.indexOf('.')
+    return condition(alias, p.slice(0, dot), p.slice(dot + 1))
+  })
+  return `(${parts.join(kind === 'or' ? ' or ' : ' and ')})`
+}
+
 function selectSql(table, params) {
   const select = params.get('select') || '*'
   const cols = []
@@ -80,6 +91,7 @@ function selectSql(table, params) {
   const where = []
   for (const [k, v] of params) {
     if (['select', 'order', 'limit', 'offset', 'on_conflict', 'columns'].includes(k)) continue
+    if (k === 'or' || k === 'and') { where.push(logic('t', k, v)); continue }
     if (k.includes('.')) {
       const [target, col] = k.split('.')
       const j = joins.find((x) => x.target === target)

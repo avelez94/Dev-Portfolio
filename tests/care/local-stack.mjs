@@ -48,7 +48,7 @@ export function seed() {
 let app = null
 let shim = null
 
-export async function startStack({ seedData = true } = {}) {
+export async function startStack({ seedData = true, env = {} } = {}) {
   await startDb()
   const ids = seedData ? seed() : null
   shim = await startRestShim(REST_PORT)
@@ -65,6 +65,7 @@ export async function startStack({ seedData = true } = {}) {
       STRIPE_SECRET_KEY: '',
       CARE_CLIENT_EMAIL_LIVE: 'false',
       CARE_EMAIL_ALLOWLIST: '',
+      ...env,
     },
     stdio: process.env.STACK_LOG ? 'inherit' : 'ignore',
     detached: true,

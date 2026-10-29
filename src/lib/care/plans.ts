@@ -4,6 +4,7 @@
  * the only prices checkout will ever use.
  */
 import { carePlans } from '@/content/offers'
+import { stripeSim } from './stripe-sim'
 
 export type PlanId = 'essential' | 'business' | 'premium'
 export const PLAN_IDS: PlanId[] = ['essential', 'business', 'premium']
@@ -31,6 +32,8 @@ const PRICE_ENV: Record<PlanId, string> = {
 }
 
 export function priceIdFor(id: PlanId): string | null {
+  const sim = stripeSim()
+  if (sim) return sim.priceId(id)
   return process.env[PRICE_ENV[id]] || null
 }
 

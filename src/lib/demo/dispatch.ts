@@ -4,19 +4,21 @@
  * data. Dashboard data and storage go straight to the demo database. Website
  * Care and the other admin API routes run their real handlers inside the demo
  * scope, so their database calls reach the demo database and their outside
- * services are simulated. A few Stripe actions have demo versions, because
- * the Stripe SDK can't be pointed at the demo.
+ * services are simulated. Stripe is answered by the simulated Stripe
+ * (stripe-sim.ts); the client's checkout page and the practice scenarios
+ * have demo routes, and their notices go through the real processEvent.
  */
 import 'server-only'
 import { NextRequest } from 'next/server'
 import { demoScope, type DemoScope } from './context'
 import { rest, storage } from './rest'
 import { DEMO_IDS, simulatedFindings } from './fixtures'
-import { db, must, logActivity, type Row } from '@/lib/care/db'
-import { createCycle, enqueueScan } from '@/lib/care/cycles'
+import { db, must, type Row } from '@/lib/care/db'
+import { enqueueScan } from '@/lib/care/cycles'
+import { processEvent } from '@/lib/care/stripe'
+import { expireLink, payCheckout, runScenario, type Scenario } from './stripe-sim'
 import { completeRun } from '@/lib/care/runs'
 import { recordWork } from '@/lib/care/work-server'
-import { plan as planInfo } from '@/lib/care/plans'
 import * as careRoute from '@/app/api/care/admin/[...path]/route'
 import * as invoicesSend from '@/app/api/invoices/send/route'
 import * as emailSend from '@/app/api/email/send/route'
@@ -76,44 +78,42 @@ export async function simulateRunner() {
   }
 }
 
-/** Step 1, like createCheckout: links a (simulated) Stripe customer and returns a checkout link. Nothing is paid yet. */
-async function demoCheckoutLink(siteId: string) {
-  const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
-  if (site.enrollment_status === 'ended') return { error: 'Care for this website has ended.', status: 409 }
-  if (site.stripe_subscription_id) return { error: 'This website already has a subscription. Use the billing portal link instead.', status: 409 }
-  const customer = site.stripe_customer_id || `cus_demo_${siteId.slice(-6)}`
-  await db.from('care_sites').update({ stripe_customer_id: customer, updated_at: new Date().toISOString() }).eq('id', siteId)
-  await logActivity({ site_id: siteId, actor: 'admin', action: 'checkout_created', detail: { session: 'cs_demo', plan: site.plan, mode: 'demo' } })
-  note('note', `Simulated Stripe checkout link created for ${site.label}. Nothing was emailed; in real use you send the link yourself.`)
-  return { url: `/admin/care/demo-checkout?site=${siteId}`, simulated: true }
+/** The scenario a website can practice, given its simulated subscription. */
+const SCENARIOS: Scenario[] = ['renewal', 'failed_payment', 'cancel_at_period_end', 'cancel_now', 'repeat']
+
+const fail = (e: unknown) => ({ error: String((e as Error).message || e), status: (e as { status?: number; statusCode?: number }).status || 409 })
+
+/** The client paying on the simulated checkout page, then Stripe's notices through the real processEvent. */
+async function demoPayment(sessionId: string) {
+  try {
+    const r = await payCheckout(processEvent, sessionId)
+    const site = must(await db.from('care_sites').select('label, plan, agreed_monthly_price').eq('id', r.site_id).single(), 'Website')
+    note('payment', `Simulated checkout paid for ${site.label}. Stripe's notices were processed: ${r.delivered.map((d) => `${d.type} (${d.status})`).join(', ')}. No Stripe call was made.`)
+    await simulateRunner()
+    const cycle = (await db.from('care_cycles').select('id, hold_reason').eq('site_id', r.site_id).order('created_at', { ascending: false }).limit(1).maybeSingle()).data
+    return { site_id: r.site_id, cycle_id: cycle?.id || null, held: !!cycle?.hold_reason, delivered: r.delivered }
+  } catch (e) { return fail(e) }
 }
 
-/**
- * Step 2, the client paying: what Stripe's verified payment notices would do
- * (handleInvoicePaid and syncSubscription). Stripe charges the plan's Stripe
- * Price, which can differ from the agreed monthly price recorded for reports.
- */
-async function demoPayment(siteId: string) {
+async function demoScenario(siteId: string, scenario: string) {
+  if (!SCENARIOS.includes(scenario as Scenario) && scenario !== 'expire_link') return { error: 'Unknown practice scenario.', status: 422 }
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
-  if (!site.stripe_customer_id) return { error: 'Create the checkout link first.', status: 409 }
-  if (site.stripe_subscription_id) return { error: 'This website already has a subscription.', status: 409 }
-  const tag = siteId.slice(-6)
-  const now = new Date()
-  const end = new Date(now.getTime() + 30 * 86_400_000)
-  const charged = planInfo(site.plan).monthly
-  await db.from('care_sites').update({
-    stripe_subscription_id: `sub_demo_${tag}`, subscription_status: 'active', billing_state: 'active', stripe_synced_at: now.toISOString(),
-    current_period_start: now.toISOString(), current_period_end: end.toISOString(), paid_through: end.toISOString(), updated_at: now.toISOString(),
-  }).eq('id', siteId)
-  await logActivity({ site_id: siteId, actor: 'stripe', action: 'subscription_linked', detail: { subscription: `sub_demo_${tag}`, simulated: true } })
-  const r = await createCycle({ siteId, source: 'stripe', invoiceId: `in_demo_${tag}_${now.getTime()}`, subscriptionId: `sub_demo_${tag}`, periodStart: now, periodEnd: end, plan: site.plan, paidAt: now, amountPaid: charged * 100, currency: 'usd', actor: 'stripe' })
-  const differs = typeof site.agreed_monthly_price === 'number' && site.agreed_monthly_price !== charged
-  note('payment', `Simulated first payment of $${charged} for ${site.label} (the ${planInfo(site.plan).name} Stripe price).${differs ? ` The agreed price recorded for reports is $${site.agreed_monthly_price}; Stripe would still charge $${charged}.` : ''} No Stripe call was made.`)
-  await simulateRunner()
-  return { cycle_id: r.cycle.id, held: !!r.cycle.hold_reason, charged }
+  try {
+    if (scenario === 'expire_link') {
+      if (!site.checkout_session_id) return { error: 'There is no open checkout link to expire. Send an invitation first.', status: 409 }
+      const delivered = await expireLink(processEvent, siteId, site.checkout_session_id)
+      note('payment', `Simulated: the checkout link for ${site.label} expired before it was used. Stripe's notice was processed: ${delivered.map((d) => `${d.type} (${d.status})`).join(', ')}.`)
+      return { summary: 'The checkout link expired. Send a new invitation to give the client a fresh link.', delivered }
+    }
+    if (!site.stripe_subscription_id) return { error: 'This website has no subscription to practice with. Use Lakeside Dental, or complete a simulated checkout first.', status: 409 }
+    const r = await runScenario(processEvent, siteId, site.stripe_subscription_id, scenario as Scenario)
+    note('payment', `Practice for ${site.label}: ${r.summary} Notices processed: ${r.delivered.map((d) => `${d.type} (${d.status}${d.note ? `: ${d.note}` : ''})`).join(', ')}. No Stripe call was made.`)
+    await simulateRunner()
+    return r
+  } catch (e) { return fail(e) }
 }
 
-async function careOverride(method: string, seg: string[]): Promise<DemoResponse | null> {
+async function careOverride(method: string, seg: string[], body: Row, query: URLSearchParams): Promise<DemoResponse | null> {
   const key = `${method} ${seg.map((s, i) => (i === 1 && /^[0-9a-f-]{36}$/i.test(s) ? ':id' : s)).join('/')}`
   if (key === 'GET status') {
     return reply(200, {
@@ -125,10 +125,16 @@ async function careOverride(method: string, seg: string[]): Promise<DemoResponse
       policyApproved: false,
     })
   }
-  if (key === 'POST sites/:id/checkout') { const r = await demoCheckoutLink(seg[1]); return reply('status' in r ? r.status as number : 200, r) }
-  if (key === 'POST sites/:id/demo-pay') { const r = await demoPayment(seg[1]); return reply('status' in r ? r.status as number : 200, r) }
+  if (key === 'POST demo-checkout/pay') { const r = await demoPayment(String(body.session || '')); return reply('status' in r ? r.status as number : 200, r) }
+  if (key === 'GET demo-checkout/session') {
+    const sid = String(query.get('session') || '')
+    const sess = (await db.from('demo_stripe').select('data').eq('id', sid).eq('kind', 'session').maybeSingle()).data?.data
+    if (!sess) return reply(404, { error: 'This checkout link isn’t valid.' })
+    const expired = sess.status === 'open' && sess.expires_at * 1000 <= Date.now()
+    return reply(200, { id: sess.id, status: expired ? 'expired' : sess.status, expires_at: new Date(sess.expires_at * 1000).toISOString(), site_id: sess.metadata?.care_site_id, price: sess.price })
+  }
+  if (key === 'POST sites/:id/demo-scenario') { const r = await demoScenario(seg[1], String(body.scenario || '')); return reply('status' in r ? r.status as number : 200, r) }
   if (key === 'POST sites/:id/portal') { note('note', 'Simulated Stripe billing portal link. No Stripe call was made.'); return reply(200, { url: `/admin/care?site=${seg[1]}`, simulated: true }) }
-  if (key === 'POST sites/:id/sync') { note('note', 'Simulated Stripe sync. Nothing was fetched from Stripe.'); return reply(200, { ok: true, simulated: true }) }
   return null
 }
 
@@ -159,7 +165,9 @@ export async function dispatchDemo(r: DemoRequest, origin: string, cookie: strin
 
   if (r.path.startsWith('/api/care/admin/')) {
     const seg = r.path.slice('/api/care/admin/'.length).split('/').filter(Boolean).map(decodeURIComponent)
-    const over = await careOverride(r.method, seg)
+    let body: Row = {}
+    try { body = raw.length ? JSON.parse(raw.toString('utf8')) : {} } catch { body = {} }
+    const over = await careOverride(r.method, seg, body, params)
     if (over) return over
     const handler = (careRoute as unknown as RouteModule)[r.method as 'GET']
     if (!handler) return reply(405, { error: 'Method not allowed' })

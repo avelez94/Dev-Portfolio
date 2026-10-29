@@ -111,6 +111,29 @@ export function billingAttention(p: { client: string; site: string; state: strin
   }
 }
 
+/** The client's invitation to start their care subscription, with the verified monthly price and the checkout link. */
+export function subscriptionInvitation(p: { name: string; business: string; siteLabel: string; siteUrl: string; planName: string; amount: string; includedMinutes: number; link: string; expires: string }): Email {
+  const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
+  const expires = new Date(p.expires).toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })
+  return {
+    subject: oneLine(`Start Website Care for ${p.siteLabel}`),
+    ...renderEmail({
+      audience: 'client',
+      preheader: `${p.planName}, ${p.amount} a month. Your secure checkout link is inside.`,
+      eyebrow: 'Website Care',
+      title: 'Your care plan is',
+      titleAccent: 'ready to start.',
+      blocks: [
+        { type: 'p', html: `Hi ${esc(first)},` },
+        { type: 'p', html: `Here’s your link to start Website Care for ${esc(p.siteLabel)}. Checkout is handled securely by Stripe.` },
+        { type: 'details', rows: [['Website', `${esc(p.siteLabel)}<br>${esc(p.siteUrl)}`], ['Plan', esc(p.planName)], ['Monthly price', `${esc(p.amount)} a month, billed monthly until you cancel`], ['Included time', `${p.includedMinutes} minutes of updates or troubleshooting each month`]] },
+        { type: 'buttons', items: [{ label: 'Start My Subscription', href: p.link }], fallbackLink: true },
+        { type: 'note', html: `This link works until ${esc(expires)}. If it expires, reply and I’ll send a new one. Your first monthly review starts after your first payment. Reply any time if you’d like to change or cancel your plan.` },
+      ],
+    }),
+  }
+}
+
 /**
  * The client's report email: your message, then the complete approved report,
  * built from the same frozen snapshot as the attached PDF. Tables with inline

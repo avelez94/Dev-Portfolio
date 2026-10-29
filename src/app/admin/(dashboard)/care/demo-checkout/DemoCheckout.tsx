@@ -1,8 +1,9 @@
 'use client'
 /**
- * Demo stand in for Stripe Checkout. In real use the client opens Stripe's
- * own page from the link you send them, and only Stripe's verified payment
- * notice marks the website paid. Here "Pay" plays that notice.
+ * Demo stand in for Stripe Checkout, opened from the link in the invitation
+ * (or the copied link). It reads the simulated checkout session, so an
+ * expired or already used link behaves like Stripe's. "Pay" plays the client
+ * paying; Stripe's notices then go through the real webhook processing.
  */
 import { useEffect, useState } from 'react'
 import { CARE_CSS, careApi, useLoad, Badge, ErrorBox, Loading } from '../ui'
@@ -10,19 +11,23 @@ import { CARE_CSS, careApi, useLoad, Badge, ErrorBox, Loading } from '../ui'
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export default function DemoCheckout() {
-  const [id, setId] = useState<string | null>(null)
-  useEffect(() => { setId(new URLSearchParams(window.location.search).get('site')) }, []) // eslint-disable-line react-hooks/set-state-in-effect
-  const site = useLoad<Row>(id ? `sites/${id}` : null, [id])
+  const [sid, setSid] = useState<string | null>(null)
+  useEffect(() => { setSid(new URLSearchParams(window.location.search).get('session')) }, []) // eslint-disable-line react-hooks/set-state-in-effect
+  const sess = useLoad<Row>(sid ? `demo-checkout/session?session=${encodeURIComponent(sid)}` : null, [sid])
+  const siteId = sess.data?.site_id as string | undefined
+  const site = useLoad<Row>(siteId ? `sites/${siteId}` : null, [siteId])
   const tpl = useLoad<Row>('template')
   const [done, setDone] = useState<Row | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const s = site.data?.site
   const plan = (tpl.data?.plans || []).find((p: Row) => p.id === s?.plan)
+  const amount = typeof s?.checkout_amount_cents === 'number' ? s.checkout_amount_cents / 100 : plan?.monthly
+  const back = siteId ? `/admin/care?site=${siteId}` : '/admin/care'
 
   async function pay() {
     setBusy(true); setErr(null)
-    try { setDone(await careApi<Row>(`sites/${id}/demo-pay`, { method: 'POST', json: {} })); site.reload() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+    try { setDone(await careApi<Row>('demo-checkout/pay', { method: 'POST', json: { session: sid } })) } catch (e) { setErr((e as Error).message); sess.reload() } finally { setBusy(false) }
   }
 
   return (
@@ -32,29 +37,28 @@ export default function DemoCheckout() {
         <section className="care-panel">
           <Badge tone="coral">Simulated Stripe checkout</Badge>
           <h1 style={{ fontSize: 22, margin: '10px 0 4px' }}>What the client sees</h1>
-          <p className="care-muted" style={{ marginBottom: 12 }}>In real use this is Stripe’s own page, opened from the link you send. Nothing here contacts Stripe.</p>
-          <ErrorBox error={err || site.error} />
-          {!s ? <Loading /> : (
+          <p className="care-muted" style={{ marginBottom: 12 }}>In real use this is Stripe’s own page, opened from the invitation email. Nothing here contacts Stripe.</p>
+          <ErrorBox error={err || sess.error || site.error} />
+          {!sid ? <p>This checkout link is missing its session. Open it from the invitation or the copied link.</p> : !sess.data || !s ? <Loading /> : (
             <div className="care-grid">
               <div className="care-sub">
                 <div className="care-label">Subscription</div>
-                <div style={{ fontSize: 18 }}><b>{plan?.name || s.plan}</b>, ${plan?.monthly}/month</div>
+                <div style={{ fontSize: 18 }}><b>{plan?.name || s.plan}</b>, ${amount}/month</div>
                 <div className="care-muted">For {site.data?.client?.business || site.data?.client?.name}: {s.label}</div>
-                {typeof s.agreed_monthly_price === 'number' && plan && s.agreed_monthly_price !== plan.monthly && (
-                  <p className="care-err" style={{ margin: '8px 0 0' }}>The agreed price on file is ${s.agreed_monthly_price}, but Stripe charges the plan’s price (${plan.monthly}). Reports show the agreed price. A different charge needs its own Stripe price.</p>
-                )}
               </div>
               {done ? (
                 <div className="care-okmsg" role="status">
-                  Paid (simulated). Stripe would now send its payment notice; the website shows <b>Paid, active</b> and the first monthly review was created{done.held ? ', waiting for you to confirm the setup' : ''}.{' '}
-                  <a href={`/admin/care?site=${id}`}>Back to the website</a>
+                  Paid (simulated). Stripe’s notices were processed by the real webhook code: the website shows <b>Paid, active</b> and the first monthly review was created{done.held ? ', waiting for you to confirm the setup' : ''}.{' '}
+                  <a href={back}>Back to the website</a>
                 </div>
-              ) : s.stripe_subscription_id ? (
-                <p>This website already has a subscription. <a href={`/admin/care?site=${id}`}>Back to the website</a></p>
+              ) : sess.data.status === 'expired' ? (
+                <p className="care-err" role="alert">This checkout link has expired. Nothing was charged. Ask for a new invitation. <a href={back}>Back to the website</a></p>
+              ) : sess.data.status === 'complete' ? (
+                <p>This checkout link was already used. <a href={back}>Back to the website</a></p>
               ) : (
                 <div className="care-row">
-                  <button className="care-btn primary" disabled={busy} onClick={pay}>{busy ? 'Paying…' : `Pay $${plan?.monthly ?? ''} (simulated)`}</button>
-                  <a className="care-btn" href={`/admin/care?site=${id}`}>Leave without paying</a>
+                  <button className="care-btn primary" disabled={busy} onClick={pay}>{busy ? 'Paying…' : `Pay $${amount ?? ''} (simulated)`}</button>
+                  <a className="care-btn" href={back}>Leave without paying</a>
                 </div>
               )}
             </div>

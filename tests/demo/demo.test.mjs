@@ -254,18 +254,58 @@ test('a new client: enroll, record the care terms at confirmation, simulated che
 
   const bill = page.locator('section[aria-labelledby="bill-h"]')
   await bill.getByText('No subscription yet').waitFor()
-  await bill.getByRole('button', { name: 'Create Stripe checkout link' }).click()
-  await bill.getByRole('link', { name: /Open the simulated checkout/ }).click()
-  await page.getByText('Stripe charges the plan’s price ($249)').waitFor()
+
+  // The agreed $239 doesn't match the Premium Stripe price ($249): checkout and the invitation are blocked.
+  await bill.getByRole('button', { name: 'Send subscription invitation' }).click()
+  const inv = bill.getByTestId('invite-panel')
+  await inv.getByText('Can’t send yet.').waitFor()
+  assert.match(await inv.textContent(), /charges \$249 a month, but the agreed price is \$239 a month/)
+  assert.equal(await inv.getByRole('button', { name: 'Send invitation' }).count(), 0)
+  await bill.getByRole('button', { name: 'Copy checkout link instead' }).click()
+  await bill.getByText(/Checkout is blocked for Rivera Garden Design/).waitFor()
+  assert.equal(await bill.getByRole('textbox', { name: 'Stripe link' }).count(), 0, 'no link was created')
+
+  // Correct the agreed price to the plan price; the invitation shows the verified recurring amount.
+  await page.locator('#f-price').fill('249')
+  await Promise.all([page.waitForResponse((r) => r.url().includes('/api/demo') && r.request().method() === 'POST'), page.getByRole('button', { name: 'Save changes' }).click()])
+  await page.reload()
+  await bill.getByRole('button', { name: 'Send subscription invitation' }).click()
+  await inv.getByText('Price verified').waitFor()
+  const shown = await inv.textContent()
+  assert.match(shown, /casey@example\.com/)
+  assert.match(shown, /Premium Care/)
+  assert.match(shown, /\$249 USD every month/)
+  await inv.locator('#inv-conf').fill('casey@example.com')
+  await inv.getByRole('button', { name: 'Send invitation' }).click()
+  await inv.getByText(/Invitation sent to casey@example\.com/).waitFor()
+  let log = await simulated(page)
+  assert.match(log, /Email to casey@example\.com: Start Website Care for Rivera Garden Design/)
+
+  // The practice panel: let the link expire, then a fresh invitation makes a new link.
+  const practice = bill.getByTestId('practice-panel')
+  await practice.getByRole('button', { name: 'Let the link expire' }).click()
+  await practice.getByText(/The checkout link expired/).waitFor()
+  await page.reload()
+  await bill.getByText(/Checkout link expired|invitation sent/).first().waitFor()
+  await bill.getByRole('button', { name: 'Send subscription invitation' }).click()
+  await inv.getByText('Expired; a new link will be created').waitFor()
+  await inv.locator('#inv-conf').fill('casey@example.com')
+  await inv.getByRole('button', { name: 'Send invitation' }).click()
+  await inv.getByText(/Invitation sent to casey@example\.com/).waitFor()
+
+  // Play the client on the simulated checkout; Stripe's notices go through the real webhook processing.
+  await page.reload()
+  await practice.getByRole('link', { name: /Open the simulated checkout/ }).click()
   await page.getByRole('button', { name: 'Pay $249 (simulated)' }).click()
   await page.getByText('Paid (simulated)').waitFor()
   await page.getByRole('link', { name: 'Back to the website' }).click()
   await bill.getByText('Paid, active').waitFor()
   await page.locator('section[aria-labelledby="hist-h"]').getByText('Manual review due').waitFor()
-  const log = await simulated(page)
-  assert.match(log, /checkout link created for Rivera Garden Design/)
-  assert.match(log, /first payment of \$249 for Rivera Garden Design.*agreed price recorded for reports is \$239/)
+  log = await simulated(page)
+  assert.match(log, /checkout paid for Rivera Garden Design.*checkout\.session\.completed \(processed\), invoice\.paid \(processed\)/)
   assert.match(log, /Simulated check finished for Rivera Garden Design/)
+  // A second invitation is refused now that a subscription exists.
+  assert.equal(await bill.getByRole('button', { name: 'Send subscription invitation' }).count(), 0)
 
   await page.goto(`${APP}/admin/care?view=queue`)
   await page.locator('section[aria-labelledby="queue-h"]').getByText('Rivera Garden Design').first().waitFor()
@@ -274,6 +314,87 @@ test('a new client: enroll, record the care terms at confirmation, simulated che
   assert.doesNotMatch(await row.textContent(), /Not set/)
   assert.doesNotMatch(await page.locator('tr', { hasText: 'Northside Physio' }).textContent(), /Not set|No subscription yet/)
   await page.locator('tr', { hasText: 'Northside Physio' }).getByText('Billed outside Stripe').waitFor()
+  await close()
+})
+
+test('practice billing events: renewal, failed payment, both cancellations, and redelivered notices create nothing twice', async () => {
+  const { page, close } = await signedIn()
+  const DENTAL = '00000000-0000-4000-8000-000000000203'
+  const site = () => page.evaluate(async (id) => (await fetch(`/api/care/admin/sites/${id}`)).json(), DENTAL)
+  const counts = async () => { const d = await site(); return { cycles: d.cycles.length, reports: d.reports.length, minutes: d.cycles.reduce((n, c) => n + c.included_minutes, 0), site: d.site } }
+  await page.goto(`${APP}/admin/care?site=${DENTAL}`)
+  const practice = page.getByTestId('practice-panel')
+  const run = async (name, expect) => {
+    await practice.getByRole('button', { name }).click()
+    await practice.getByRole('status').getByText(expect).waitFor()
+    return practice.getByRole('status').textContent()
+  }
+  // The panel shows once the page is running on the demo session; the counts read through it.
+  await practice.getByRole('button', { name: 'Renewal' }).waitFor()
+  const start = await counts()
+  assert.equal(start.cycles, 1)
+
+  // Renewal: one new paid period with its review and its own included minutes.
+  await run('Renewal', /renewed the subscription/)
+  const renewed = await counts()
+  assert.equal(renewed.cycles, 2)
+  assert.equal(renewed.reports, start.reports + 1)
+  assert.equal(renewed.minutes, start.minutes + 90)
+  assert.ok(new Date(renewed.site.paid_through) > new Date(start.site.paid_through))
+
+  // The same notices again (Stripe's retry): ignored as duplicates, nothing added.
+  const again = await run('Send the last notice again', /same notices again/)
+  assert.match(again, /invoice\.paid: already processed, ignored/)
+  assert.deepEqual(await counts().then((c) => [c.cycles, c.reports, c.minutes]), [2, renewed.reports, renewed.minutes])
+
+  // Failed payment: no period starts for the unpaid month; billing needs attention after the failures.
+  await run('Failed payment', /payment failed \(attempt 1\)/)
+  await run('Failed payment', /payment failed \(attempt 2\)/)
+  let c = await counts()
+  assert.equal(c.cycles, 2, 'an unpaid month starts no review')
+  assert.equal(c.site.subscription_status, 'past_due')
+  assert.ok(c.site.failed_payment_count >= 2)
+  await page.reload()
+  await page.locator('section[aria-labelledby="bill-h"]').getByText(/failed payment/).first().waitFor()
+
+  // Stripe's retry succeeds: that month's period starts once.
+  await run('Renewal', /retried the failed renewal and it was paid/)
+  c = await counts()
+  assert.equal(c.cycles, 3)
+  assert.equal(c.site.subscription_status, 'active')
+  await run('Send the last notice again', /same notices again/)
+  assert.equal((await counts()).cycles, 3)
+
+  // Cancel at period end: still active and honored; the next "renewal" ends it instead of charging.
+  await run('Cancel at period end', /scheduled cancellation/)
+  c = await counts()
+  assert.equal(c.site.billing_state, 'canceling')
+  await page.reload()
+  await page.locator('section[aria-labelledby="bill-h"]').getByText('Cancels at period end').waitFor()
+  await run('Renewal', /closed the subscription instead of renewing/)
+  c = await counts()
+  assert.equal(c.site.subscription_status, 'canceled')
+  assert.equal(c.cycles, 3, 'no new period after cancellation')
+
+  const log = await simulated(page)
+  assert.match(log, /Practice for Lakeside Dental/)
+  assert.match(log, /Email to .*Website Care billing: Lakeside Dental needs attention/)
+  await close()
+})
+
+test('practice: immediate cancellation flags the open review for your decision', async () => {
+  const { page, close } = await signedIn()
+  const DENTAL = '00000000-0000-4000-8000-000000000203'
+  await page.goto(`${APP}/admin/care?site=${DENTAL}`)
+  const practice = page.getByTestId('practice-panel')
+  await practice.getByRole('button', { name: 'Cancel immediately' }).click()
+  await practice.getByRole('status').getByText(/canceled immediately/).waitFor()
+  const d = await page.evaluate(async (id) => (await fetch(`/api/care/admin/sites/${id}`)).json(), DENTAL)
+  assert.equal(d.site.subscription_status, 'canceled')
+  assert.equal(d.cycles.length, 1)
+  assert.equal(d.cycles[0].billing_flag, 'canceled_immediately')
+  await page.reload()
+  await page.locator('section[aria-labelledby="hist-h"]').getByText(/canceled immediately/).first().waitFor()
   await close()
 })
 

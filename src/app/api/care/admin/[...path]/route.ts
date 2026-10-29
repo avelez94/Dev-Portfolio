@@ -14,7 +14,7 @@ import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateConte
 import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
 import { reportPdf } from '@/lib/care/report-pdf'
 import { sendPreview, sendReport, markStuckSend } from '@/lib/care/send'
-import { createCheckout, portalSession, syncSubscription, stripeMode } from '@/lib/care/stripe'
+import { createCheckout, closeCheckout, invitationPreview, portalSession, sendInvitation, syncSubscription, stripeMode } from '@/lib/care/stripe'
 import { deliver } from '@/lib/care/notify'
 import { diffFindings, type FindingRow } from '@/lib/care/findings'
 import { checkUrlResolves } from '@/lib/care/url-safety'
@@ -193,6 +193,10 @@ async function putSite({ seg, body }: Ctx) {
     const open = (await db.from('care_cycles').select('id').eq('site_id', siteId).is('completed_at', null)).data || []
     for (const c of open) await invalidateApproval(c.id, 'The report recipient changed.', ACTOR)
   }
+  // A checkout link made for the old price or plan must not stay payable.
+  if (site.checkout_session_id && (site.agreed_monthly_price !== saved.agreed_monthly_price || site.plan !== saved.plan)) {
+    await closeCheckout(siteId, 'The agreed price or plan changed.', ACTOR)
+  }
   // Open reviews without their own recorded price show the website's agreed price.
   if (site.agreed_monthly_price !== saved.agreed_monthly_price) {
     const open = (await db.from('care_cycles').select('id').eq('site_id', siteId).is('completed_at', null).is('agreed_price', null)).data || []
@@ -226,6 +230,12 @@ function setStatus(to: 'paused' | 'confirmed' | 'ended'): Handler {
 
 async function checkout({ seg }: Ctx) {
   return ok(await createCheckout(id(seg[1]), ACTOR))
+}
+async function invitation({ seg }: Ctx) {
+  return ok(await invitationPreview(id(seg[1])))
+}
+async function invite({ seg, body }: Ctx) {
+  return ok(await sendInvitation(id(seg[1]), { confirm_email: String(body.confirm_email || ''), resend: body.resend === true }, ACTOR))
 }
 async function portal({ seg }: Ctx) {
   return ok(await portalSession(id(seg[1]), ACTOR))
@@ -512,6 +522,8 @@ const routes: [string, string, Handler][] = [
   ['PUT', 'sites/:id', putSite],
   ['POST', 'sites/:id/confirm', confirm],
   ['POST', 'sites/:id/checkout', checkout],
+  ['GET', 'sites/:id/invitation', invitation],
+  ['POST', 'sites/:id/invitation', invite],
   ['POST', 'sites/:id/portal', portal],
   ['POST', 'sites/:id/sync', sync],
   ['POST', 'sites/:id/cycles', manualCycle],

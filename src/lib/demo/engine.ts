@@ -25,7 +25,7 @@ export type DemoState = {
   log: DemoLogEntry[]
 }
 
-const MIGRATIONS = ['20261030_website_care.sql', '20261031_care_work_ledger.sql', '20261103_care_report_suggestions.sql']
+const MIGRATIONS = ['20261030_website_care.sql', '20261031_care_work_ledger.sql', '20261103_care_report_suggestions.sql', '20261104_care_checkout_invitations.sql']
 
 /** The existing dashboard tables (created outside the repo in production), with the columns the app uses. */
 const BASE_SCHEMA = `
@@ -60,6 +60,8 @@ create table public.sows (id uuid primary key default gen_random_uuid(), proposa
 create table public.contracts (id uuid primary key default gen_random_uuid(), sow_id uuid, proposal_id uuid, client_name text, client_email text, client_business text,
   project_title text, project_type text, start_date text, delivery_date text, total_fee numeric, deposit numeric, balance numeric, kill_fee_pct numeric, payment_method text,
   status text default 'pending', signed_at timestamptz, signature text, terms_version text, hourly_rate numeric, payment_plan text, created_at timestamptz default now());
+-- Demo only: the simulated Stripe's objects (stripe-sim.ts). Not part of any real database.
+create table public.demo_stripe (id text primary key, kind text not null, data jsonb not null, created_at timestamptz not null default clock_timestamp());
 create table public.debt_payoff (id uuid primary key default gen_random_uuid(), creditor text, promo_name text, original_balance numeric, current_balance numeric,
   promo_deadline date, deadline_is_estimated boolean default false, priority int, completed boolean default false, completed_at timestamptz,
   created_at timestamptz default now(), updated_at timestamptz default now());

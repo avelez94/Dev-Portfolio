@@ -61,6 +61,8 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-table tr.click{cursor:pointer}.care-table tr.click:hover td{background:var(--surface)}
 .care-err{background:var(--red);color:var(--redText);border-radius:12px;padding:10px 14px;margin:0 0 12px}
 .care-okmsg{background:var(--green);color:var(--greenText);border-radius:12px;padding:10px 14px;margin:0 0 12px}
+.care-dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px;margin:0}.care-dl dt{color:var(--text2);font-size:13px}.care-dl dd{margin:0;overflow-wrap:anywhere}
+@media (max-width:480px){.care-dl{grid-template-columns:1fr}.care-dl dd{margin-bottom:6px}}
 .care-who{background:var(--surface2);border:2px solid var(--coral);border-radius:16px;padding:14px 16px;margin:0 0 16px}
 .care-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0 0}
 .care-step{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px}

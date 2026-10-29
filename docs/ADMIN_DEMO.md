@@ -26,12 +26,14 @@ Vercel previews share the production database, so the admin on a preview runs as
   - Database and storage calls go to the demo database.
   - Resend email, Zoom meetings and GitHub runner dispatch are simulated and listed under **Simulated actions**.
   - DNS lookups return example.com's address.
-  - Everything else is refused, including Stripe and any raw http(s) connection.
+  - Stripe is answered by the simulated Stripe (`stripe-sim.ts`): prices, customers, checkout sessions, subscriptions, and invoices kept in the demo database. The real checkout, invitation, and webhook code runs against it.
+  - Everything else is refused, including any raw http(s) connection.
 - **Demo versions of some actions** (in `dispatch.ts`):
   - The check runner finishes queued checks with fictional results.
-  - **Create Stripe checkout link** returns a link to a simulated checkout page (what the client would see). **Pay (simulated)** there plays Stripe's payment notice. It charges the plan's Stripe price, as Stripe would, and creates the paid period with the real `createCycle`.
+  - **Send subscription invitation** and **Copy checkout link instead** run the real price check and link handling; the link opens a simulated checkout page (what the client would see). **Pay (simulated)** there completes the simulated session and delivers Stripe's `checkout.session.completed` and `invoice.paid` notices to the real `processEvent`.
+  - **Practice billing events (demo)** on a website's page: renewal, failed payment, cancel at period end, cancel immediately, let the link expire, and send the last notice again. Each changes the simulated subscription and delivers Stripe style notices to the real `processEvent`; redelivered notices keep their event ids, as Stripe's retries do.
   - Simulated checks report each site's second agreed page as too wide for phones, so every review has an issue to handle.
-  - The Stripe portal and Stripe sync are acknowledged only.
+  - The Stripe billing portal is acknowledged only. **Refresh from Stripe** reads the simulated subscription.
 
 ## Direct links (fictional records, the same in every session)
 
@@ -44,6 +46,8 @@ Vercel previews share the production database, so the admin on a preview runs as
 | Harbor Street Bakery (older terms, flagged) | `/admin/care?site=00000000-0000-4000-8000-000000000202` |
 | Lakeside Dental (simulated Stripe subscription) | `/admin/care?site=00000000-0000-4000-8000-000000000203` |
 | Owner's guide | `/admin/care/guide` |
+| Practice renewal, failed payment, and cancellations | Lakeside Dental: `/admin/care?site=00000000-0000-4000-8000-000000000203` |
+| A blocked checkout price ($239 agreed, $249 Premium price) | Harbor Street Bakery (link above) |
 | My Pricing cards, proposal and contract forms | `/admin/documents` |
 | Proposal with milestone payments (client view, current terms) | `/proposals/00000000-0000-4000-8000-000000000933` |
 | Proposal issued under the October terms (kept as issued) | `/proposals/00000000-0000-4000-8000-000000000932` |
