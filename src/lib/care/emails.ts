@@ -111,24 +111,101 @@ export function billingAttention(p: { client: string; site: string; state: strin
   }
 }
 
-/** The client's invitation to start their care subscription, with the verified monthly price and the checkout link. */
-export function subscriptionInvitation(p: { name: string; business: string; siteLabel: string; siteUrl: string; planName: string; amount: string; includedMinutes: number; link: string; expires: string }): Email {
+/** The client's persistent private link to read and sign their care agreement. */
+export function agreementLink(p: { name: string; siteLabel: string; siteUrl: string; planName: string; amount: string; includedMinutes: number; link: string; version: string; queuedLine: string }): Email {
   const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
-  const expires = new Date(p.expires).toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })
   return {
-    subject: oneLine(`Start Website Care for ${p.siteLabel}`),
+    subject: oneLine(`Your Website Care agreement for ${p.siteLabel}`),
     ...renderEmail({
       audience: 'client',
-      preheader: `${p.planName}, ${p.amount} a month. Your secure checkout link is inside.`,
+      preheader: `${p.planName}, ${p.amount} a month. Read and sign your care agreement, then start your plan.`,
       eyebrow: 'Website Care',
-      title: 'Your care plan is',
-      titleAccent: 'ready to start.',
+      title: 'Your care agreement is',
+      titleAccent: 'ready to sign.',
       blocks: [
         { type: 'p', html: `Hi ${esc(first)},` },
-        { type: 'p', html: `Here’s your link to start Website Care for ${esc(p.siteLabel)}. Checkout is handled securely by Stripe.` },
-        { type: 'details', rows: [['Website', `${esc(p.siteLabel)}<br>${esc(p.siteUrl)}`], ['Plan', esc(p.planName)], ['Monthly price', `${esc(p.amount)} a month, billed monthly until you cancel`], ['Included time', `${p.includedMinutes} minutes of updates or troubleshooting each month`]] },
-        { type: 'buttons', items: [{ label: 'Start My Subscription', href: p.link }], fallbackLink: true },
-        { type: 'note', html: `This link works until ${esc(expires)}. If it expires, reply and I’ll send a new one. Your first monthly review starts after your first payment. Reply any time if you’d like to change or cancel your plan.` },
+        { type: 'p', html: `Here’s your private link to read and sign the Website Care agreement for ${esc(p.siteLabel)}. It lists the website and checks we agreed on, your plan and price, and the billing, cancellation and refund terms.` },
+        { type: 'details', rows: [['Website', `${esc(p.siteLabel)}<br>${esc(p.siteUrl)}`], ['Plan', esc(p.planName)], ['Monthly price', `${esc(p.amount)} a month, billed monthly in advance until you cancel`], ['Included time', `${p.includedMinutes} minutes each month`], ['Agreement', `Version ${esc(p.version)}`]] },
+        { type: 'buttons', items: [{ label: 'Read and Sign', href: p.link }], fallbackLink: true },
+        { type: 'note', html: `Once you sign, you’ll get a signed PDF copy by email and the same page lets you start your plan through Stripe. ${esc(p.queuedLine)} This link stays the same, so you can come back to it any time.` },
+      ],
+    }),
+  }
+}
+
+/** Sent to the client with the signed agreement PDF attached. */
+export function agreementSignedClient(p: { name: string; siteLabel: string; signedDate: string; link: string; queuedLine: string; paid: boolean }): Email {
+  const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
+  return {
+    subject: oneLine(`Your signed Website Care agreement for ${p.siteLabel}`),
+    ...renderEmail({
+      audience: 'client',
+      preheader: 'Your signed copy is attached.',
+      eyebrow: 'Website Care',
+      title: 'Thanks for',
+      titleAccent: 'signing.',
+      blocks: [
+        { type: 'p', html: `Hi ${esc(first)},<br><br>Your signed Website Care agreement for ${esc(p.siteLabel)} is attached as a PDF for your records. You signed it on ${esc(p.signedDate)}.` },
+        ...(p.paid ? [] : [
+          { type: 'p' as const, html: `The next step is starting your plan. ${esc(p.queuedLine)}` },
+          { type: 'buttons' as const, items: [{ label: 'Continue to Payment', href: p.link }], fallbackLink: true },
+        ]),
+        { type: 'note', html: 'Questions? Just reply to this email.' },
+      ],
+    }),
+  }
+}
+
+/** Owner notice that a client signed, with the same PDF attached. */
+export function agreementSignedOwner(p: { client: string; site: string; signer: string; signedDate: string; version: string; ip: string; link: string; clientEmail: string }): Email {
+  return {
+    subject: oneLine(`Website Care: ${p.client} signed the care agreement`),
+    ...renderEmail({
+      audience: 'admin',
+      preheader: `${p.signer} signed version ${p.version}. Payment is now unlocked for them.`,
+      eyebrow: 'Agreement signed',
+      title: 'Agreement signed by',
+      titleAccent: `${p.client}.`,
+      blocks: [
+        { type: 'details', rows: [['Website', esc(p.site)], ['Signed by', esc(p.signer)], ['Signed', esc(p.signedDate)], ['Version', esc(p.version)], ['From', esc(p.ip)], ['Signed copy emailed to', esc(p.clientEmail)]] },
+        { type: 'p', html: 'The signed PDF is attached and stored with the website. Payment is unlocked on the client’s agreement page; a verified payment queues the first check straight away.' },
+        { type: 'buttons', items: [{ label: 'Open Website', href: p.link }], fallbackLink: true },
+      ],
+    }),
+  }
+}
+
+export function paidReviewHeld(p: { client: string; site: string; siteUrl: string; reason: string; reasonText: string; renewal: boolean; period: string; due: string; link: string }): Email {
+  return {
+    subject: `Website Care: paid review for ${p.client} is on hold`,
+    ...renderEmail({
+      audience: 'admin',
+      preheader: `${p.renewal ? 'A renewal' : 'A payment'} was received but the check can’t start: ${p.reasonText}`,
+      eyebrow: 'Payment received, check on hold',
+      title: 'Paid review on hold for',
+      titleAccent: `${p.client}.`,
+      blocks: [
+        { type: 'details', rows: [['Website', `${esc(p.site)}<br>${esc(p.siteUrl)}`], ['Paid period', esc(p.period)], ['Why it’s held', esc(p.reasonText)], ['Review due', esc(p.due)]] },
+        { type: 'p', html: 'The paid review is kept. Nothing was scanned, because the confirmed scope doesn’t match what’s set up now. Confirm the setup (or resume care) and the check is queued straight away. If the service can’t be provided for this period, decide how to handle it; nothing was refunded.' },
+        { type: 'buttons', items: [{ label: 'Open Review', href: p.link }], fallbackLink: true },
+      ],
+    }),
+  }
+}
+
+export function dispatchBlocked(p: { client: string; site: string; siteUrl: string; error: string; attempts: number; due: string; link: string }): Email {
+  return {
+    subject: `Website Care: the check for ${p.client} couldn’t be started`,
+    ...renderEmail({
+      audience: 'admin',
+      preheader: 'The paid review is kept and its check is still queued.',
+      eyebrow: 'Check not started',
+      title: 'The check couldn’t start for',
+      titleAccent: `${p.client}.`,
+      blocks: [
+        { type: 'details', rows: [['Website', `${esc(p.site)}<br>${esc(p.siteUrl)}`], ['What happened', esc(p.error)], ['Attempts', String(p.attempts)], ['Review due', esc(p.due)]] },
+        { type: 'p', html: 'The paid review and its queued check are kept. The check workflow’s own schedule can still pick it up. Check the runner settings, then choose Retry start on the review.' },
+        { type: 'buttons', items: [{ label: 'Open Review', href: p.link }], fallbackLink: true },
       ],
     }),
   }

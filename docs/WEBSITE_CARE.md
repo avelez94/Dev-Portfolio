@@ -4,17 +4,22 @@ Status: built and tested locally on `feature/website-care`. **Not merged, not de
 
 ## What it does
 
-1. You enroll a client's website in admin: client record, site URL, approved domains, plan, agreed pages, destinations (contact, booking, checkout), manual checklist, and report recipient.
-2. You send the client a Stripe Checkout link that admin creates. Only a **verified Stripe webhook** for a **paid invoice** creates a service cycle: one per paid service period per website.
-3. Nothing is scanned until you **confirm the setup** (website, client authorization, checklist). A paid period that arrives earlier waits.
-4. A read only scan runs in GitHub Actions (Playwright). It records findings and screenshots and emails you a summary with a link to the draft.
-5. You complete the manual checklist and write the report. Draft, then Ready for review, then Approved (with a frozen snapshot and PDF), then Sent.
-6. Sending puts the complete approved report in the email body and attaches the exact approved PDF through Resend. Each review also appears in your existing admin **Schedule** calendar, with reminders and overdue notices by email.
+1. You enroll a client's website in admin: client record, site URL, approved domains, plan, agreed price, pages, destinations (contact, booking, checkout), manual checklist, and report recipient. **Suggested scope** fills in the home page and the manual checks the scope needs; everything stays editable. Required checks (desktop and phone always; booking, contact form, payments, or updates when the scope includes them) can be reworded but not removed.
+2. You **confirm the technical scope** (website, client authorization, checklist; the address must resolve to a public site). The agreement can't be sent before this, or with a Stripe price that differs from the agreed amount.
+3. The client gets a **persistent private agreement link** (`/care/agreement/<token>`, the same link every time). It shows the parties, plan, price, the agreed website and checks, and the full care terms, including billing, cancellation and refunds.
+4. The client **signs**: typed name, drawn signature, and an explicit agreement, on the exact version they were shown. The **signed PDF** is stored privately (`care-agreements` bucket) and emailed to the client and you.
+5. **Payment unlocks** on the same page: Continue to payment opens a Stripe Checkout for the verified price, made on demand (no 24 hour invitation to expire). A change to the scope, plan or price closes any open link and needs a new signed version.
+6. A **verified Stripe webhook** for a **paid invoice** creates the paid review (one per paid period, with its included plan time) and **immediately queues and dispatches** the scan (GitHub workflow dispatch, recorded on the run, retried within limits). A read only scan runs in GitHub Actions (Playwright) and emails you when results are ready.
+7. You complete the manual checklist and write the report. Draft, then Ready for review, then Approved (with a frozen snapshot and PDF), then Sent.
+8. Sending puts the complete approved report in the email body and attaches the exact approved PDF through Resend. Each review also appears in your existing admin **Schedule** calendar, with reminders and overdue notices by email.
 
 ```
+Owner confirms scope ─▶ agreement link ─▶ client signs ─▶ signed PDF stored and emailed ─▶ payment unlocks
 Stripe ──webhook──▶ /api/care/stripe/webhook ──▶ care_cycles (1 per paid period)
-                                                    │  (waits until setup confirmed)
-Vercel cron (hourly) ─▶ /api/care/cron ─▶ queue scan, recover, remind, retry emails
+                                     │              │ held + owner email if the scope isn't confirmed
+                                     └─▶ queue scan ─▶ GitHub workflow dispatch (recorded, retried)
+Vercel cron (every 3h) ─▶ /api/care/cron ─▶ recovery only: missed scans, failed dispatches,
+                                             stalled runs, reminders, email retries
                                                     │
 GitHub Actions (dispatch + every 6h) ─▶ care-runner ─▶ /api/care/runner/* (token)
                                                     │
@@ -51,12 +56,12 @@ What I could verify from here, and what you need to check in each account. Nothi
 ## Setup (in this order, test mode first)
 
 ### 1. Database (staging or a Supabase branch first, never straight to production)
-Run `supabase/pending/website-care/20261030_website_care.sql`, then `20261031_care_work_ledger.sql`, then `20261103_care_report_suggestions.sql`, then `20261104_care_checkout_invitations.sql`, in the SQL editor. They only create new `care_*` tables, functions, and two private buckets (`care-evidence`, `care-reports`), and seed the proposed task catalog. They don't change any existing table; the one function that writes outside `care_*` (`care_invoice_estimate`) inserts a pending row into `invoices` only when you ask it to. Both are safe to run twice. Production and preview share one database today, so applying it there is a production change: do it only with the release, after a backup.
+Run `supabase/pending/website-care/20261030_website_care.sql`, then `20261031_care_work_ledger.sql`, then `20261103_care_report_suggestions.sql`, then `20261104_care_checkout_invitations.sql`, then `20261105_care_agreements_and_dispatch.sql`, in the SQL editor. They only create new `care_*` tables, functions, and three private buckets (`care-evidence`, `care-reports`, `care-agreements`), and seed the proposed task catalog. They don't change any existing table; the one function that writes outside `care_*` (`care_invoice_estimate`) inserts a pending row into `invoices` only when you ask it to. Both are safe to run twice. Production and preview share one database today, so applying it there is a production change: do it only with the release, after a backup.
 
 ### 2. Stripe (test mode)
 1. In test mode, create one product, "Website Care", with three monthly prices: $59, $129, $249. No trial.
 2. Developers, Webhooks: add `https://<deployment>/api/care/stripe/webhook` with these events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.paused`, `customer.subscription.resumed`, `invoice.paid`, `invoice.payment_failed`, `charge.refunded`, `charge.dispute.created`.
-3. Settings, Billing, Customer portal: choose what clients may do (update card, see invoices, cancel at period end). Those choices are business policy; see below.
+3. Customer portal: the app creates its own portal configuration on first use (cancel at the end of the period, no proration, card updates and invoice history, no plan switching) and stores its id in settings; set `STRIPE_CARE_PORTAL_CONFIGURATION` to use one you made. If you enable Stripe's no code customer portal login link, set the **default** portal configuration the same way, because that link uses the default.
 4. Environment (Vercel, server only, never `NEXT_PUBLIC_`): `STRIPE_SECRET_KEY` (sk_test_…), `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_CARE_ESSENTIAL`, `STRIPE_PRICE_CARE_BUSINESS`, `STRIPE_PRICE_CARE_PREMIUM`.
 5. A live key is refused unless `CARE_STRIPE_LIVE_APPROVED=true`, and live checkout also needs the billing policy approved in admin settings.
 
@@ -64,11 +69,11 @@ Run `supabase/pending/website-care/20261030_website_care.sql`, then `20261031_ca
 1. Generate a long random token (for example `openssl rand -base64 32`).
 2. Vercel: `CARE_RUNNER_TOKEN=<token>`.
 3. GitHub, Settings, Secrets and variables, Actions: `CARE_APP_URL` (the deployment URL) and `CARE_RUNNER_TOKEN` (same token).
-4. Optional, for immediate pickup instead of within 6 hours: a fine grained token with Actions read and write on this repository, set as `CARE_GITHUB_DISPATCH_TOKEN`, plus `CARE_GITHUB_REPO=avelez94/dev-portfolio`.
+4. **Required for the automatic start after payment:** a fine grained token with Actions read and write on this repository, set as `CARE_GITHUB_DISPATCH_TOKEN`, plus `CARE_GITHUB_REPO=avelez94/dev-portfolio`. Without it every paid scan's start fails, is retried 5 times (1, 5, 15 and 60 minutes apart, through the cron), then you're emailed once; the workflow's 6 hour schedule can still pick it up, and Retry start on the review tries again.
 5. Scheduled workflows only run from `main`, so nothing runs from this branch. The runner never logs client URLs or results, because Actions logs are public on a public repository.
 
 ### 4. Scheduler
-`vercel.json` adds `/api/care/cron` hourly. It uses the existing `CRON_SECRET`. Vercel runs crons only on production deployments, so the preview never ticks.
+`vercel.json` adds `/api/care/cron` every 3 hours. It is a recovery mechanism (missed scans, failed or unclaimed dispatches), not the normal path. It uses the existing `CRON_SECRET`. Vercel runs crons only on production deployments, so the preview never ticks.
 
 ### 5. Email
 Uses the existing `RESEND_API_KEY`. Owner notices go to the address in admin settings (or `CARE_NOTIFY_EMAIL`, or the studio address). Client report emails are refused unless the recipient matches `CARE_EMAIL_ALLOWLIST` (for example `alante.v+*@gmail.com`) or `CARE_CLIENT_EMAIL_LIVE=true`. Keep the allowlist on in preview.
@@ -80,19 +85,30 @@ No setup. Each monthly review appears in admin, Schedule: a small diamond on its
 
 Optional: in Resend, Webhooks, add `https://<deployment>/api/care/resend/webhook` for `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, and set `RESEND_WEBHOOK_SECRET` in Vercel. Check that your Resend plan includes webhooks; if not, leave it off and delivery stays "not confirmed".
 
-## Business policy decisions still needing your approval
+## Billing, cancellation and refunds (approved Oct 29, 2026)
+
+Published in the care agreement the client signs (`care-agreement-2026-11`), the care terms page (`/care/terms`), the Website Care FAQ, the agreement emails, Stripe Checkout's submit text and the pricing guide, all from `src/content/care-terms.ts`.
+
+- **Billing:** monthly in advance. Successful payment starts the paid service period and automatically starts its review. Client wording: "Your monthly website check is automatically queued when payment is confirmed." Nothing promises instant completion.
+- **Refunds:** non-refundable after successful payment, except where required by law. A refund made in Stripe is flagged to you; the system never refunds.
+- **Cancelling:** the client cancels future renewals before the next billing date (email you or reply to any care email; you cancel in Stripe at period end or send a portal link). Effective at the end of the paid period; the plan stays available until then; no prorated refund.
+- **Billing errors:** duplicate or incorrect charges are always investigated and corrected; the refund rule never blocks that. Flagged automatically: a second paid invoice for a period that already has a review, and a paid invoice on a subscription that isn't linked to the website.
+- **Service you can't provide:** a paid period whose website isn't confirmed (never confirmed, setup changed, paused, ended) is kept, held and emailed to you at once; nothing outside the confirmed scope is scanned. Confirming or resuming queues it. An ended site's payment is never released automatically. A subscription Stripe ends before its paid period is over flags open reviews.
+- **Existing subscribers:** never moved to the new agreement silently. Any subscriber without a signed current agreement is flagged ("Agreement signature needed"); send them the agreement link. Their earlier agreement stays in place until they sign.
+
+Settings shows these as approved and read only (changing them needs a new agreement version).
+
+## Still needing your approval
 
 1. **Grace period** after a failed payment (days). Not set. Reviews only ever start for paid periods either way.
 2. **When billing attention starts**: proposed after 1 failed payment.
-3. **Refunds**: proposed "flag the review for you to decide". Nothing stops automatically.
-4. **Disputes**: proposed "flag for you to decide".
-5. **Immediate cancellation**: proposed "keep the open review and flag it".
-6. **Cancel at period end**: always honors the paid period (built in, per your brief).
-7. **Customer portal permissions** in Stripe (cancel, switch plans, proration on switching). Not configured by this system; proration is Stripe's setting.
-8. **Trials and promotion codes**: none (checkout turns promotion codes off).
-9. **Retention**: proposal below.
-10. **Public "Starting a plan" note** (`careSubscribeNote.approved` in `src/content/offers.ts`) stays hidden until you approve.
-11. **Ownership clause** from the earlier release is still pending and untouched.
+3. **Disputes**: proposed "flag for you to decide"; no automatic response.
+4. **Trials and promotion codes**: none (checkout turns promotion codes off).
+5. **Retention**: proposal below.
+6. **Public "Starting a plan" note** (`careSubscribeNote.approved` in `src/content/offers.ts`) stays hidden until Stripe is live.
+7. **Ownership clause** from the earlier release is still pending and untouched.
+
+Live checkout stays off until these are approved in admin settings.
 
 12. **Proposed task durations** in the starter catalog (Task catalog): confirm or change each before it deducts plan time.
 13. **Additional work pricing (settled)**: additional work is $70 an hour with a one hour minimum (approved November 2026, replacing $100), or a fixed quote the client agrees to (`STANDARD_HOURLY_RATE` in `src/lib/terms.ts`, the same rule as occasional support and the current proposal and contract terms). Preset standard minutes only measure included plan time; they never set an hourly charge, and nothing converts minutes to dollars. Each estimate's additional price and its explanation are entered by hand (the form offers hourly and fixed quote wording). The public sample's $110 is an example fixed quote. Documents issued earlier keep their own wording.
@@ -150,7 +166,7 @@ Public samples: two fictional reports (no outstanding issues; an issue plus unve
 
 **Estimates for larger requests:** scope, deliverables, agreed schedule, total standard minutes with testing, included minutes proposed, additional minutes, and the additional price with how it was calculated (entered by you, either at the standard $70 an hour with a one hour minimum or as an agreed fixed quote; standard minutes never set the price). A draft reserves nothing. **Record client approval** (with how they approved) reserves the included minutes in that billing period only. Recording the work against the estimate takes the reservation first and counts the rest as approved additional work, without counting anything twice; "This finishes the estimate" releases unused reserved minutes. Cancel or decline releases them too. Work beyond the approved standard minutes is refused until a **revised estimate** is approved (which replaces the earlier one). An approved estimate whose period ended is flagged on the Overview; **Carry to current period** closes it and creates a draft that needs approval again, so no expired or future allowance is used silently. **Create invoice** saves a pending fixed fee invoice for the approved additional price, once, in the existing invoices (Revenue); it isn't sent and nothing is charged. Stripe is never charged for overages.
 
-**Agreements:** a new enrollment records the current care terms (`care-flex-2026-11`) when you confirm its setup: tick that the client accepted them and say how (signed agreement and date). Saving an enrollment doesn't record acceptance. Websites enrolled earlier are flagged on the Overview and on their page ("Review this client's care agreement first"); Quick add and estimates stay off for them until you record how the client accepted the current terms. Earlier issued agreements and sent report snapshots are never rewritten.
+**Agreements:** a new enrollment's care terms are recorded when the client signs the care agreement on their private link (it records `care-flex-2026-11` for plan time and the signed agreement version). Confirming the technical scope no longer records terms, and there is no manual online acceptance. Websites enrolled earlier are flagged on the Overview and on their page ("Review this client's care agreement first"); Quick add and estimates stay off for them until you record how the client accepted the current terms. Earlier issued agreements and sent report snapshots are never rewritten.
 
 **Approved earlier reports:** snapshots approved before this change keep their original plan block and render unchanged.
 
@@ -160,7 +176,8 @@ Public samples: two fictional reports (no outstanding issues; an issue plus unve
 - `npm run test:care`: 25 ledger tests on a throwaway PostgreSQL 16 with both pending migrations (quantities, batch and per unit testing, preset edits and reconfirmation, duplicate saves including 6 at once, 5 simultaneous allocations against one allowance, overdraw refusal, excluded work, undo, correction, draft vs approved reservations, conversion on completion, early finish, cancellation, revised estimates, period renewal, cross period refusal, terms review, invoice amount and single invoice, browser roles refused); 11 report and email tests; 9 end to end tests that run the real Next.js routes and screens against that database through a local REST stand in (`tests/care/local-stack.mjs`).
 - `npm run test:admin`: 22 browser tests for the admin pages (see docs/ADMIN_STRUCTURE.md).
 - Typecheck, lint on changed files, production build, pricing guide regenerated (`npm run guide:check` passes), sample PDFs and emails regenerated.
-- `tests/care/billing.test.mjs`: checkout and invitations against local stand ins for Stripe's and Resend's APIs (`tests/care/fake-services.mjs`), using the real Stripe and Resend SDKs and signed webhooks. Covers a price that differs from the agreed amount, currency, interval, trial, archived, live versus test, Stripe unreachable, the typed address, one link per website, Send again, expired links, a price change closing the open link, an existing Stripe subscription, and redelivered paid notices creating nothing twice.
+- `tests/care/billing.test.mjs` (14 tests): the agreement and payment workflow against local stand ins for Stripe, Resend and GitHub (`tests/care/fake-services.mjs`), using the real Stripe and Resend SDKs and signed webhooks. Covers: no agreement before the technical scope is confirmed or with a mismatched price (currency, interval, trial, archived, live versus test, Stripe unreachable); required manual checks at confirmation; the persistent link sent once, reminders on the same link; the client page showing only agreement text; payment locked until signing; exact version, name, signature and agreement required; signed PDF stored, emailed to the client and you, identical to the admin download; checkout on demand for the verified price, reused; a price or scope change locking payment until a new version is signed; the first payment queuing and dispatching the scan at once, out of order and redelivered notices adding nothing; a renewal's dispatch failing, retried with backoff and recovering; a dispatch blocked after 5 attempts with one owner email and a manual retry; renewals held for a changed scope and for a paused site, flagged and released; failed and incomplete payments never scanning; a duplicate charge flagged; cancel at period end.
+- `tests/care/scope.test.mjs`: required checks, suggestions, and the payment to scan pipeline.
 - Not verified: the REST stand in covers what this code uses but isn't Supabase itself; run the migrations and one Quick add on a Supabase branch before release.
 
 
@@ -185,10 +202,10 @@ Public samples: two fictional reports (no outstanding issues; an issue plus unve
 
 1. **Before:** set the environment variables above in a test setup, apply the migration there, and turn the feature on.
 2. **Settings:** Admin, Care, Settings. Check the time zone, working days and hours, review deadline (default 7 days after payment), reminders, and screenshot retention.
-3. **Enroll:** Websites, then Enroll a website. Pick the client record, plan, site URL, approved domains, pages, destinations, and checklist (use the template buttons). Set the recipient name and email. Save. It's a draft; nothing runs.
-4. **Confirm:** open the website, read the setup, tick the three boxes, describe how the client authorized it (for example "signed care agreement, Nov 3"), and confirm.
-5. **Billing:** Send subscription invitation (or Copy checkout link instead). Checkout is refused unless the plan's Stripe price matches the agreed monthly price, in USD, monthly (`verifyCheckoutPrice` in `src/lib/care/stripe.ts`). When Stripe reports the paid invoice, a review appears in the queue with its due date. (Billed by invoice instead? Use "Add a paid service period by hand".)
-6. **Check:** the scan starts automatically and the review appears in your Schedule calendar. You get an email with grouped results and a link. Open the review: each issue is one card with its pages; choose what happens next for every red issue, and open individual results or screenshots only when you need them.
+3. **Enroll:** Websites, then Enroll a website. Pick the client record, plan, agreed price, site URL, approved domains, pages and destinations. Use **Suggested scope** (Add all suggestions), then edit the checklist. Set the recipient name and email. Save. It's a draft; nothing runs.
+4. **Confirm the technical scope:** open the website, read the setup, tick the three boxes, describe how the client authorized the checks, and confirm.
+5. **Agreement:** in Care agreement, preview what the client signs, type the client's address, and Send agreement link. You'll see when they open it and when they sign; the signed PDF downloads from the same panel and was emailed to both of you. The agreement is refused unless the plan's Stripe price matches the agreed monthly price, in USD, monthly (`verifyCheckoutPrice`). (Billed by invoice instead? Use "Add a paid service period by hand".)
+6. **Payment and check:** the client chooses Continue to payment on their agreement page. When Stripe reports the paid invoice, the review shows Payment received, then Scan queued (runner started), Running, Completed, and it's on your Schedule calendar. You're emailed when results are ready, or if the start keeps failing (Retry start on the review). If the scope isn't confirmed when a renewal is paid, the review shows On hold and you're emailed. You get an email with grouped results and a link. Open the review: each issue is one card with its pages; choose what happens next for every red issue, and open individual results or screenshots only when you need them.
 7. **Manual review:** record each checklist item. Use Not checked with a reason when needed.
 8. **Record work and write:** as you finish work during the period, use **Quick add work** on the website page (it shows up in the report automatically). For anything larger, create an estimate and record the client's approval before starting. At review time, check the agreed price, tick that all completed work is recorded, and write a short summary.
 9. **Approve:** Mark ready for review, open the client report and PDF preview, tick sign off, type your name, and approve.

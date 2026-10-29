@@ -1,5 +1,5 @@
 import 'server-only'
-import { CARE_FLEXIBLE_TIME, CARE_STANDARD_MINUTES } from './care-terms'
+import { CARE_FLEXIBLE_TIME, CARE_STANDARD_MINUTES, careBillingFaq } from './care-terms'
 import { PROJECT_PAYMENT_POLICY, STANDARD_HOURLY_RATE } from '@/lib/terms'
 
 /**
@@ -349,4 +349,6 @@ export const careFaqs: Faq[] = [
     q: 'What doesn’t use plan time?',
     a: approved('Monthly checks, preparing your report, and fixing defects covered by your 30 day launch guarantee. Hosting, domains, subscriptions, licenses, and other provider costs are always separate.'),
   },
+  // Billing wording approved Oct 29, 2026 (see care-terms.ts).
+  { q: careBillingFaq.q, a: approved(careBillingFaq.a) },
 ]

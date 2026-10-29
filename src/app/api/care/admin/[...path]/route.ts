@@ -9,12 +9,14 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { careEnabled, careOff, clientEmailAllowed } from '@/lib/care/config'
 import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCKET, REPORTS_BUCKET, type Row } from '@/lib/care/db'
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
-import { createCycle, enqueueScan, cancelScan, releaseHeldCycles } from '@/lib/care/cycles'
+import { createCycle, enqueueScan, cancelScan, releaseHeldCycles, retryDispatch, dispatchConfigured } from '@/lib/care/cycles'
+import { pipeline } from '@/lib/care/pipeline'
+import { agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy } from '@/lib/care/agreement'
 import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote, updatePlanTime, suggestionState, refreshSuggestions, acceptSuggestion, dismissSuggestion } from '@/lib/care/report'
 import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
 import { reportPdf } from '@/lib/care/report-pdf'
 import { sendPreview, sendReport, markStuckSend } from '@/lib/care/send'
-import { createCheckout, closeCheckout, invitationPreview, portalSession, sendInvitation, syncSubscription, stripeMode } from '@/lib/care/stripe'
+import { closeCheckout, portalSession, syncSubscription, stripeMode } from '@/lib/care/stripe'
 import { deliver } from '@/lib/care/notify'
 import { diffFindings, type FindingRow } from '@/lib/care/findings'
 import { checkUrlResolves } from '@/lib/care/url-safety'
@@ -22,6 +24,7 @@ import { validTimeZone, zonedToUtc, localDate } from '@/lib/care/schedule'
 import { isPlanId, plan as planInfo, priceIdFor, PLAN_IDS } from '@/lib/care/plans'
 import * as work from '@/lib/care/work-server'
 import { inDemoScope } from '@/lib/demo/context'
+import { CARE_AGREEMENT_VERSION } from '@/content/care-terms'
 
 export const maxDuration = 60
 
@@ -44,7 +47,7 @@ async function status() {
   return ok({
     enabled: true,
     stripe: { mode: stripeMode(), webhook: !!process.env.STRIPE_WEBHOOK_SECRET, prices: Object.fromEntries(PLAN_IDS.map((p) => [p, !!priceIdFor(p)])) },
-    runner: { token: !!process.env.CARE_RUNNER_TOKEN, dispatch: !!(process.env.CARE_GITHUB_DISPATCH_TOKEN && process.env.CARE_GITHUB_REPO) },
+    runner: { token: !!process.env.CARE_RUNNER_TOKEN, dispatch: dispatchConfigured() },
     email: { provider: !!process.env.RESEND_API_KEY, clientEmailsLive: process.env.CARE_CLIENT_EMAIL_LIVE === 'true', allowlist: (process.env.CARE_EMAIL_ALLOWLIST || '').split(',').filter(Boolean) },
     calendar: { adminCalendar: true, resendWebhook: !!process.env.RESEND_WEBHOOK_SECRET },
     policyApproved: !!s.policy_approved_at,
@@ -64,7 +67,14 @@ async function overview() {
   const stuckSends = (await db.from('care_report_sends').select('id, report_id, recipient_email, created_at, status, error').in('status', ['sending', 'failed']).order('created_at', { ascending: false }).limit(20)).data || []
   const settings = await getSettings()
   const workFlags = await work.workFlags()
-  return ok({ sites, clients, cycles, reports, failedRuns, activeRuns, failedNotes, failedEvents, stuckSends, workFlags, timezone: settings.timezone, policyApproved: !!settings.policy_approved_at })
+  // Paid reviews that can't be scanned, and checks that couldn't be started: both need the owner.
+  const heldCycles = cycles.filter((c) => c.hold_reason && !c.completed_at)
+  const blockedRuns = (await db.from('care_scan_runs').select('id, cycle_id, site_id, dispatch_error, dispatch_attempts, dispatch_status').eq('status', 'queued').in('dispatch_status', ['blocked', 'failed'])).data || []
+  // Subscribers without a signed current agreement (existing agreements are never replaced silently).
+  const agreements = sites.length ? (await db.from('care_agreements').select('id, site_id, status, terms_version').in('site_id', sites.map((x) => x.id))).data || [] : []
+  const signatureNeeded = sites.filter((x) => x.enrollment_status !== 'ended' && x.stripe_subscription_id && !['canceled', 'incomplete_expired'].includes(x.subscription_status || '')
+    && !agreements.some((a) => a.id === x.agreement_id && a.status === 'signed' && a.terms_version === CARE_AGREEMENT_VERSION)).map((x) => x.id)
+  return ok({ sites, clients, cycles, reports, failedRuns, activeRuns, failedNotes, failedEvents, stuckSends, workFlags, heldCycles, blockedRuns, signatureNeeded, timezone: settings.timezone, policyApproved: !!settings.policy_approved_at })
 }
 
 /* ------------------------------ settings ------------------------------ */
@@ -111,7 +121,12 @@ async function putSettings({ body }: Ctx) {
     if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new CareError('Notification email is not valid.')
     patch.notify_email = e || null
   }
-  for (const k of ['refund_handling', 'dispute_handling', 'immediate_cancel_handling'] as const) {
+  // Refunds, cancellation and billing errors follow the approved care agreement (care-terms.ts);
+  // changing them means a new agreement version, not a settings edit. Disputes are still open.
+  for (const k of ['refund_handling', 'cancellation_handling', 'billing_error_handling'] as const) {
+    if (body[k] !== undefined && body[k] !== (await getSettings() as unknown as Row)[k]) throw new CareError('Refunds, cancellation and billing errors follow the approved care agreement. Changing them needs a new agreement version.', 409)
+  }
+  for (const k of ['dispute_handling', 'immediate_cancel_handling'] as const) {
     if (body[k] !== undefined) patch[k] = String(body[k]).slice(0, 60)
   }
   const before = await getSettings()
@@ -120,7 +135,7 @@ async function putSettings({ body }: Ctx) {
   if (start >= end) throw new CareError('The workday must end after it starts.')
   if (Array.isArray(patch.working_days) && patch.working_days.length === 0) throw new CareError('Choose at least one working day.')
   // Changing a billing policy value clears an earlier approval.
-  const policyKeys = ['grace_days', 'billing_attention_after_failures', 'refund_handling', 'dispute_handling', 'immediate_cancel_handling']
+  const policyKeys = ['grace_days', 'billing_attention_after_failures', 'dispute_handling', 'immediate_cancel_handling']
   if (policyKeys.some((k) => k in patch && (patch as Record<string, unknown>)[k] !== (before as unknown as Record<string, unknown>)[k])) {
     patch.policy_approved_at = null
     patch.policy_approved_note = null
@@ -170,7 +185,9 @@ async function getSite({ seg }: Ctx) {
   const cycles = (await db.from('care_cycles').select('*').eq('site_id', siteId).order('period_start', { ascending: false })).data || []
   const reports = cycles.length ? (await db.from('care_reports').select('id, cycle_id, status, version').in('cycle_id', cycles.map((c) => c.id))).data || [] : []
   const activity = (await db.from('care_activity').select('*').eq('site_id', siteId).order('created_at', { ascending: false }).limit(60)).data || []
-  return ok({ site, client, cycles, reports, activity, setupChanged: site.confirmed_hash ? site.confirmed_hash !== setupHash(site) : false })
+  const runs = cycles.length ? (await db.from('care_scan_runs').select('id, cycle_id, trigger, status, dispatch_status, dispatch_attempts, dispatch_error, created_at, started_at, finished_at, error, progress').in('cycle_id', cycles.map((c) => c.id))).data || [] : []
+  const pipelines = Object.fromEntries(cycles.map((c) => [c.id, pipeline(c, runs.filter((r) => r.cycle_id === c.id))]))
+  return ok({ site, client, cycles, reports, activity, pipelines, setupChanged: site.confirmed_hash ? site.confirmed_hash !== setupHash(site) : false })
 }
 
 async function putSite({ seg, body }: Ctx) {
@@ -197,6 +214,8 @@ async function putSite({ seg, body }: Ctx) {
   if (site.checkout_session_id && (site.agreed_monthly_price !== saved.agreed_monthly_price || site.plan !== saved.plan)) {
     await closeCheckout(siteId, 'The agreed price or plan changed.', ACTOR)
   }
+  // An unsigned agreement for the old scope or price is closed; a signed one no longer unlocks payment.
+  await reconcileAgreement(siteId, changed ? 'The agreed scope changed.' : 'The agreed details changed.', ACTOR)
   // Open reviews without their own recorded price show the website's agreed price.
   if (site.agreed_monthly_price !== saved.agreed_monthly_price) {
     const open = (await db.from('care_cycles').select('id').eq('site_id', siteId).is('completed_at', null).is('agreed_price', null)).data || []
@@ -223,19 +242,29 @@ function setStatus(to: 'paused' | 'confirmed' | 'ended'): Handler {
     if (to === 'ended' && body.confirm !== true) throw new CareError('Confirm ending care for this website.', 422)
     await db.from('care_sites').update({ enrollment_status: to, updated_at: new Date().toISOString() }).eq('id', siteId)
     await logActivity({ site_id: siteId, actor: ACTOR, action: `enrollment_${to}`, detail: {} })
+    if (to !== 'confirmed') await reconcileAgreement(siteId, to === 'paused' ? 'Care was paused.' : 'Care ended.', ACTOR)
     if (to === 'confirmed') await releaseHeldCycles(siteId, ACTOR)
     return ok({ ok: true })
   }
 }
 
+/** Your copy of the checkout link: only after the client signed the current agreement. */
 async function checkout({ seg }: Ctx) {
-  return ok(await createCheckout(id(seg[1]), ACTOR))
+  return ok(await ownerCheckout(id(seg[1]), ACTOR))
 }
-async function invitation({ seg }: Ctx) {
-  return ok(await invitationPreview(id(seg[1])))
+async function agreement({ seg }: Ctx) {
+  return ok(await agreementStatus(id(seg[1])))
 }
-async function invite({ seg, body }: Ctx) {
-  return ok(await sendInvitation(id(seg[1]), { confirm_email: String(body.confirm_email || ''), resend: body.resend === true }, ACTOR))
+async function sendAgreement({ seg, body }: Ctx) {
+  return ok(await sendAgreementLink(id(seg[1]), { confirm_email: String(body.confirm_email || ''), resend: body.resend === true }, ACTOR))
+}
+async function agreementPdfRoute({ seg }: Ctx) {
+  const { bytes, name } = await signedPdf(id(seg[1]), id(seg[3]))
+  return new NextResponse(new Uint8Array(bytes), { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' } })
+}
+async function agreementResend({ seg }: Ctx) {
+  const a = must(await db.from('care_agreements').select('id, site_id').eq('id', id(seg[3])).eq('site_id', id(seg[1])).single(), 'Agreement')
+  return ok(await emailSignedCopy(a.id, ACTOR))
 }
 async function portal({ seg }: Ctx) {
   return ok(await portalSession(id(seg[1]), ACTOR))
@@ -313,6 +342,7 @@ async function getCycle({ seg }: Ctx) {
   return ok({
     ...b, allFindings, snapshot, snapshotHash: hash, problems: await readinessProblems(b), diff, notifications, activity, groups, cleared, manualIssues, statusCounts,
     suggestions: await suggestionState(b),
+    pipeline: pipeline(b.cycle, b.runs),
     scope: { checked: checkedUrls, setupChangedSinceCheck: !!b.latest && JSON.stringify(checkedUrls) !== JSON.stringify(currentUrls) },
     timezone: settings.timezone, plan: planInfo(b.cycle.plan), recipientAllowed: b.site.recipient_email ? clientEmailAllowed(b.site.recipient_email) : null,
   })
@@ -358,13 +388,20 @@ function careStatus(c: Row, report: Row | undefined, send: Row | undefined): str
   if (send?.delivery_status === 'bounced' || send?.delivery_status === 'complained') return 'Sent, delivery failed'
   if (send?.delivery_status === 'delivered') return 'Sent and delivered'
   if (c.completed_at) return 'Sent, delivery not confirmed'
-  if (c.hold_reason === 'enrollment') return 'Waiting for setup'
-  if (c.scan_state === 'queued' || c.scan_state === 'running') return 'Automated check running'
+  if (c.hold_reason === 'ended') return 'Paid, on hold: care ended'
+  if (c.hold_reason === 'paused') return 'Paid, on hold: care paused'
+  if (c.hold_reason) return 'Paid, on hold: confirm setup'
+  if (c.scan_state === 'queued') return 'Paid, check queued'
+  if (c.scan_state === 'running') return 'Automated check running'
   if (c.scan_state === 'failed') return 'Check failed'
   if (report?.status === 'approved') return 'Approved, not sent'
   if (report?.status === 'ready') return 'Ready for approval'
   if (c.scan_state === 'done' || c.scan_state === 'partial') return 'Manual review due'
   return 'Scheduled'
+}
+
+async function dispatchAgain({ seg }: Ctx) {
+  return ok({ result: await retryDispatch(id(seg[1]), ACTOR) })
 }
 
 async function rerun({ seg }: Ctx) {
@@ -522,8 +559,10 @@ const routes: [string, string, Handler][] = [
   ['PUT', 'sites/:id', putSite],
   ['POST', 'sites/:id/confirm', confirm],
   ['POST', 'sites/:id/checkout', checkout],
-  ['GET', 'sites/:id/invitation', invitation],
-  ['POST', 'sites/:id/invitation', invite],
+  ['GET', 'sites/:id/agreement', agreement],
+  ['POST', 'sites/:id/agreement', sendAgreement],
+  ['GET', 'sites/:id/agreements/:aid/pdf', agreementPdfRoute],
+  ['POST', 'sites/:id/agreements/:aid/email', agreementResend],
   ['POST', 'sites/:id/portal', portal],
   ['POST', 'sites/:id/sync', sync],
   ['POST', 'sites/:id/cycles', manualCycle],
@@ -533,6 +572,7 @@ const routes: [string, string, Handler][] = [
   ['POST', 'sites/:id/end', setStatus('ended')],
   ['GET', 'cycles/:id', getCycle],
   ['POST', 'cycles/:id/rerun', rerun],
+  ['POST', 'cycles/:id/dispatch', dispatchAgain],
   ['POST', 'cycles/:id/cancel-scan', cancel],
   ['PUT', 'cycles/:id/manual/:item', putManual],
   ['PUT', 'cycles/:id/due', putDue],
@@ -581,7 +621,7 @@ async function dispatch(req: NextRequest, ctx: { params: Promise<{ path: string[
     if (method !== req.method) continue
     const pp = pattern.split('/')
     if (pp.length !== seg.length) continue
-    if (pp.every((p, i) => p === seg[i] || (p === ':id' && UUID.test(seg[i])) || (p === ':item' && /^[a-z0-9-]{1,60}$/i.test(seg[i])))) {
+    if (pp.every((p, i) => p === seg[i] || ((p === ':id' || p === ':aid') && UUID.test(seg[i])) || (p === ':item' && /^[a-z0-9-]{1,60}$/i.test(seg[i])))) {
       try {
         let body: Row = {}
         if (req.method !== 'GET') {

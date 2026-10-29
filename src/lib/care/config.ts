@@ -51,7 +51,7 @@ export function clientEmailAllowed(email: string): { ok: boolean; reason?: strin
   })
   return hit
     ? { ok: true }
-    : { ok: false, reason: 'Client emails are switched off in this environment. Only addresses on the test allowlist can receive reports.' }
+    : { ok: false, reason: 'Client emails are switched off in this environment. Only addresses on the test allowlist can receive client emails.' }
 }
 
 /** Test only host map for fixture websites. Refused on production deploys. */

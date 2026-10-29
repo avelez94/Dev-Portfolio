@@ -9,7 +9,15 @@
  * Service cycles come only from paid invoices for an approved care price with
  * billing reason subscription_create or subscription_cycle, using the line's
  * own service period. Plan change and other invoices never create a cycle.
- * Nothing here charges, refunds, or cancels anything.
+ * A paid cycle queues and dispatches its scan straight away (see cycles.ts).
+ *
+ * Checkout opens only for a signed, current care agreement (agreement.ts).
+ *
+ * Approved policy (Oct 29, 2026): billed monthly in advance, non-refundable
+ * after payment except where law requires, cancellation at the end of the paid
+ * period with no proration, billing errors always corrected. Nothing here
+ * charges, refunds, or cancels anything: refunds, disputes and early
+ * cancellations are flagged for the owner, never decided automatically.
  */
 import Stripe from 'stripe'
 import { db, must, CareError, getSettings, logActivity, type Row } from './db'
@@ -17,11 +25,8 @@ import { appUrl, isProductionDeploy } from './config'
 import { planForPrice, priceIdFor, plan as planInfo } from './plans'
 import { createCycle } from './cycles'
 import { queueBillingNotice } from './notify'
-import { clientEmailAllowed } from './config'
-import { subscriptionInvitation } from './emails'
 import { stripeSim } from './stripe-sim'
-import { Resend } from 'resend'
-import { BRAND } from '@/lib/brand'
+import { CARE_AGREEMENT_VERSION, CARE_CHECKOUT_DISCLOSURE, CARE_TERMS_PATH } from '@/content/care-terms'
 
 let cached: Stripe | null = null
 
@@ -205,7 +210,7 @@ export async function openCheckout(siteId: string, actor: string): Promise<Check
   }
   await db.from('care_sites').update({ stripe_customer_id: customer, updated_at: new Date().toISOString() }).eq('id', siteId)
   if (!site.stripe_customer_id) await refuseDuplicate({ ...site, stripe_customer_id: customer })
-  const meta = { care_site_id: site.id, client_id: site.client_id, plan: site.plan }
+  const meta = { care_site_id: site.id, client_id: site.client_id, plan: site.plan, agreement_id: String(site.agreement_id || ''), agreement_version: CARE_AGREEMENT_VERSION }
   const session = await s.checkout.sessions.create({
     mode: 'subscription',
     customer,
@@ -214,10 +219,13 @@ export async function openCheckout(siteId: string, actor: string): Promise<Check
     metadata: meta,
     subscription_data: { metadata: meta },
     allow_promotion_codes: false,
+    // The client signed the agreement before reaching this page; this repeats the billing terms next to Pay.
+    custom_text: { submit: { message: CARE_CHECKOUT_DISCLOSURE } },
+    // Created when the client chooses Continue to payment on their agreement page.
     // Stripe allows at most 24 hours from creation; a few minutes are kept in hand.
     expires_at: Math.floor(Date.now() / 1000) + LINK_HOURS * 3600 - 300,
     success_url: `${appUrl()}/care/subscribed`,
-    cancel_url: `${appUrl()}/care`,
+    cancel_url: site.agreement_token ? `${appUrl()}/care/agreement/${site.agreement_token}` : `${appUrl()}/care`,
   })
   const expires = new Date(session.expires_at * 1000).toISOString()
   await db.from('care_sites').update({
@@ -227,73 +235,37 @@ export async function openCheckout(siteId: string, actor: string): Promise<Check
   return { url: session.url!, id: session.id, expires_at: expires, reused: false, mode, check }
 }
 
-/** Kept for the existing route name: the checkout link to copy and send yourself. */
-export const createCheckout = openCheckout
-
-/** Everything shown before sending an invitation. Reads Stripe's price; creates nothing. */
-export async function invitationPreview(siteId: string) {
-  const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
-  const client = must(await db.from('clients').select('id, name, email, business').eq('id', site.client_id).single(), 'Client')
-  const p = planInfo(site.plan)
-  const recipient = { name: site.recipient_name || client.name || '', email: String(site.recipient_email || client.email || '').trim() }
-  const blockers: string[] = []
-  if (site.enrollment_status === 'ended') blockers.push('Care for this website has ended.')
-  if (site.stripe_subscription_id && !['canceled', 'incomplete_expired'].includes(site.subscription_status || '')) blockers.push('This website already has a subscription.')
-  if (!recipient.email) blockers.push('There is no recipient email. Add one in Website settings.')
-  let check: PriceCheck
-  try { check = await verifyCheckoutPrice(site) } catch (e) { check = { ok: false, problems: [String((e as Error).message || e)], expected: expectedCharge(site), price: null } }
-  if (!check.ok) blockers.push(...check.problems)
-  const allowed = recipient.email ? clientEmailAllowed(recipient.email) : { ok: false, reason: 'No recipient email.' }
-  if (!allowed.ok && allowed.reason) blockers.push(allowed.reason)
-  const linkOpen = !!site.checkout_url && !!site.checkout_expires_at && new Date(site.checkout_expires_at).getTime() > Date.now()
-  return {
-    recipient, client: { name: client.name, business: client.business }, site: { label: site.label, url: site.site_url },
-    plan: { id: p.id, name: p.name, included_minutes: p.includedMinutes },
-    amount_cents: check.expected.amount_cents, currency: 'USD', interval: 'month',
-    check, blockers, ok: blockers.length === 0,
-    link: site.checkout_session_id ? { expires_at: site.checkout_expires_at, open: linkOpen } : null,
-    last_sent: site.invitation_sent_at ? { at: site.invitation_sent_at, to: site.invitation_sent_to } : null,
-  }
-}
-
-let mailer: Resend | null = null
-
 /**
- * Emails the client their checkout link, after the same checks as checkout
- * and only once you type the recipient address. Sending again for a link that
- * was already sent needs `resend: true`; an expired link is replaced first.
+ * The customer portal configuration that matches the approved policy:
+ * cancellation at the end of the paid period with no proration, card updates
+ * and invoice history, no plan switching. Created once per Stripe mode.
  */
-export async function sendInvitation(siteId: string, body: { confirm_email?: string; resend?: boolean }, actor: string) {
-  const pre = await invitationPreview(siteId)
-  if (!pre.recipient.email) throw new CareError('There is no recipient email. Add one in Website settings.', 422)
-  if (String(body.confirm_email || '').trim().toLowerCase() !== pre.recipient.email.toLowerCase()) throw new CareError(`Type the recipient address exactly (${pre.recipient.email}) to confirm.`, 422)
-  const allowed = clientEmailAllowed(pre.recipient.email)
-  if (!allowed.ok) throw new CareError(allowed.reason!, 403)
-  const link = await openCheckout(siteId, actor)
-  const site = must(await db.from('care_sites').select('invitation_sent_at, invitation_sent_to, checkout_session_id').eq('id', siteId).single(), 'Website')
-  if (link.reused && site.invitation_sent_at && !body.resend) {
-    throw new CareError(`This link was already sent to ${site.invitation_sent_to} on ${new Date(site.invitation_sent_at).toUTCString().slice(0, 16)}. Choose Send again to resend the same link.`, 409)
-  }
-  const m = subscriptionInvitation({
-    name: pre.recipient.name, business: pre.client.business || '', siteLabel: pre.site.label, siteUrl: pre.site.url, planName: pre.plan.name,
-    amount: dollars(link.check.expected.amount_cents), includedMinutes: pre.plan.included_minutes, link: link.url, expires: link.expires_at,
-  })
-  mailer ??= new Resend(process.env.RESEND_API_KEY)
-  const { data, error } = await mailer.emails.send(
-    { from: BRAND.from, to: pre.recipient.email, replyTo: BRAND.email, subject: m.subject, html: m.html, text: m.text },
-    { idempotencyKey: `care-invite-${link.id}-${body.resend ? Date.now() : 'first'}` },
-  )
-  if (error) throw new CareError(`The invitation wasn’t sent: ${error.message || 'the email provider refused it'}. The checkout link is still open; you can retry.`, 502)
-  const now = new Date().toISOString()
-  await db.from('care_sites').update({ invitation_sent_at: now, invitation_sent_to: pre.recipient.email, updated_at: now }).eq('id', siteId)
-  await logActivity({ site_id: siteId, actor, action: 'invitation_sent', detail: { to: pre.recipient.email, session: link.id, amount_cents: link.check.expected.amount_cents, resend: !!body.resend, provider_id: data?.id || null } })
-  return { sent_to: pre.recipient.email, expires_at: link.expires_at, reused_link: link.reused, url: link.url }
+async function portalConfiguration(): Promise<string | undefined> {
+  if (stripeSim()) return undefined
+  const mode = stripeMode()
+  const fromEnv = process.env.STRIPE_CARE_PORTAL_CONFIGURATION
+  if (fromEnv) return fromEnv
+  const settings = await getSettings() as unknown as { stripe_portal_config?: Record<string, string> }
+  const saved = settings.stripe_portal_config?.[mode]
+  if (saved) return saved
+  const cfg = await stripe().billingPortal.configurations.create({
+    business_profile: { headline: 'Manage your Website Care plan', terms_of_service_url: `${appUrl()}${CARE_TERMS_PATH}` },
+    features: {
+      subscription_cancel: { enabled: true, mode: 'at_period_end', proration_behavior: 'none', cancellation_reason: { enabled: true, options: ['too_expensive', 'unused', 'switched_service', 'other'] } },
+      payment_method_update: { enabled: true },
+      invoice_history: { enabled: true },
+      subscription_update: { enabled: false },
+    },
+    metadata: { purpose: 'website-care', terms_version: CARE_AGREEMENT_VERSION },
+  }, { idempotencyKey: `care-portal-config-${mode}-${CARE_AGREEMENT_VERSION}` })
+  await db.from('care_settings').update({ stripe_portal_config: { ...(settings.stripe_portal_config || {}), [mode]: cfg.id } }).eq('id', 1)
+  return cfg.id
 }
 
 export async function portalSession(siteId: string, actor: string) {
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
   if (!site.stripe_customer_id) throw new CareError('This website has no Stripe customer yet.', 409)
-  const p = await stripe().billingPortal.sessions.create({ customer: site.stripe_customer_id, return_url: `${appUrl()}/care` })
+  const p = await stripe().billingPortal.sessions.create({ customer: site.stripe_customer_id, return_url: `${appUrl()}/care`, configuration: await portalConfiguration() })
   await logActivity({ site_id: siteId, actor, action: 'portal_link_created', detail: {} })
   return { url: p.url }
 }
@@ -384,11 +356,13 @@ export async function syncSubscription(subId: string, actor = 'stripe') {
         .eq('site_id', site.id).is('completed_at', null).is('billing_flag', null)
     }
     await logActivity({ site_id: site.id, actor, action: 'subscription_ended', detail: { early: !!endedEarly } })
-    await queueBillingNotice(site, `canceled:${sub.id}`, 'Canceled', endedEarly ? 'The subscription was canceled before the end of the paid period. Open reviews are kept and flagged for you to decide.' : 'The subscription ended at the end of its paid period. Past reports are kept.')
+    await queueBillingNotice(site, `canceled:${sub.id}`, 'Canceled', endedEarly
+      ? 'The subscription ended before the end of the paid period. Under the approved policy, cancellation takes effect at the end of the paid period with no prorated refund, so the rest of this period may not be served. Open reviews are kept and flagged for your review; nothing was refunded.'
+      : 'The subscription ended at the end of its paid period, as the approved policy describes. Past reports are kept, and an open review for the paid period stays open until you finish it.')
   }
   if (state === 'canceling' && site.billing_state !== 'canceling') {
     await logActivity({ site_id: site.id, actor, action: 'cancel_scheduled', detail: { at: patch.current_period_end } })
-    await queueBillingNotice(site, `canceling:${sub.id}:${item?.current_period_end}`, 'Canceling at period end', 'The client scheduled cancellation. The paid period is still honored; no new cycle starts after it ends.')
+    await queueBillingNotice(site, `canceling:${sub.id}:${item?.current_period_end}`, 'Canceling at period end', 'The client canceled future renewals. The current paid period stays available until it ends, with no prorated refund; no new review starts after it ends.')
   }
   return { site_id: site.id, state }
 }
@@ -408,7 +382,10 @@ export async function handleInvoicePaid(invoiceId: string) {
   if (!subId) return { ignored: 'Not a subscription invoice.' }
   const sub = await stripe().subscriptions.retrieve(subId)
   const site = await siteForSubscription(sub)
-  if (!site) return { ignored: 'No enrolled website matches this subscription.' }
+  if (!site) {
+    await flagUnlinkedPayment(sub, inv)
+    return { ignored: 'No enrolled website matches this subscription.' }
+  }
   if (!['subscription_create', 'subscription_cycle'].includes(inv.billing_reason || '')) {
     await syncSubscription(subId)
     return { ignored: `Billing reason ${inv.billing_reason} does not start a service period.` }
@@ -423,12 +400,30 @@ export async function handleInvoicePaid(invoiceId: string) {
   const periodEnd = new Date(line.period.end * 1000)
   const { cycle, created } = await createCycle({
     siteId: site.id, source: 'stripe', invoiceId: inv.id, subscriptionId: subId, periodStart, periodEnd, plan,
-    paidAt: inv.status_transitions?.paid_at ? new Date(inv.status_transitions.paid_at * 1000) : new Date(), amountPaid: inv.amount_paid, currency: inv.currency, actor: 'stripe',
+    paidAt: inv.status_transitions?.paid_at ? new Date(inv.status_transitions.paid_at * 1000) : new Date(), amountPaid: inv.amount_paid, currency: inv.currency,
+    billingReason: inv.billing_reason, actor: 'stripe',
   })
   const paidThrough = site.paid_through && new Date(site.paid_through) > periodEnd ? site.paid_through : periodEnd.toISOString()
   await db.from('care_sites').update({ paid_through: paidThrough, failed_payment_count: 0, billing_attention_since: null, updated_at: new Date().toISOString() }).eq('id', site.id)
   await syncSubscription(subId)
   return { cycle_id: cycle.id, created }
+}
+
+/**
+ * A paid care invoice whose subscription names a website it can't be linked to
+ * (for example a second subscription for an already linked website): money was
+ * taken with no service attached, so the owner is told. Nothing is refunded.
+ */
+async function flagUnlinkedPayment(sub: Stripe.Subscription, inv: Stripe.Invoice) {
+  const siteId = sub.metadata?.care_site_id
+  if (!siteId) return
+  const site = (await db.from('care_sites').select('*').eq('id', siteId).maybeSingle()).data
+  if (!site) return
+  const hasCarePrice = (inv.lines?.data || []).some((l) => !!planForPrice(carePriceOfLine(l)))
+  if (!hasCarePrice) return
+  await logActivity({ site_id: site.id, actor: 'stripe', action: 'unlinked_payment', detail: { subscription: sub.id, invoice: inv.id } })
+  await queueBillingNotice(site, `unlinked:${inv.id}`, 'Payment not linked to a review',
+    `Invoice ${inv.id} was paid on subscription ${sub.id}, which names this website but isn’t the subscription linked to it. No review was created. This may be a duplicate subscription or charge: check it in Stripe and correct it if needed.`)
 }
 
 export async function handlePaymentFailed(invoiceId: string) {
@@ -526,7 +521,7 @@ export async function processEvent(event: Stripe.Event): Promise<{ status: 'proc
         result = await handlePaymentFailed((event.data.object as Stripe.Invoice).id!)
         break
       case 'charge.refunded':
-        result = await flagCharge('refunded', event.data.object as Stripe.Charge, 'A payment was refunded in Stripe. The related review is flagged; decide whether to continue, pause, or close it.')
+        result = await flagCharge('refunded', event.data.object as Stripe.Charge, 'A payment was refunded in Stripe. Under the approved policy, payments are non-refundable except where required by law or to correct a billing error, so check the reason. The related review is flagged; decide whether to continue, pause, or close it.')
         break
       case 'charge.dispute.created': {
         const d = event.data.object as Stripe.Dispute

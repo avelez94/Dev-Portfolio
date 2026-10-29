@@ -139,9 +139,9 @@ export async function payCheckout(processEvent: Process, sessionId: string): Pro
   if (s.status === 'open' && s.expires_at <= now()) {
     await put('session', { ...s, status: 'expired' })
     await deliver(processEvent, siteId, [event('checkout.session.expired', { ...s, status: 'expired' })])
-    throw new SimError('This checkout link has expired. Ask for a new invitation.')
+    throw new SimError('This checkout link has expired. Open the agreement page again for a fresh link.')
   }
-  if (s.status === 'expired') throw new SimError('This checkout link has expired. Ask for a new invitation.')
+  if (s.status === 'expired') throw new SimError('This checkout link has expired. Open the agreement page again for a fresh link.')
   if (s.status === 'complete') throw new SimError('This checkout link was already used.')
   const start = now()
   const sub = await put('subscription', subscriptionObj({ id: rid('sub'), customer: s.customer, priceId: s.price, meta: s.metadata, start }))

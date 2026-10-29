@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, STATUS_TEXT, statusTone } from './ui'
+import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, STATUS_TEXT, statusTone, Pipeline } from './ui'
 import ReportView from '@/components/care/ReportView'
 import WorkPanel from './WorkPanel'
 
@@ -73,6 +73,7 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
             {sentOk && <div className="care-muted">Sent {fmt(sentOk.finished_at, tz)}</div>}
           </div>
         </div>
+        <Pipeline steps={data.pipeline} tz={tz} />
         <div className="care-steps">
           <div className="care-step"><span>Billing</span>{cycle.billing_flag ? <Badge tone="bad">{cycle.billing_flag.replace(/_/g, ' ')}</Badge> : cycle.source === 'manual' ? <Badge>Billed outside Stripe</Badge> : <Badge tone="ok">Period paid</Badge>} <BillingBadge state={site.billing_state} /></div>
           <div className="care-step"><span>Automated check</span><Badge tone={cycle.scan_state === 'done' ? 'ok' : cycle.scan_state === 'failed' ? 'bad' : cycle.scan_state === 'partial' ? 'warn' : 'info'}>{cycle.scan_state.replace(/_/g, ' ')}</Badge></div>
@@ -81,8 +82,14 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
         </div>
       </div>
 
-      {cycle.hold_reason === 'enrollment' && (
-        <div className="care-sub" style={{ marginBottom: 16 }}><b>Waiting for setup confirmation.</b> This period is paid, but no check runs until you confirm the website setup. <button className="care-btn small" onClick={() => go({ site: site.id })}>Confirm setup</button></div>
+      {cycle.hold_reason && (
+        <div className="care-err" role="alert" style={{ marginBottom: 16 }}>
+          <b>Paid review on hold. </b>
+          {cycle.hold_reason === 'paused' ? 'Care for this website is paused. Resume it to queue the check.'
+            : cycle.hold_reason === 'ended' ? 'Care for this website has ended, but this period was paid. Decide how to handle it; nothing was refunded.'
+            : 'The agreed setup isn’t confirmed (it was never confirmed, or it changed). Confirm it and the check is queued straight away.'}
+          {' '}The paid review is kept and nothing was scanned. <button className="care-btn small" onClick={() => go({ site: site.id })}>Open website</button>
+        </div>
       )}
 
       <ScanSummary data={data} reload={reload} />
@@ -183,8 +190,14 @@ function ScanSummary({ data, reload }: { data: Row; reload: () => void }) {
           <p className="care-muted">{latest ? `Last finished ${fmt(latest.finished_at, tz)} (${latest.status === 'partial' ? 'partly finished' : 'finished'})` : 'No completed check yet.'}</p>
         </div>
         {current ? <Action label={current.status === 'queued' ? 'Cancel queued check' : 'Stop check'} run={() => careApi(`cycles/${cycle.id}/cancel-scan`, { method: 'POST', json: {} })} done={reload} />
-          : site.enrollment_status === 'confirmed' && <Action label={runs.length ? 'Run the check again' : 'Run check now'} run={() => careApi(`cycles/${cycle.id}/rerun`, { method: 'POST', json: {} })} done={reload} />}
+          : site.enrollment_status === 'confirmed' && !cycle.hold_reason && <Action label={runs.length ? 'Run the check again' : 'Run check now'} run={() => careApi(`cycles/${cycle.id}/rerun`, { method: 'POST', json: {} })} done={reload} />}
       </div>
+      {current && current.status === 'queued' && ['failed', 'blocked'].includes(current.dispatch_status) && (
+        <div className="care-err" role="alert" style={{ margin: '10px 0' }}>
+          <b>{current.dispatch_status === 'blocked' ? 'The runner couldn’t be started.' : 'Starting the runner failed; retrying automatically.'}</b> {current.dispatch_error} (attempt {current.dispatch_attempts}). The paid review and its queued check are kept.
+          <div style={{ marginTop: 6 }}><Action small label="Retry start" run={() => careApi(`cycles/${cycle.id}/dispatch`, { method: 'POST', json: {} })} done={reload} /></div>
+        </div>
+      )}
       {current && (
         <div className="care-sub" role="status" aria-live="polite" style={{ margin: '10px 0' }}>
           <b>{current.status === 'queued' ? 'Queued' : 'Running'}</b> (attempt {current.attempts || 1} of {current.max_attempts}) {current.progress?.total ? `· ${current.progress.done} of ${current.progress.total} · ${current.progress.step}` : current.status === 'queued' ? `· waiting for the runner (from ${fmt(current.available_at, tz)})` : ''}
@@ -314,12 +327,13 @@ function RunTable({ data }: { data: Row }) {
   if (!runs.length) return <Empty>No checks have run for this period yet.</Empty>
   return (
     <div className="care-scroll" tabIndex={0}><table className="care-table">
-      <thead><tr><th>Started</th><th>Why</th><th>Result</th><th>Results by status</th></tr></thead>
+      <thead><tr><th>Started</th><th>Why</th><th>Result</th><th>Runner start</th><th>Results by status</th></tr></thead>
       <tbody>{runs.map((r: Row) => (
         <tr key={r.id}>
           <td>{fmt(r.started_at || r.created_at, tz)}</td>
-          <td>{r.trigger === 'rerun' ? 'Rerun' : 'Scheduled'}</td>
+          <td>{r.trigger === 'rerun' ? 'Rerun' : 'Paid period check'}</td>
           <td><Badge tone={r.status === 'succeeded' ? 'ok' : r.status === 'failed' ? 'bad' : r.status === 'partial' || r.status === 'canceled' ? 'warn' : 'info'}>{r.status}</Badge></td>
+          <td className="care-muted">{({ pending: 'Pending', dispatched: 'Started', failed: 'Failed, retrying', blocked: 'Blocked', not_needed: 'Picked up' } as Record<string, string>)[r.dispatch_status] || r.dispatch_status}{r.dispatch_attempts ? ` (${r.dispatch_attempts})` : ''}</td>
           <td className="care-muted">{r.summary?.counts ? ['passed', 'failed', 'needs_review', 'could_not_check', 'not_applicable'].filter((k) => r.summary.counts[k]).map((k) => `${r.summary.counts[k]} ${STATUS_TEXT[k].toLowerCase()}`).join(', ') : ''}{r.error ? ` ${r.error}` : ''}</td>
         </tr>
       ))}</tbody>

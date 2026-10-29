@@ -26,11 +26,11 @@ Vercel previews share the production database, so the admin on a preview runs as
   - Database and storage calls go to the demo database.
   - Resend email, Zoom meetings and GitHub runner dispatch are simulated and listed under **Simulated actions**.
   - DNS lookups return example.com's address.
-  - Stripe is answered by the simulated Stripe (`stripe-sim.ts`): prices, customers, checkout sessions, subscriptions, and invoices kept in the demo database. The real checkout, invitation, and webhook code runs against it.
+  - Stripe is answered by the simulated Stripe (`stripe-sim.ts`): prices, customers, checkout sessions, subscriptions, and invoices kept in the demo database. The real agreement, checkout, and webhook code runs against it.
   - Everything else is refused, including any raw http(s) connection.
 - **Demo versions of some actions** (in `dispatch.ts`):
   - The check runner finishes queued checks with fictional results.
-  - **Send subscription invitation** and **Copy checkout link instead** run the real price check and link handling; the link opens a simulated checkout page (what the client would see). **Pay (simulated)** there completes the simulated session and delivers Stripe's `checkout.session.completed` and `invoice.paid` notices to the real `processEvent`.
+  - **Send agreement link** runs the real scope and price checks and issues the agreement. **Open the client’s agreement page** (Practice billing events) shows the client’s private page on demo data: signing is real (signature, stored signed PDF, simulated emails), and **Continue to Payment** opens a simulated checkout page. **Pay (simulated)** there completes the simulated session and delivers Stripe's `checkout.session.completed` and `invoice.paid` notices to the real `processEvent`, which queues and dispatches the check (the dispatch is simulated) before the simulated runner finishes it.
   - **Practice billing events (demo)** on a website's page: renewal, failed payment, cancel at period end, cancel immediately, let the link expire, and send the last notice again. Each changes the simulated subscription and delivers Stripe style notices to the real `processEvent`; redelivered notices keep their event ids, as Stripe's retries do.
   - Simulated checks report each site's second agreed page as too wide for phones, so every review has an issue to handle.
   - The Stripe billing portal is acknowledged only. **Refresh from Stripe** reads the simulated subscription.
@@ -48,6 +48,7 @@ Vercel previews share the production database, so the admin on a preview runs as
 | Owner's guide | `/admin/care/guide` |
 | Practice renewal, failed payment, and cancellations | Lakeside Dental: `/admin/care?site=00000000-0000-4000-8000-000000000203` |
 | A blocked checkout price ($239 agreed, $249 Premium price) | Harbor Street Bakery (link above) |
+| Full journey: suggested scope, confirm, agreement, sign, pay, check | Enroll **Rivera Garden Design** from Websites, Enroll a website |
 | My Pricing cards, proposal and contract forms | `/admin/documents` |
 | Proposal with milestone payments (client view, current terms) | `/proposals/00000000-0000-4000-8000-000000000933` |
 | Proposal issued under the October terms (kept as issued) | `/proposals/00000000-0000-4000-8000-000000000932` |

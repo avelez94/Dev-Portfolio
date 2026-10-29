@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import WorkPanel from './WorkPanel'
-import InvitePanel from './InvitePanel'
+import AgreementPanel from './AgreementPanel'
 import PracticePanel from './PracticePanel'
-import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus } from './ui'
+import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, Pipeline } from './ui'
 import { SitesTable } from './CareApp'
+import { requiredChecks, missingRequired, suggestScope } from '@/lib/care/scope'
 import { CARE_TERMS_VERSION } from '@/content/care-terms'
-import { STANDARD_HOURLY_RATE } from '@/lib/terms'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Go = (n: { view?: 'sites'; site?: string | null; cycle?: string | null }) => void
@@ -75,6 +75,8 @@ function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () =>
   }
 
   const list = (k: 'pages' | 'destinations' | 'manual_checklist') => (f[k] || []) as Row[]
+  // Checks this scope requires: they can be reworded but not removed.
+  const required = new Map(requiredChecks({ destinations: f.destinations, features: f.features }).map((r) => [r.id, r.reason]))
   const setList = (k: 'pages' | 'destinations' | 'manual_checklist', i: number, patch: Row) => set(k, list(k).map((x, j) => (j === i ? { ...x, ...patch } : x)))
   const removeAt = (k: 'pages' | 'destinations' | 'manual_checklist', i: number) => set(k, list(k).filter((_, j) => j !== i))
 
@@ -144,13 +146,16 @@ function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () =>
 
         <Field label="Agreed features and scope notes" id="f-feat" hint="For custom apps, list exactly what is covered. Nothing outside the checklist is promised."><textarea id="f-feat" value={f.features} onChange={(e) => set('features', e.target.value)} /></Field>
 
+        <ScopeSuggestions f={f} set={set} />
+
         <fieldset className="care-sub" style={{ border: '1px solid var(--border)' }}>
           <legend className="care-label">Manual checklist</legend>
           <div className="care-row" style={{ marginBottom: 10 }}>
             {(tpl.data?.checklist || []).map((t: Row) => {
               const on = list('manual_checklist').some((m) => m.id === t.id)
-              return <button type="button" key={t.id} className="care-btn small" aria-pressed={on} style={on ? { background: 'var(--accentBg)', borderColor: 'var(--accent)' } : undefined}
-                onClick={() => set('manual_checklist', on ? list('manual_checklist').filter((m) => m.id !== t.id) : [...list('manual_checklist'), t])}>{on ? '✓ ' : '+ '}{t.label}</button>
+              const locked = on && required.has(t.id)
+              return <button type="button" key={t.id} className="care-btn small" aria-pressed={on} disabled={locked} title={locked ? required.get(t.id) : undefined} style={on ? { background: 'var(--accentBg)', borderColor: 'var(--accent)' } : undefined}
+                onClick={() => set('manual_checklist', on ? list('manual_checklist').filter((m) => m.id !== t.id) : [...list('manual_checklist'), t])}>{on ? '✓ ' : '+ '}{t.label}{locked ? ' (required)' : ''}</button>
             })}
           </div>
           <div className="care-grid">
@@ -161,7 +166,9 @@ function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () =>
                   <input aria-label={`Checklist item ${i + 1}`} value={m.label} onChange={(e) => setList('manual_checklist', i, { label: e.target.value })} />
                   <input aria-label={`Checklist item ${i + 1} instructions`} value={m.instructions || ''} onChange={(e) => setList('manual_checklist', i, { instructions: e.target.value })} placeholder="How to check it" />
                 </div>
-                <button type="button" className="care-btn small" onClick={() => removeAt('manual_checklist', i)} aria-label={`Remove checklist item ${i + 1}`}>Remove</button>
+                {required.has(m.id)
+                  ? <span className="care-badge warn" title={required.get(m.id)}>Required</span>
+                  : <button type="button" className="care-btn small" onClick={() => removeAt('manual_checklist', i)} aria-label={`Remove checklist item ${i + 1}`}>Remove</button>}
               </div>
             ))}
             <div><button type="button" className="care-btn small" onClick={() => set('manual_checklist', [...list('manual_checklist'), { id: '', label: '', category: 'Other', instructions: '' }])}>Add custom item</button></div>
@@ -200,7 +207,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
   const settings = useLoad<Row>('settings')
   const status = useLoad<Row>('status')
   const [link, setLink] = useState<string | null>(null)
-  const [conf, setConf] = useState({ confirm_website: false, confirm_authorization: false, confirm_checklist: false, authorization_note: '', confirm_terms: false, terms_note: '' })
+  const [conf, setConf] = useState({ confirm_website: false, confirm_authorization: false, confirm_checklist: false, authorization_note: '' })
   const [period, setPeriod] = useState({ period_start: '', period_end: '', note: '', confirm_paid: false })
   const [billNote, setBillNote] = useState('')
   useEffect(() => { if (data?.site?.authorization_note) setConf((c) => ({ ...c, authorization_note: data.site.authorization_note })) }, [data?.site?.authorization_note]) // eslint-disable-line react-hooks/set-state-in-effect
@@ -223,26 +230,24 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
           <SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} />
           <span className="care-muted" style={{ textTransform: 'capitalize' }}>{site.plan} Care</span>
         </div>
-        <div className="care-muted" style={{ marginTop: 4 }}>Care terms: {site.care_terms_version === CARE_TERMS_VERSION ? `current (${site.care_terms_note || 'accepted'})` : site.care_terms_version ? `older terms (${site.care_terms_version}), review needed` : 'recorded when you confirm the setup'}</div>
+        <div className="care-muted" style={{ marginTop: 4 }}>Care terms: {site.care_terms_version === CARE_TERMS_VERSION ? `current (${site.care_terms_note || 'accepted'})` : site.care_terms_version ? `older terms (${site.care_terms_version}), review needed` : 'recorded when the client signs the care agreement'}</div>
       </div>
 
       {!confirmed && !ended && site.enrollment_status !== 'paused' && (
         <section className="care-panel" aria-labelledby="conf-h">
-          <h2 id="conf-h">Confirm the setup</h2>
-          <p className="care-muted" style={{ margin: '4px 0 12px' }}>Recurring reviews stay off until you confirm. A paid period that arrives before then waits here; no scan of any address starts on payment alone.{data.setupChanged && ' The setup changed since the last confirmation.'}</p>
+          <h2 id="conf-h">Confirm the technical scope</h2>
+          <p className="care-muted" style={{ margin: '4px 0 12px' }}>Step 1. The care agreement can be sent only after you confirm what gets checked. A paid period that arrives while the scope isn’t confirmed is kept on hold and flagged to you; nothing outside the confirmed scope is scanned.{data.setupChanged && ' The setup changed since the last confirmation.'}</p>
           <div className="care-grid">
             <label className="care-row"><input type="checkbox" checked={conf.confirm_website} onChange={(e) => setConf({ ...conf, confirm_website: e.target.checked })} /> The website address, approved domains, pages, and destinations above are the agreed scope.</label>
             <label className="care-row"><input type="checkbox" checked={conf.confirm_authorization} onChange={(e) => setConf({ ...conf, confirm_authorization: e.target.checked })} /> The client authorized these read only checks of their website.</label>
             <label className="care-row"><input type="checkbox" checked={conf.confirm_checklist} onChange={(e) => setConf({ ...conf, confirm_checklist: e.target.checked })} /> The manual checklist matches what we agreed.</label>
             <Field label="How the client authorized it" id="c-auth"><input id="c-auth" value={conf.authorization_note} onChange={(e) => setConf({ ...conf, authorization_note: e.target.value })} placeholder="Signed care agreement, Oct 28" /></Field>
-            {site.care_terms_version !== CARE_TERMS_VERSION && <>
-              <label className="care-row"><input type="checkbox" checked={conf.confirm_terms} onChange={(e) => setConf({ ...conf, confirm_terms: e.target.checked })} /> The client accepted the current care terms ({CARE_TERMS_VERSION}): flexible plan time, and additional work at ${STANDARD_HOURLY_RATE} an hour with a one hour minimum or an agreed fixed quote.</label>
-              <Field label="How the client accepted the care terms" id="c-terms"><input id="c-terms" value={conf.terms_note} onChange={(e) => setConf({ ...conf, terms_note: e.target.value })} placeholder="Signed care agreement, Oct 28" /></Field>
-            </>}
-            <div><Action tone="primary" label="Confirm setup and enable reviews" run={() => careApi(`sites/${id}/confirm`, { method: 'POST', json: conf })} done={reload} /></div>
+            <div><Action tone="primary" label="Confirm technical scope" run={() => careApi(`sites/${id}/confirm`, { method: 'POST', json: conf })} done={reload} /></div>
           </div>
         </section>
       )}
+
+      {!ended && <AgreementPanel siteId={id as string} tz={tz} onChange={reload} />}
 
       <section className="care-panel" aria-labelledby="bill-h">
         <div className="care-between"><h2 id="bill-h">Subscription and billing</h2><SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} /></div>
@@ -259,12 +264,10 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             <div className="care-muted">Last synced {fmt(site.stripe_synced_at, tz)}</div>
           </div>
           <div className="care-grid">
-            {!site.stripe_subscription_id && !ended && <InvitePanel siteId={id as string} tz={tz} onSent={reload} />}
-            {!site.stripe_subscription_id && !ended && <Action label="Copy checkout link instead" run={() => careApi<Row>(`sites/${id}/checkout`, { method: 'POST', json: {} })} done={(r) => { setLink((r as Row).url); reload() }} />}
-            {!site.stripe_subscription_id && site.checkout_session_id && <div className="care-muted">Checkout link {site.checkout_expires_at && new Date(site.checkout_expires_at) > new Date() ? `open until ${fmt(site.checkout_expires_at, tz)}` : 'expired'}{site.invitation_sent_at ? `; invitation sent ${fmt(site.invitation_sent_at, tz)} to ${site.invitation_sent_to}` : ''}.</div>}
+            {!site.stripe_subscription_id && !ended && <div className="care-muted">Payment opens on the client’s agreement page once they sign. Their Stripe checkout is created when they choose Continue to payment.</div>}
             {site.stripe_customer_id && <Action label="Create billing portal link" run={() => careApi<Row>(`sites/${id}/portal`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
             {site.stripe_subscription_id && <Action label="Refresh from Stripe" run={() => careApi(`sites/${id}/sync`, { method: 'POST', json: {} })} done={reload} />}
-            {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. The same link is reused until it expires (24 hours). Opening it doesn’t activate anything; only Stripe’s verified payment notice does.</small></div>}
+            {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. Opening it doesn’t change anything in their plan.</small></div>}
             {['attention', 'past_due', 'unpaid', 'refunded', 'disputed'].includes(site.billing_state) && (
               <div className="care-sub">
                 <Field label="Mark billing reviewed" id="b-note"><input id="b-note" value={billNote} onChange={(e) => setBillNote(e.target.value)} placeholder="What you did" /></Field>
@@ -273,7 +276,13 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             )}
           </div>
         </div>
-        {status.data?.demo && !ended && <PracticePanel site={site} onChange={reload} />}
+        {cycles[0] && data.pipelines?.[cycles[0].id] && (
+          <div style={{ marginTop: 12 }}>
+            <div className="care-label">Latest paid period: {fmt(cycles[0].period_start, tz, false)} to {fmt(cycles[0].period_end, tz, false)}</div>
+            <Pipeline steps={data.pipelines[cycles[0].id]} tz={tz} label="Latest payment to check" />
+          </div>
+        )}
+        {status.data?.demo && !ended && <PracticePanel site={site} onChange={reload} agreementLink={site.agreement_token ? `/care/agreement/${site.agreement_token}` : null} />}
         {!site.stripe_subscription_id && !ended && (
           <details style={{ marginTop: 12 }}>
             <summary>Billed outside Stripe? Add a paid service period by hand</summary>
@@ -339,5 +348,30 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         )}
       </section>
     </>
+  )
+}
+
+/** Suggested scope for this website: fills the form, stays editable. Required checks are explained. */
+function ScopeSuggestions({ f, set }: { f: Row; set: (k: string, v: unknown) => void }) {
+  const sug = suggestScope({ site_url: f.site_url, pages: f.pages, destinations: f.destinations, features: f.features, manual_checklist: f.manual_checklist })
+  const have = new Set((f.manual_checklist || []).map((m: Row) => m.id))
+  const pages = sug.pages
+  const checks = sug.checklist.filter((c) => !have.has(c.id))
+  const missing = missingRequired({ destinations: f.destinations, features: f.features, manual_checklist: f.manual_checklist })
+  if (!pages.length && !checks.length) return <p className="care-muted" style={{ margin: 0 }}>Suggested scope: everything suggested for these destinations and notes is already in the form.</p>
+  const addAll = () => {
+    if (pages.length) set('pages', [...(f.pages || []), ...pages.map(({ url, label }) => ({ url, label }))])
+    if (checks.length) set('manual_checklist', [...(f.manual_checklist || []), ...checks.map(({ id, label, category, instructions }) => ({ id, label, category, instructions }))])
+  }
+  return (
+    <section className="care-sub" aria-labelledby="sug-scope-h" style={{ border: '1px dashed var(--border2)' }}>
+      <div className="care-between"><b id="sug-scope-h">Suggested scope</b><button type="button" className="care-btn small" onClick={addAll}>Add all suggestions</button></div>
+      <p className="care-muted" style={{ margin: '4px 0 8px' }}>Based on the website address, destinations and scope notes. Suggestions only fill the form; edit anything before saving. Required checks can be reworded but not removed while what requires them is in scope.</p>
+      {missing.length > 0 && <div className="care-err" role="status" style={{ margin: '0 0 8px' }}>Required before you can confirm: {missing.map((m) => m.label).join('; ')}.</div>}
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        {pages.map((p) => <li key={p.url}>Page: {p.label} ({p.url}) <span className="care-muted">{p.why}</span></li>)}
+        {checks.map((c) => <li key={c.id}>{c.required ? <span className="care-badge warn">Required</span> : <span className="care-badge info">Suggested</span>} {c.label} <span className="care-muted">{c.why}</span></li>)}
+      </ul>
+    </section>
   )
 }

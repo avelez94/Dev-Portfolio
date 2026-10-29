@@ -46,17 +46,18 @@ The admin **Schedule** page also shows each review’s due date (a green diamond
 - **Agreed monthly price**: what this client agreed to pay. Reports show this figure.
 - **Website name**, **Website address** (public https), and **Approved domains**. **Check** tests that the address is public and inside the approved domains.
 - **Agreed pages**, plus any **Contact, booking, and checkout destinations**. Destinations are opened only; nothing is filled in, booked, or paid.
-- **Manual checklist**: tap the suggested items, or **Add custom item**.
+- **Suggested scope**: based on the address, destinations and scope notes. **Add all suggestions** adds the home page and the manual checks this scope needs. Everything stays editable.
+- **Manual checklist**: tap the suggested items, or **Add custom item**. Items marked **Required** (desktop and phone always; booking, contact form, payments, or updates when the scope includes them) can be reworded but not removed.
 - **Report recipient name** and **email**. Reports go only to this exact address.
 - **Save enrollment**.
 
-**What happens after saving:** the website is a draft (**Needs confirmation**). Nothing is checked or billed. Its page opens with **Confirm the setup**.
+**What happens after saving:** the website is a draft (**Needs confirmation**). Nothing is checked or billed. Its page opens with **Confirm the technical scope**.
 
-![Confirm the setup](website-care-guide/04-confirm-setup.png)
+![Confirm the technical scope](website-care-guide/04-confirm-setup.png)
 
-**Confirm the setup:** tick the three scope boxes, fill in **How the client authorized it**, then tick **The client accepted the current care terms** and fill in **How the client accepted the care terms**. Then press **Confirm setup and enable reviews**. The header then says **Setup confirmed**. The header’s **Care terms** line shows the version and your note.
+**Confirm the technical scope:** tick the three scope boxes, fill in **How the client authorized it**, then press **Confirm technical scope**. The header then says **Setup confirmed**. Confirmation is refused while a required manual check is missing. The care terms are accepted later, when the client signs the agreement.
 
-**Automatic:** the address is checked again (it must be public). Any paid period that was waiting for confirmation starts.
+**Automatic:** the address is checked again (it must be public). Any paid period that was held for confirmation starts.
 
 **The client sees:** nothing. Enrollment and confirmation are internal.
 
@@ -64,44 +65,37 @@ The admin **Schedule** page also shows each review’s due date (a green diamond
 
 **Demo:** real behavior, run on the demo data. The address check is answered without looking up the real domain (every demo address resolves to a public address).
 
-## 2. Subscription invitation, checkout, and payment status
+## 2. Care agreement, signing, and payment
 
-**Where:** the website’s page, **Subscription and billing**.
+**Where:** the website’s page, **Care agreement**, then **Subscription and billing**.
 
-### Send the subscription invitation
+The workflow is: you confirm the technical scope, the client gets a persistent private agreement link, they sign, the signed PDF is stored and emailed to both of you, payment unlocks, and a verified payment queues the first check straight away.
 
-1. Press **Send subscription invitation**. Before anything is sent, the panel shows:
-   - **To**: the report recipient’s name and email.
-   - **Plan**: the care plan and its included minutes.
-   - **Recurring amount**: the client’s **Agreed monthly price**, in USD, every month, with the Stripe price it was checked against.
-   - **Checkout link**: whether a link is open (and until when), expired, or about to be created.
-   - **Last sent**: when and to whom, if it was sent before.
-2. **Price verified** means the app read the plan’s real Stripe price and it matches the agreed amount, in US dollars, billed once a month.
-3. Type the recipient’s address exactly, then press **Send invitation**.
+### Send the agreement link
 
-![Invitation](website-care-guide/05-invitation.png)
+1. **Care agreement** shows the steps and what’s still missing. **Preview what the client signs** shows the exact agreement: parties, plan, price, agreed website and checks, and the full terms (plan time, billing, refunds, cancelling, billing errors).
+2. The panel shows **To** (the report recipient), **Plan and price** (the agreed monthly price in USD, checked against the plan’s real Stripe price), and the **Private link**.
+3. Type the recipient’s address exactly, then press **Send agreement link**. The link never changes; **Send again** sends it as a reminder.
 
-**The client receives:** an email titled “Start Website Care for (website)” with the website, plan, monthly price (“billed monthly until you cancel”), included minutes, a **Start My Subscription** button to Stripe’s checkout, and the date and time the link stops working.
+![Agreement](website-care-guide/05-agreement.png)
 
-**Checkout is blocked when the price doesn’t match.** The app compares the plan’s configured Stripe price with the client’s agreed price before it creates a link or sends anything. It refuses when:
-- the Stripe price charges a different amount than the agreed price;
-- the currency isn’t USD;
-- it bills on any schedule other than once a month;
-- it is metered, tiered, archived, or starts with a free trial;
-- it is a test price on a live account, or a live price in test mode;
-- Stripe can’t be reached to confirm it.
+**The client receives:** an email titled “Your Website Care agreement for (website)” with the plan, price (“billed monthly in advance until you cancel”), included minutes and a **Read and Sign** button. Their page shows the agreement, then a typed name, a signature box and “I’ve read this agreement and agree to it”.
 
-The panel lists each problem under **Can’t send yet**, and **Copy checkout link instead** shows the same message. Nothing is created or sent. To fix it, change the **Agreed monthly price** to the plan price, or have a Stripe price that matches the agreed amount set for that plan. (One custom Stripe price per client isn’t built.)
+![The client’s agreement page](website-care-guide/05c-client-agreement.png)
 
-![Blocked](website-care-guide/05b-invitation-blocked.png)
+**When they sign:** the signature, name, time and address are stored with that exact version, a signed PDF is saved privately and emailed to the client (with the PDF attached) and to you. The panel shows **Signed, payment unlocked** and **Download signed PDF**.
 
-**One link at a time, no duplicates**
-- Each website has one open checkout link, good for 24 hours. Sending again before it expires reuses the same link: **Send invitation** says it was already sent, and **Send again** resends it as a reminder.
-- When the link expires (Stripe tells the app), the page says **Checkout link expired**. The next invitation makes a new link.
-- Changing the agreed price or plan closes the open link, so the old price can’t be paid.
-- If the website already has a subscription, here or in Stripe, the invitation and checkout are refused.
+**The agreement is blocked when the price doesn’t match.** Before an agreement is issued or payment opens, the app compares the plan’s configured Stripe price with the client’s agreed price. It refuses when the amount differs, the currency isn’t USD, it bills other than once a month, it is metered, tiered, archived or has a trial, it is a test price on a live account (or the reverse), or Stripe can’t be reached. The panel lists each problem. Fix the **Agreed monthly price** or the plan’s Stripe price.
 
-**Copy checkout link instead** gives you the same link to send in your own email. Nothing is emailed.
+![Blocked](website-care-guide/05b-agreement-blocked.png)
+
+**Changes after signing:** changing the price, plan or checked scope locks payment (the open checkout link is closed) until a new version is sent and signed. A signed version is never altered; earlier versions are listed under **Earlier versions**. An existing subscriber without a signed current agreement is flagged **Agreement signature needed**; their earlier agreement stays in place until they sign.
+
+### Payment unlocks
+
+![Payment unlocked](website-care-guide/05d-client-signed.png)
+
+On their agreement page, the client chooses **Continue to Payment**. The app creates (or reuses) a Stripe Checkout for the verified price at that moment, so there is no invitation link to expire. **Copy payment link** in the panel gives you the same link after signing.
 
 ### The client pays
 
@@ -111,7 +105,7 @@ The client pays on Stripe’s page. Stripe’s verified payment notice then sets
 
 ![Paid](website-care-guide/07-site-paid.png)
 
-**Automatic:** linking the subscription, **Paid through**, the current period, the first review, the check, and an email to you saying the review is ready.
+**Automatic:** linking the subscription, **Paid through**, the current period, the first review with its included plan time, and the check: queued and the runner started straight from the payment notice. The review shows **Payment received**, **Scan queued** (runner started), **Running**, **Completed**, and you’re emailed when results are ready. If the runner can’t be started it retries (1, 5, 15, 60 minutes), then emails you once; **Retry start** tries again. If the scope isn’t confirmed, or care is paused or ended, the paid review is kept **On hold** and you’re emailed immediately.
 
 **The client sees:** Stripe’s checkout page, then a “subscribed” page on your site. Stripe sends their receipt.
 
@@ -120,9 +114,9 @@ The client pays on Stripe’s page. Stripe’s verified payment notice then sets
 **Fixing a mistake:** a paid period can’t be deleted from the app. If you added the wrong dates by hand, note it in the review and fix the next one.
 
 **Demo:**
-- Stripe is simulated: the same checks and notices run, answered by a stand in. The invitation email appears in **Simulated actions**.
+- Stripe is simulated: the same checks and notices run, answered by a stand in. The agreement and signed copy emails appear in **Simulated actions**.
 - Harbor Street Bakery shows a blocked price ($239 agreed, $249 Premium price).
-- On a website with an open link, **Practice billing events** has **Open the simulated checkout (play the client)** and **Let the link expire**.
+- After sending the agreement link, **Practice billing events** has **Open the client’s agreement page (play the client)**: sign, then **Continue to Payment** opens the simulated checkout. With an open link it also has **Let the link expire**.
 - **Create billing portal link** is acknowledged only.
 
 ## 3. Find the monthly review
@@ -320,14 +314,18 @@ Both come from the frozen copy made when you approved, so the email and the PDF 
 
 **Unfinished reservation:** an approved estimate near or past its period end is flagged on the Overview (**Unfinished approved work**). Reserved minutes never carry into the next period. **Carry to current period** creates a new draft that needs approval again; **Cancel** releases the minutes.
 
-**Awaiting your decision** (**Settings, Billing policy (proposed)**):
+**Approved (Oct 29, 2026)** (**Settings, Billing policy: approved**, read only): billed monthly in advance; payment queues the check; non-refundable after payment except where required by law; cancel future renewals before the next billing date, effective at the end of the paid period with no prorated refund; duplicate or incorrect charges always corrected; paid periods that can't be served are flagged. The client signs this in the care agreement.
+
+![Billing policy approved](website-care-guide/27-settings-policy.png)
+
+**Awaiting your decision** (**Settings, Billing policy: still to decide**):
 - The grace period.
-- What to do about refunds, disputes, and immediate cancellations.
+- What to do about disputes.
 - How many failed payments raise billing attention.
 
-Today these settings only control flags and reminder emails; nothing is suspended or refunded automatically. Record your approval with **Record approval**.
+Today these settings only control flags and reminder emails; nothing is suspended or refunded automatically, and live checkout stays off. Record your approval with **Record approval**.
 
-![Billing policy](website-care-guide/27-settings-policy.png)
+![Billing policy still to decide](website-care-guide/27b-settings-undecided.png)
 
 **Repeated notices are safe.** Stripe can send the same notice more than once. Each notice is recorded by its id and processed once, and each paid invoice and each period can only create one review, so a repeat never adds a second period, review, or allowance of included minutes.
 
@@ -435,11 +433,12 @@ The cards are **Business Website**, **Booking & Payments**, **Custom Website or 
 | What you see | What it means | What to do |
 | --- | --- | --- |
 | **Confirm setup** says the address is “private or reserved” | The address resolves to a private network, or it isn’t public. | Check the address and approved domains. Use **Check**. |
-| Review stuck on **Waiting for setup confirmation** | A paid period arrived before you confirmed the setup. | Confirm the setup on the website’s page. |
+| Review shows **Paid, on hold** | A paid period arrived while the scope wasn’t confirmed, or care was paused or ended. | Confirm the technical scope, or resume care. An ended site’s payment is for you to decide. |
+| **The check couldn’t start** | The runner dispatch failed 5 times. | Check the GitHub dispatch settings, then **Retry start** on the review. |
 | **Check failed: retry needed** | The checker couldn’t finish after its retries. | **Run the check again**; read the error under **Runs, due date, and history**. |
-| **Can’t send yet** or **Checkout is blocked** | The plan’s Stripe price doesn’t match the agreed price, currency, or monthly billing, or Stripe couldn’t confirm it. | Read the listed problems. Correct the agreed price, or have a matching Stripe price set for the plan. Retry if Stripe was unreachable. |
-| “This link was already sent” | The open link was already emailed. | Use **Send again** to resend it as a reminder. |
-| **Checkout link expired** | The 24 hour link ran out before the client paid. | **Send subscription invitation** again; a new link is made. |
+| **Not ready to send** or **Checkout is blocked** | The scope isn’t confirmed, a required check is missing, or the plan’s Stripe price doesn’t match the agreed price, currency, or monthly billing. | Read the listed problems and fix each one. Retry if Stripe was unreachable. |
+| “The agreement link was already sent” | The same private link was already emailed. | Use **Send again** to send a reminder. |
+| **Signature needed for the current details** | The price, plan or scope changed after signing. | **Send updated agreement**; payment opens once they sign it. |
 | **Quick add work** is greyed out | The client’s care terms aren’t current. | Record the terms (setup confirmation or **Mark agreement reviewed**). |
 | Plan time says **No paid billing period yet** | There’s no paid period for this website. | Wait for the first payment, or add a paid period by hand. |
 | “needs X standard minutes but only Y are available” | Recording would go past the allowance. | Create an estimate for the larger work. |
@@ -459,7 +458,7 @@ The cards are **Business Website**, **Booking & Payments**, **Custom Website or 
   - **Paid, active** (on the website): the Stripe subscription is in good standing.
   - **Paid** or **Billed outside Stripe** (in the queue): how the period was paid.
   - They don’t say whether the review is done; the work status does.
-- **Agreed monthly price versus the Stripe charge.** Fixed: checkout and the invitation are now blocked unless the plan’s Stripe price charges exactly the agreed price, in USD, monthly. A client with a custom price can’t check out until a matching Stripe price exists for that plan, or you bill them by hand. Per client Stripe prices aren’t built.
+- **Agreed monthly price versus the Stripe charge.** Fixed: the agreement and checkout are blocked unless the plan’s Stripe price charges exactly the agreed price, in USD, monthly. A client with a custom price can’t check out until a matching Stripe price exists for that plan, or you bill them by hand. Per client Stripe prices aren’t built.
 - **“(no Stripe price set)” beside a plan.** The Stripe price ID for that plan isn’t configured, so checkout would fail. The demo hides this because checkout there is simulated.
 - **“Accepted by provider” is not “Delivered”.** Delivery is confirmed only with Resend’s webhook.
 - **Revenue shorthand.** **(ms)** is a milestone schedule, **(fixed)** a fixed fee invoice, **(rev)** a revision invoice. **Awaiting Dep** means the deposit is invoiced but not paid; **Dep Paid** means the deposit is in and milestones remain.

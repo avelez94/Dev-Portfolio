@@ -7,6 +7,7 @@
 import 'server-only'
 import { TERMS_VERSION } from '@/lib/terms'
 import { seedSubscription } from './stripe-sim'
+import { setupHash } from '@/lib/care/sites'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
@@ -150,7 +151,11 @@ export function careRows(): Rows {
   ]
   // Northside Physio and Harbor Street Bakery are billed by hand (paid periods added under
   // "Billed outside Stripe?"); Lakeside Dental pays through a (simulated) Stripe subscription.
-  const site = (o: Record<string, unknown>) => ({ enrollment_status: 'confirmed', manual_checklist: checklist, confirmed_at: at(-90), authorization_note: 'Signed care agreement (demo)', billing_state: 'not_started', ...o })
+  // Confirmed sites carry the fingerprint of the setup that was confirmed, as confirmSite records it.
+  const site = (o: Record<string, unknown>) => {
+    const row: Record<string, unknown> = { enrollment_status: 'confirmed', manual_checklist: checklist, confirmed_at: at(-90), authorization_note: 'Signed care agreement (demo)', billing_state: 'not_started', scan_limits: {}, ...o }
+    return { ...row, confirmed_hash: setupHash(row as unknown as Parameters<typeof setupHash>[0]) }
+  }
   return {
     care_sites: [
       site({ id: S.physio, client_id: C.physio, label: 'Northside Physio', site_url: 'https://physio.example.com/', approved_domains: ['physio.example.com'], plan: 'business', agreed_monthly_price: 129, pages: physioPages, destinations: physioDest, recipient_name: 'Sam Patel', recipient_email: 'frontdesk@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed the current care agreement (demo)', care_terms_reviewed_at: at(-30), next_review_due: at(3), created_at: at(-100) }),

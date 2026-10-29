@@ -25,7 +25,7 @@ export type DemoState = {
   log: DemoLogEntry[]
 }
 
-const MIGRATIONS = ['20261030_website_care.sql', '20261031_care_work_ledger.sql', '20261103_care_report_suggestions.sql', '20261104_care_checkout_invitations.sql']
+const MIGRATIONS = ['20261030_website_care.sql', '20261031_care_work_ledger.sql', '20261103_care_report_suggestions.sql', '20261104_care_checkout_invitations.sql', '20261105_care_agreements_and_dispatch.sql']
 
 /** The existing dashboard tables (created outside the repo in production), with the columns the app uses. */
 const BASE_SCHEMA = `

@@ -4,7 +4,7 @@ import s from '@/components/site/site.module.css'
 import { CareCompare, CarePlanCards, CareTime, CostBreakdown, CtaBand, FaqList, PageHeader, SubNav } from '@/components/site/blocks'
 import { inquiryHref } from '@/content/site'
 import { careBenefits, careFaqs, careSubscribeNote, occasionalSupport } from '@/content/offers'
-import { CARE_FLEXIBLE_TIME, CARE_STANDARD_MINUTES, CARE_TERMS } from '@/content/care-terms'
+import { CARE_FLEXIBLE_TIME, CARE_STANDARD_MINUTES, CARE_TERMS, CARE_QUEUED_LINE, CARE_TERMS_PATH } from '@/content/care-terms'
 import { CARE_SAMPLES } from '@/content/care-samples'
 import CareSample from '@/components/site/CareSample'
 
@@ -36,6 +36,7 @@ export default function CarePage() {
             { href: '#time', label: 'How time works' },
             { href: '#terms', label: 'Care terms' },
             { href: '#support', label: 'Occasional support' },
+            { href: '#faq', label: 'Questions' },
           ]}
         />
       </PageHeader>
@@ -113,7 +114,10 @@ export default function CarePage() {
           <h2 id="terms-title" className={s.sectionTitle}>
             Know how it works <em>before you start.</em>
           </h2>
-          <p className={s.sectionLede}>These terms are part of your care agreement.</p>
+          <p className={s.sectionLede}>
+            These terms are part of your care agreement. Plans are billed monthly in advance. {CARE_QUEUED_LINE}{' '}
+            <Link href={CARE_TERMS_PATH}>Read the full agreement terms, including cancellation and refunds</Link>.
+          </p>
         </div>
         <div className={s.benefits}>
           {CARE_TERMS.map((t) => (
@@ -130,7 +134,7 @@ export default function CarePage() {
         <div className={s.sectionHead} data-reveal>
           <p className={s.eyebrow}>Questions</p>
           <h2 id="care-faq-title" className={s.sectionTitle}>
-            Plan time, <em>answered.</em>
+            Plan time and billing, <em>answered.</em>
           </h2>
         </div>
         <FaqList faqs={careFaqs} />

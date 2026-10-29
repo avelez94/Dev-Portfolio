@@ -64,7 +64,7 @@ export function startFakeStripe(port) {
         if (req.method === 'POST' && !c) {
           const o = {
             id: rid('cs'), object: 'checkout.session', status: 'open', mode: form.mode, customer: form.customer, metadata: form.metadata || {},
-            price: form.line_items?.[0]?.price, expires_at: Number(form.expires_at) || now() + 86400, subscription: null,
+            price: form.line_items?.[0]?.price, expires_at: Number(form.expires_at) || now() + 86400, subscription: null, custom_text: form.custom_text || null, cancel_url: form.cancel_url,
           }
           o.url = `https://checkout.stripe.local/pay/${o.id}`
           s.sessions[o.id] = o
@@ -96,6 +96,23 @@ export function startFakeResend(port) {
       s.emails.push({ id, ...m, idempotencyKey: req.headers['idempotency-key'] })
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ id }))
+    })
+  })
+  return new Promise((r) => s.server.listen(port, '127.0.0.1', () => r(s)))
+}
+
+/** GitHub's workflow dispatch endpoint. `fail` refuses every dispatch, `failTimes` the next n. */
+export function startFakeGithub(port) {
+  const s = { dispatches: [], fail: false, failTimes: 0 }
+  s.server = http.createServer((req, res) => {
+    let body = ''
+    req.on('data', (c) => { body += c })
+    req.on('end', () => {
+      const failing = s.fail || s.failTimes > 0
+      if (s.failTimes > 0) s.failTimes--
+      s.dispatches.push({ path: req.url, ok: !failing, body, at: Date.now() })
+      if (failing) { res.writeHead(503, { 'content-type': 'application/json' }); return res.end('{"message":"Simulated GitHub outage"}') }
+      res.writeHead(204); res.end()
     })
   })
   return new Promise((r) => s.server.listen(port, '127.0.0.1', () => r(s)))

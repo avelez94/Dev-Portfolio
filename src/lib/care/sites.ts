@@ -1,31 +1,21 @@
 /**
  * Website enrollment: validation, the setup fingerprint, and confirmation.
- * Payment alone never starts a scan: a site must be confirmed by the owner
- * (website, authorization, and checklist), and any later change to what gets
- * checked returns it to draft until it is confirmed again.
+ * The owner confirms the technical scope (website, authorization, and
+ * checklist) first; the client then signs the care agreement and pays. A paid
+ * period is scanned only within the confirmed scope, and any later change to
+ * what gets checked returns the site to draft until it is confirmed again.
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { db, must, CareError, logActivity, type Row } from './db'
 import { isPlanId, type PlanId } from './plans'
 import { checkUrlShape, checkUrlResolves, normalizeDomain, hostInDomains } from './url-safety'
-import { CARE_TERMS_VERSION } from '@/content/care-terms'
 
 export const LIMIT_DEFAULTS = { maxPages: 15, maxLinks: 60, concurrency: 2, navTimeoutMs: 30000, runTimeoutMs: 360000 }
 export const LIMIT_CAPS = { maxPages: 25, maxLinks: 150, concurrency: 3, navTimeoutMs: 45000, runTimeoutMs: 480000 }
 
-export type Page = { url: string; label: string }
-export type Destination = { kind: 'contact' | 'booking' | 'checkout' | 'other'; url: string; label: string }
-export type ChecklistItem = { id: string; label: string; category: string; instructions?: string }
-
-export const CHECKLIST_TEMPLATE: ChecklistItem[] = [
-  { id: 'visual-desktop', category: 'Appearance', label: 'Desktop appearance looks right', instructions: 'Compare the desktop screenshots with the live site. Look for broken layouts, missing images, and overlapping text.' },
-  { id: 'visual-mobile', category: 'Appearance', label: 'Mobile appearance looks right', instructions: 'Check the mobile screenshots and open the site on a phone.' },
-  { id: 'content-details', category: 'Content', label: 'Hours, prices, and contact details are correct', instructions: 'Compare against the details the client last confirmed.' },
-  { id: 'contact-form', category: 'Forms', label: 'Contact form sends and arrives in the inbox', instructions: 'Send one clearly labeled test message and confirm it reaches the agreed inbox.' },
-  { id: 'booking', category: 'Booking', label: 'Booking shows availability and the steps make sense', instructions: 'Open the booking page and look at availability. Do not book a real appointment.' },
-  { id: 'payments', category: 'Payments', label: 'Payment works through the approved test process', instructions: 'Only if the client approved a test process in writing. Otherwise mark Not applicable.' },
-  { id: 'updates-backups', category: 'Maintenance', label: 'Updates or backups verified', instructions: 'Only where updates or backups are in the agreed scope.' },
-]
+export { CHECKLIST_TEMPLATE, requiredChecks, missingRequired, suggestScope } from './scope'
+export type { Page, Destination, ChecklistItem } from './scope'
+import { missingRequired, type Page, type Destination, type ChecklistItem } from './scope'
 
 const str = (v: unknown, max = 500) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
@@ -174,7 +164,7 @@ export async function assertClient(clientId: string) {
 }
 
 /** Confirmation gate. Checks DNS too, so a domain pointing at a private network is refused. */
-export async function confirmSite(siteId: string, body: { authorization_note?: string; confirm_website?: boolean; confirm_authorization?: boolean; confirm_checklist?: boolean; confirm_terms?: boolean; terms_note?: string }, actor: string) {
+export async function confirmSite(siteId: string, body: { authorization_note?: string; confirm_website?: boolean; confirm_authorization?: boolean; confirm_checklist?: boolean }, actor: string) {
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
   const problems: string[] = []
   if (!body.confirm_website) problems.push('Confirm the website address and pages are the agreed scope.')
@@ -182,13 +172,11 @@ export async function confirmSite(siteId: string, body: { authorization_note?: s
   if (!body.confirm_checklist) problems.push('Confirm the manual checklist.')
   const note = str(body.authorization_note, 1000)
   if (note.length < 5) problems.push('Describe how the client authorized the checks (for example, the signed care agreement and date).')
-  // The current care terms (flexible plan time, additional work rate) apply once the client accepts them.
-  const termsCurrent = site.care_terms_version === CARE_TERMS_VERSION
-  const termsNote = str(body.terms_note, 500)
-  if (!termsCurrent && !body.confirm_terms) problems.push('Confirm the client accepted the current care terms.')
-  if (!termsCurrent && termsNote.length < 5) problems.push('Describe how the client accepted the care terms (for example, the signed care agreement and date).')
+  // This confirms the technical scope only. The client accepts the care terms by
+  // signing the care agreement on their private link (agreement.ts).
   if (!site.recipient_email) problems.push('Add the report recipient email.')
   if (!site.manual_checklist?.length) problems.push('Add at least one manual checklist item.')
+  for (const m of missingRequired(site)) problems.push(`Add the required manual check “${m.label}”: ${m.reason}`)
   if (site.enrollment_status === 'ended') problems.push('This website has ended care. Create a new enrollment instead.')
   const check = await checkUrlResolves(site.site_url, site.approved_domains)
   if (!check.ok) problems.push(`Website address: ${check.reason}`)
@@ -201,11 +189,9 @@ export async function confirmSite(siteId: string, body: { authorization_note?: s
   const upd = await db.from('care_sites')
     .update({
       enrollment_status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_hash: hash, authorization_note: note, updated_at: new Date().toISOString(),
-      ...(termsCurrent ? {} : { care_terms_version: CARE_TERMS_VERSION, care_terms_note: termsNote, care_terms_reviewed_at: new Date().toISOString() }),
     })
     .eq('id', siteId).select('*').single()
   const saved = must(upd, 'Website')
   await logActivity({ site_id: siteId, actor, action: 'enrollment_confirmed', detail: { hash: hash.slice(0, 12) } })
-  if (!termsCurrent) await logActivity({ site_id: siteId, actor, action: 'care_terms_accepted', detail: { version: CARE_TERMS_VERSION, note: termsNote } })
   return saved
 }
