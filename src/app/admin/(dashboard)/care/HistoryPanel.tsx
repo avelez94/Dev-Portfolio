@@ -19,7 +19,7 @@ export function RunResults({ runId, tz }: { runId: string; tz: string }) {
   const r = useLoad<Row>(`runs/${runId}`, [runId])
   if (r.error) return <ErrorBox error={r.error} onRetry={r.reload} />
   if (!r.data) return <Loading lines={2} />
-  const { run, groups, findings } = r.data
+  const { run, groups, findings, screenshots = [] } = r.data
   return (
     <div className="care-sub" data-testid="run-results" style={{ marginTop: 8 }}>
       <div className="care-label">{run.trigger === 'rerun' ? 'Rerun' : 'Paid period check'} on {fmt(run.at, tz)}: <Badge tone={RUN_TONE(run.status)}>{run.status}</Badge> <span className="care-muted">{countText(run.counts)}</span></div>
@@ -27,6 +27,7 @@ export function RunResults({ runId, tz }: { runId: string; tz: string }) {
       {groups.length === 0 ? <p className="care-muted" style={{ margin: '6px 0' }}>No issues in this check.</p> : (
         <ul style={{ margin: '6px 0', paddingLeft: 18 }}>{groups.map((g: Row) => <li key={g.key}><b>{g.title}</b> <span className="care-muted">{g.severity === 'issue' ? 'issue' : 'not verified'} · {g.pages.join(', ')}{g.devices.length ? ` · ${g.devices.join(', ')}` : ''}</span></li>)}</ul>
       )}
+      {screenshots.length > 0 && <p style={{ margin: '4px 0' }}>Screenshots (admin only, kept for the evidence retention period): {screenshots.map((x: Row, i: number) => <span key={x.path}>{i ? ', ' : ''}<a href={`/api/care/admin/evidence?path=${encodeURIComponent(x.path)}`} target="_blank" rel="noreferrer">{x.url ? new URL(x.url).pathname : 'page'}{x.viewport ? ` (${x.viewport})` : ''}</a></span>)}</p>}
       <details><summary>All {findings.length} results</summary>
         <div className="care-scroll" tabIndex={0}><table className="care-table">
           <thead><tr><th>Check</th><th>Page</th><th>Result</th><th>What was seen</th></tr></thead>

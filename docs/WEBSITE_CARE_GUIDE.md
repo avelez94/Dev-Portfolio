@@ -146,7 +146,7 @@ The admin **Schedule** shows the same reviews under **Monthly care reviews**, an
 
 Each billing period shows, newest first (**Oldest first** reverses it):
 
-- **Automated checks:** every check that period, when it ran and its result. **View results** opens that check’s stored results as they were (issues, then all results).
+- **Automated checks:** every check that period, when it ran and its result. **View results** opens that check’s stored results as they were (issues, screenshots while they are kept, then all results).
 - **Findings:** issues and items not verified in the period’s latest check, how many have a decision, and how many you marked fixed.
 - **Manual review:** how many checklist items were recorded, passed, need attention or weren’t checked.
 - **Work recorded:** entries and minutes (included and additional), and any estimates with their status.

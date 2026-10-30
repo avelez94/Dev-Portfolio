@@ -254,6 +254,7 @@ test('each website has its own review history: every billing period’s checks, 
   sql(`insert into care_findings (run_id, cycle_id, site_id, check_key, issue_code, fingerprint, url, viewport, status, observed, explanation, checked_at)
     values (${q(run)}, ${q(old)}, ${q(ids.site)}, 'images', 'broken', 'old-img', 'https://physio.example.com/', 'desktop', 'failed', 'Two images did not load', 'seeded', now() - interval '60 days'),
            (${q(run)}, ${q(old)}, ${q(ids.site)}, 'page_load', 'ok', 'old-load', 'https://physio.example.com/', 'desktop', 'passed', 'Loaded', 'seeded', now() - interval '60 days')`)
+  sql(`update care_findings set evidence = '{"screenshot":"evidence/old-home.png"}' where fingerprint = 'old-load'`)
   sql(`insert into care_manual_results (cycle_id, item_id, label, category, status, note, confirmed_at) values (${q(old)}, 'visual', 'Desktop appearance looks right', 'Visual', 'passed', 'Fine', now() - interval '59 days')`)
   sql(`insert into care_issue_notes (cycle_id, group_key, resolution, verification_note) values (${q(old)}, 'images:broken', 'fixed', 'Rechecked on a laptop')`)
   const rep = one(`insert into care_reports (cycle_id, status, version, content) values (${q(old)}, 'sent', 2, '{}') returning id`).id
@@ -292,6 +293,7 @@ test('each website has its own review history: every billing period’s checks, 
   assert.equal(rr.data.run.cycle_id, old)
   assert.deepEqual(rr.data.findings.map((f) => f.observed).sort(), ['Loaded', 'Two images did not load'])
   assert.equal(rr.data.groups.length, 1)
+  assert.deepEqual(rr.data.screenshots, [{ url: 'https://physio.example.com/', viewport: 'desktop', path: 'evidence/old-home.png' }], 'its screenshots open too')
   assert.equal((await api(`runs/${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}`)).status, 404)
 
   // A second website for the same client keeps its own history; the client profile lists both.

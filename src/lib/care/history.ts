@@ -108,6 +108,7 @@ export async function runResults(runId: string) {
   return {
     run: { id: run.id, cycle_id: run.cycle_id, site_id: run.site_id, trigger: run.trigger, status: run.status, at: run.finished_at || run.started_at || run.created_at, error: run.error, counts: run.summary?.counts || counts(findings) },
     groups,
+    screenshots: findings.filter((f) => f.evidence?.screenshot).map((f) => ({ url: f.url, viewport: f.viewport, path: String(f.evidence.screenshot) })),
     findings: findings.filter((f) => f.check_key !== 'screenshot').map((f) => ({ id: f.id, check_key: f.check_key, status: f.status, url: f.url, viewport: f.viewport, observed: f.observed, explanation: f.explanation, next_action: f.next_action, client_visible: f.client_visible, issue: ISSUE.includes(f.status) })),
     pages: (cfg.pages || []).length,
   }
