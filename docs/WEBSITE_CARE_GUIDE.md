@@ -140,6 +140,24 @@ The admin **Schedule** shows the same reviews under **Monthly care reviews**, an
 
 ![Schedule](website-care-guide/10-schedule.png)
 
+### Review history (every earlier month)
+
+**Where:** each website’s page, **Review history**. From a client’s Pipeline profile, **Website Care: (website) (n reviews)** opens it. A client with several websites has one link and one history per website; the website page also lists **Other websites** for that client.
+
+Each billing period shows, newest first (**Oldest first** reverses it):
+
+- **Automated checks:** every check that period, when it ran and its result. **View results** opens that check’s stored results as they were (issues, then all results).
+- **Findings:** issues and items not verified in the period’s latest check, how many have a decision, and how many you marked fixed.
+- **Manual review:** how many checklist items were recorded, passed, need attention or weren’t checked.
+- **Work recorded:** entries and minutes (included and additional), and any estimates with their status.
+- **Report:** its status and version, when it was sent and to whom, **Sent PDF**, and under **Approved versions and sends** every approved version (including replaced ones) with its stored PDF.
+
+**Open review** opens that month’s full review. In a review, **Runs, due date, and history** lists its checks; **View results** opens any of them.
+
+**Agreement versions:** in **Care agreement**, **All agreement versions** lists every version issued for the website. **View** shows it as the client read it; **Signed PDF** downloads the stored signed copy.
+
+**Demo:** Northside Physio has last month completed (check, manual review, work, approved and sent report) and this month in progress.
+
 **Automatic:**
 - A review is created for every paid period.
 - The check runs as soon as the period starts.
@@ -351,7 +369,7 @@ Open **Lakeside Dental** (it has a simulated subscription). Under **Subscription
 
 | Button | What happens | What to look for |
 | --- | --- | --- |
-| **Renewal** | The next month is paid. | A new review in **Monthly reviews**, **Paid through** moves a month. |
+| **Renewal** | The next month is paid. | A new period in **Review history**, **Paid through** moves a month. |
 | **Failed payment** | The renewal payment fails. Press again for another failed attempt. | **Past due**, the failed payment count, **Billing attention** on the Overview, and an owner email in **Simulated actions**. No new review. |
 | **Renewal** (after a failure) | Stripe’s retry succeeds. | Back to **Paid, active**; that month’s review appears once. Then **Mark billing reviewed**. |
 | **Cancel at period end** | The client schedules cancellation. | **Canceling at period end**. The paid period continues. |

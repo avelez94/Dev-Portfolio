@@ -11,7 +11,8 @@ import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCK
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
 import { createCycle, enqueueScan, cancelScan, releaseHeldCycles, retryDispatch, dispatchConfigured } from '@/lib/care/cycles'
 import { pipeline } from '@/lib/care/pipeline'
-import { agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy, revokeLink, replaceLink } from '@/lib/care/agreement'
+import { agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy, revokeLink, replaceLink, agreementVersion } from '@/lib/care/agreement'
+import { siteHistory, runResults } from '@/lib/care/history'
 import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote, updatePlanTime, suggestionState, refreshSuggestions, acceptSuggestion, dismissSuggestion } from '@/lib/care/report'
 import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
 import { reportPdf } from '@/lib/care/report-pdf'
@@ -270,6 +271,17 @@ async function agreementReplace({ seg, body }: Ctx) {
 /** The client's Website Care documents, by client id (signed agreements and sent reports). */
 async function clientDocs({ seg }: Ctx) {
   return ok(await clientCareDocuments(id(seg[1])))
+}
+async function agreementVersionRoute({ seg }: Ctx) {
+  return ok(await agreementVersion(id(seg[1]), id(seg[3])))
+}
+/** The website's review history: every billing period, newest first. */
+async function historyRoute({ seg }: Ctx) {
+  return ok(await siteHistory(id(seg[1])))
+}
+/** One check's stored results, read only. */
+async function runRoute({ seg }: Ctx) {
+  return ok(await runResults(id(seg[1])))
 }
 async function agreementPdfRoute({ seg }: Ctx) {
   const { bytes, name } = await signedPdf(id(seg[1]), id(seg[3]))
@@ -577,7 +589,10 @@ const routes: [string, string, Handler][] = [
   ['POST', 'sites/:id/agreement', sendAgreement],
   ['POST', 'sites/:id/agreement/revoke', agreementRevoke],
   ['POST', 'sites/:id/agreement/replace', agreementReplace],
+  ['GET', 'sites/:id/agreements/:aid', agreementVersionRoute],
   ['GET', 'sites/:id/agreements/:aid/pdf', agreementPdfRoute],
+  ['GET', 'sites/:id/history', historyRoute],
+  ['GET', 'runs/:id', runRoute],
   ['POST', 'sites/:id/agreements/:aid/email', agreementResend],
   ['POST', 'sites/:id/portal', portal],
   ['POST', 'sites/:id/sync', sync],

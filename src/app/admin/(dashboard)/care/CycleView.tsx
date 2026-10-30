@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { RunResults } from './HistoryPanel'
 import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, STATUS_TEXT, statusTone, Pipeline, SuggestHint } from './ui'
 import { issueClientNote, verificationNote, manualSuggestion } from '@/lib/care/field-suggest'
 import ReportView from '@/components/care/ReportView'
@@ -332,10 +333,12 @@ function Shots({ findings }: { findings: Row[] }) {
 
 function RunTable({ data }: { data: Row }) {
   const { runs, timezone: tz } = data
+  const [open, setOpen] = useState<string | null>(null)
   if (!runs.length) return <Empty>No checks have run for this period yet.</Empty>
   return (
+    <>
     <div className="care-scroll" tabIndex={0}><table className="care-table">
-      <thead><tr><th>Started</th><th>Why</th><th>Result</th><th>Runner start</th><th>Results by status</th></tr></thead>
+      <thead><tr><th>Started</th><th>Why</th><th>Result</th><th>Runner start</th><th>Results by status</th><th></th></tr></thead>
       <tbody>{runs.map((r: Row) => (
         <tr key={r.id}>
           <td>{fmt(r.started_at || r.created_at, tz)}</td>
@@ -343,9 +346,12 @@ function RunTable({ data }: { data: Row }) {
           <td><Badge tone={r.status === 'succeeded' ? 'ok' : r.status === 'failed' ? 'bad' : r.status === 'partial' || r.status === 'canceled' ? 'warn' : 'info'}>{r.status}</Badge></td>
           <td className="care-muted">{({ pending: 'Pending', dispatched: 'Started', failed: 'Failed, retrying', blocked: 'Blocked', not_needed: 'Picked up' } as Record<string, string>)[r.dispatch_status] || r.dispatch_status}{r.dispatch_attempts ? ` (${r.dispatch_attempts})` : ''}</td>
           <td className="care-muted">{r.summary?.counts ? ['passed', 'failed', 'needs_review', 'could_not_check', 'not_applicable'].filter((k) => r.summary.counts[k]).map((k) => `${r.summary.counts[k]} ${STATUS_TEXT[k].toLowerCase()}`).join(', ') : ''}{r.error ? ` ${r.error}` : ''}</td>
+          <td>{['succeeded', 'partial', 'failed', 'canceled'].includes(r.status) && <button type="button" className="care-btn small" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Hide results' : 'View results'}</button>}</td>
         </tr>
       ))}</tbody>
     </table></div>
+    {open && <RunResults runId={open} tz={tz} />}
+    </>
   )
 }
 

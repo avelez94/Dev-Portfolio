@@ -257,7 +257,7 @@ export type AgreementState = 'not_ready' | 'ready' | 'sent' | 'viewed' | 'signed
 export async function agreementStatus(siteId: string) {
   const { site, client } = await loadSite(siteId)
   const cur = await currentAgreement(site)
-  const history = (await db.from('care_agreements').select('id, terms_version, status, issued_at, signed_at, signer_name, signed_email_status, signed_emailed_at, signed_email_error, superseded_reason, amount_cents, first_viewed_at')
+  const history = (await db.from('care_agreements').select('id, terms_version, status, issued_at, signed_at, signer_name, signed_email_status, signed_emailed_at, signed_email_error, superseded_reason, amount_cents, first_viewed_at, signed_pdf_path')
     .eq('site_id', siteId).order('issued_at', { ascending: false }).limit(20)).data || []
   const subscribed = !!site.stripe_subscription_id && !['canceled', 'incomplete_expired'].includes(site.subscription_status || '')
   const problems = cur && cur.status === 'signed' && covers(cur, site, client) ? [] : await issueProblems(site, client)
@@ -274,7 +274,7 @@ export async function agreementStatus(siteId: string) {
     recipient: { name: site.recipient_name || client.name || '', email: recipient, allowed: recipient ? clientEmailAllowed(recipient) : { ok: false, reason: 'No recipient email.' } },
     sent: site.agreement_sent_at ? { at: site.agreement_sent_at, to: site.agreement_sent_to } : null,
     current: cur ? { id: cur.id, status: cur.status, issued_at: cur.issued_at, signed_at: cur.signed_at, signer_name: cur.signer_name, amount_cents: cur.amount_cents, email_status: cur.signed_email_status, email_error: cur.signed_email_error, has_pdf: !!cur.signed_pdf_path, viewed_at: cur.first_viewed_at } : null,
-    history,
+    history: history.map(({ signed_pdf_path, ...h }: Row) => ({ ...h, has_pdf: !!signed_pdf_path })),
     links: await linkHistory(siteId),
     link_off: !site.agreement_token && (await db.from('care_agreement_links').select('id').eq('site_id', siteId).limit(1)).data?.length ? true : false,
     preview: buildSnapshot(site, client),
@@ -313,6 +313,13 @@ export async function sendAgreementLink(siteId: string, body: { confirm_email?: 
   await db.from('care_sites').update({ agreement_sent_at: now, agreement_sent_to: to, updated_at: now }).eq('id', siteId)
   await logActivity({ site_id: siteId, actor, action: 'agreement_link_sent', detail: { to, agreement: agreement.id, resend: !!body.resend, replaced, link: tail(token), provider_id: data?.id || null } })
   return { sent_to: to, agreement_id: agreement.id, link: agreementUrl(token) }
+}
+
+/** One issued version as the client read it, for the admin (no signature image or address). */
+export async function agreementVersion(siteId: string, agreementId: string) {
+  const a = must(await db.from('care_agreements').select('id, terms_version, status, snapshot, snapshot_hash, amount_cents, issued_at, signed_at, signer_name, signer_email, superseded_at, superseded_reason, signed_pdf_path, signed_email_status').eq('id', agreementId).eq('site_id', siteId).single(), 'Agreement')
+  const { signed_pdf_path, ...rest } = a
+  return { ...rest, has_pdf: !!signed_pdf_path, pdf: signed_pdf_path ? `/api/care/admin/sites/${siteId}/agreements/${a.id}/pdf` : null }
 }
 
 /** The stored signed PDF (admin download). */

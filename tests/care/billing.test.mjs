@@ -352,6 +352,20 @@ test('the client’s Documents list shows their signed care agreements by client
   assert.match(u.unlinked[0].reason, /no client id recorded/)
   sql(`update care_agreements set client_id = ${q(clientId)} where id = ${q(agreementId)}`)
   assert.equal((await api(`clients/${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}/documents`)).status, 404)
+  // Every agreement version can be opened as the client read it; signed ones download their stored PDF.
+  const st = (await api(`sites/${ids.site}/agreement`)).data
+  const first = st.history.at(-1)
+  assert.equal(first.status, 'signed')
+  assert.equal(first.has_pdf, true)
+  assert.notEqual(first.id, agreementId, 'the earlier signed version')
+  const v = await api(`sites/${ids.site}/agreements/${first.id}`)
+  assert.equal(v.status, 200)
+  assert.equal(v.data.signer_name, 'Sam Patel')
+  assert.equal(v.data.snapshot.price.amount_cents, 12900)
+  assert.equal(v.data.pdf, `/api/care/admin/sites/${ids.site}/agreements/${first.id}/pdf`)
+  assert.doesNotMatch(JSON.stringify(v.data), /signature_image|signer_ip|signed_pdf_path/)
+  assert.equal((await fetch(`${APP}${v.data.pdf}`, { headers: { cookie: 'admin_token=care-local-admin' } })).status, 200)
+  assert.equal((await api(`sites/${bakery}/agreements/${first.id}`)).status, 404, 'only through its own website')
 })
 
 test('a verified successful payment immediately queues and dispatches the scan; redelivered and out of order notices add nothing', { skip }, async () => {

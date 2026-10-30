@@ -69,5 +69,5 @@ export async function clientCareDocuments(clientId: string) {
   })) : []
 
   docs.sort((a, b) => String(b.date).localeCompare(String(a.date)))
-  return { client, sites: sites.map((s) => ({ id: s.id, label: s.label, enrollment_status: s.enrollment_status })), documents: docs, unlinked }
+  return { client, sites: sites.map((s) => ({ id: s.id, label: s.label, enrollment_status: s.enrollment_status, reviews: cycles.filter((c) => c.site_id === s.id).length })), documents: docs, unlinked }
 }

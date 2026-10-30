@@ -4,7 +4,8 @@ import WorkPanel from './WorkPanel'
 import AgreementPanel from './AgreementPanel'
 import PracticePanel from './PracticePanel'
 import ClientDocuments from '../_components/ClientDocuments'
-import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, Pipeline } from './ui'
+import HistoryPanel from './HistoryPanel'
+import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, Pipeline } from './ui'
 import { SitesTable } from './CareApp'
 import { requiredChecks, missingRequired, suggestScope } from '@/lib/care/scope'
 import { CARE_TERMS_VERSION } from '@/content/care-terms'
@@ -226,7 +227,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         <h2>{client?.business || client?.name || 'Unknown client'}</h2>
         <div>{site.label} · <a href={site.site_url} target="_blank" rel="noreferrer noopener">{site.site_url}</a></div>
         <div className="care-muted">Report recipient: {site.recipient_name || 'not set'} &lt;{site.recipient_email || 'no email'}&gt;</div>
-        {client?.id && <div style={{ marginTop: 4 }}><a href={`/admin/pipeline?client=${client.id}`} data-testid="open-client-profile">Open client profile in Pipeline</a></div>}
+        {client?.id && <div style={{ marginTop: 4 }}><a href={`/admin/pipeline?client=${client.id}`} data-testid="open-client-profile">Open client profile in Pipeline</a><OtherSites clientId={client.id} siteId={id as string} /></div>}
         <div className="care-row" style={{ marginTop: 8 }}>
           <Badge tone={confirmed ? 'ok' : 'warn'}>{confirmed ? 'Setup confirmed' : ended ? 'Care ended' : site.enrollment_status === 'paused' ? 'Paused' : 'Needs confirmation'}</Badge>
           <SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} />
@@ -303,27 +304,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
 
       {client?.id && <section className="care-panel" aria-label="Client documents"><ClientDocuments client={client} heading="Client documents" links={<a href={`/admin/pipeline?client=${client.id}`} style={{ textTransform: 'none', letterSpacing: 0 }}>Same list in Pipeline</a>} /></section>}
 
-      <section className="care-panel" aria-labelledby="hist-h">
-        <h2 id="hist-h" style={{ marginBottom: 10 }}>Monthly reviews</h2>
-        {cycles.length === 0 ? <Empty>No service periods yet. The first appears when the first payment succeeds.</Empty> : (
-          <div className="care-scroll" tabIndex={0}><table className="care-table">
-            <thead><tr><th>Period</th><th>Work</th><th>Report</th><th>Due</th><th></th></tr></thead>
-            <tbody>{cycles.map((c: Row) => {
-              const r = reports.find((x: Row) => x.cycle_id === c.id)
-              const [label, tone] = workStatus(c, r)
-              return (
-                <tr key={c.id}>
-                  <td>{fmt(c.period_start, tz, false)} to {fmt(c.period_end, tz, false)}<div className="care-muted">{c.source === 'manual' ? 'Added by hand' : 'Stripe'}{c.billing_flag ? ` · ${c.billing_flag.replace(/_/g, ' ')}` : ''}</div></td>
-                  <td><Badge tone={tone}>{label}</Badge></td>
-                  <td><span style={{ textTransform: 'capitalize' }}>{r?.status || 'draft'}</span> <span className="care-muted">v{r?.version}</span></td>
-                  <td>{fmt(c.review_due_at, tz)}</td>
-                  <td><button className="care-btn small" onClick={() => go({ cycle: c.id })}>Open</button></td>
-                </tr>
-              )
-            })}</tbody>
-          </table></div>
-        )}
-      </section>
+      <HistoryPanel siteId={id as string} tz={tz} cycles={cycles} reports={reports} version={data} go={go} />
 
       <section className="care-panel" aria-labelledby="work-h">
         <h2 id="work-h" style={{ marginBottom: 10 }}>Plan time and work</h2>
@@ -378,4 +359,12 @@ function ScopeSuggestions({ f, set }: { f: Row; set: (k: string, v: unknown) => 
       </ul>
     </section>
   )
+}
+
+/** The client's other websites, each with its own review history. */
+function OtherSites({ clientId, siteId }: { clientId: string; siteId: string }) {
+  const r = useLoad<Row>(`clients/${clientId}/documents`, [clientId])
+  const others = (r.data?.sites || []).filter((x: Row) => x.id !== siteId)
+  if (!others.length) return null
+  return <span data-testid="other-sites"> · Other websites: {others.map((x: Row, i: number) => <span key={x.id}>{i ? ', ' : ''}<a href={`/admin/care?site=${x.id}#review-history`}>{x.label}</a></span>)}</span>
 }

@@ -53,6 +53,9 @@ Vercel previews share the production database, so the admin on a preview runs as
 | The signed agreement PDF itself | `/api/care/admin/sites/00000000-0000-4000-8000-000000000203/agreements/00000000-0000-4000-8000-000000000601/pdf` |
 | Lakeside Dental's client Documents in Pipeline (same list as Care) | `/admin/pipeline?client=00000000-0000-4000-8000-000000000103` |
 | Lakeside Dental's private agreement page (client view, signed and active) | `/care/agreement/demoLakesideDentalSignedLink0001` |
+| Review history with last month completed (checks, manual review, work, sent report) | `/admin/care?site=00000000-0000-4000-8000-000000000201#review-history` |
+| Last month's review (Northside Physio) | `/admin/care?cycle=00000000-0000-4000-8000-000000000304` |
+| Review history from the client profile | `/admin/pipeline?client=00000000-0000-4000-8000-000000000101`, **Website Care: Northside Physio** |
 | Turn off or replace an agreement link | Lakeside Dental, **Care agreement**, **Turn off or replace this link** |
 | My Pricing cards, proposal and contract forms | `/admin/documents` |
 | Proposal with milestone payments (client view, current terms) | `/proposals/00000000-0000-4000-8000-000000000933` |

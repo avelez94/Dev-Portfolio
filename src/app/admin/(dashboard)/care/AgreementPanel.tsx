@@ -100,11 +100,7 @@ export default function AgreementPanel({ siteId, tz, onChange }: { siteId: strin
           ))}</ul>
         </details>
       )}
-      {a.history.length > 1 && (
-        <details style={{ marginTop: 10 }}><summary>Earlier versions ({a.history.length - 1})</summary>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{a.history.slice(1).map((h: Row) => <li key={h.id}>{h.terms_version}, {usd(h.amount_cents)}: {h.status}{h.signed_at ? ` ${fmt(h.signed_at, tz)} by ${h.signer_name}` : ''}{h.superseded_reason ? ` (${h.superseded_reason})` : ''}</li>)}</ul>
-        </details>
-      )}
+      {a.history.length > 0 && <AgreementVersions siteId={siteId} tz={tz} history={a.history} currentId={a.current?.id} />}
     </section>
   )
 }
@@ -128,5 +124,34 @@ function LinkControls({ siteId, active, signed, onDone }: { siteId: string; acti
         <button type="button" className="care-btn small" onClick={() => setOpen(false)}>Cancel</button>
       </div>
     </div>
+  )
+}
+
+/** Every issued version: open any one as the client read it; signed versions download their stored PDF. */
+function AgreementVersions({ siteId, tz, history, currentId }: { siteId: string; tz: string; history: Row[]; currentId?: string }) {
+  const [open, setOpen] = useState<string | null>(null)
+  const v = useLoad<Row>(open ? `sites/${siteId}/agreements/${open}` : null, [open])
+  const label = (h: Row) => h.status === 'signed' ? `signed ${fmt(h.signed_at, tz)} by ${h.signer_name}` : h.status === 'superseded' ? (h.signed_at ? `signed ${fmt(h.signed_at, tz)} by ${h.signer_name}, later replaced` : 'not signed, replaced') : 'issued, not signed yet'
+  return (
+    <details style={{ marginTop: 10 }} data-testid="agreement-versions"><summary>All agreement versions ({history.length})</summary>
+      <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{history.map((h: Row) => (
+        <li key={h.id} style={{ marginBottom: 4 }}>
+          {h.terms_version}, {usd(h.amount_cents)}, issued {fmt(h.issued_at, tz)}: {label(h)}{h.superseded_reason ? ` (${h.superseded_reason})` : ''}{h.id === currentId ? ' · current' : ''}{' '}
+          <button type="button" className="care-btn small" aria-expanded={open === h.id} onClick={() => setOpen(open === h.id ? null : h.id)}>{open === h.id ? 'Hide' : 'View'}</button>{' '}
+          {h.has_pdf && <a className="care-btn small" href={`/api/care/admin/sites/${siteId}/agreements/${h.id}/pdf`}>Signed PDF</a>}
+        </li>
+      ))}</ul>
+      {open && (v.error ? <ErrorBox error={v.error} onRetry={v.reload} /> : !v.data ? <Loading lines={2} /> : (
+        <div className="care-paper" style={{ marginTop: 8, maxHeight: 420, overflow: 'auto' }} data-testid="agreement-version">
+          <h3>Care agreement for {v.data.snapshot.site.label}</h3>
+          <p className="muted">Version {v.data.terms_version} · {v.data.snapshot.plan.name} · {v.data.snapshot.price.label} a month · issued {v.data.snapshot.issued_on}{v.data.signed_at ? ` · signed by ${v.data.signer_name} (${v.data.signer_email})` : ''}</p>
+          <div className="sec">Agreed website and checks</div>
+          <p>{v.data.snapshot.site.url}</p>
+          <ul>{v.data.snapshot.scope.pages.map((p: Row) => <li key={p.url}>{p.label}: {p.url}</li>)}{v.data.snapshot.scope.destinations.map((d: Row) => <li key={d.url}>{d.label} (opened only): {d.url}</li>)}</ul>
+          <p>Checked by hand: {v.data.snapshot.scope.checks.map((c: Row) => c.label).join('; ')}</p>
+          {v.data.snapshot.terms.map((t: Row) => <div key={t.title}><div className="sec">{t.title}</div>{t.body.map((b: string) => <p key={b}>{b}</p>)}</div>)}
+        </div>
+      ))}
+    </details>
   )
 }
