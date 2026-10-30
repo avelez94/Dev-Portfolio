@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const ROOT = new URL('../..', import.meta.url).pathname
-const MIGRATIONS = ['supabase/pending/website-care/20261030_website_care.sql', 'supabase/pending/website-care/20261031_care_work_ledger.sql', 'supabase/pending/website-care/20261103_care_report_suggestions.sql', 'supabase/pending/website-care/20261104_care_checkout_invitations.sql', 'supabase/pending/website-care/20261105_care_agreements_and_dispatch.sql', 'supabase/pending/website-care/20261106_care_agreement_links.sql']
+const MIGRATIONS = ['supabase/pending/website-care/20261030_website_care.sql', 'supabase/pending/website-care/20261031_care_work_ledger.sql', 'supabase/pending/website-care/20261103_care_report_suggestions.sql', 'supabase/pending/website-care/20261104_care_checkout_invitations.sql', 'supabase/pending/website-care/20261105_care_agreements_and_dispatch.sql', 'supabase/pending/website-care/20261106_care_agreement_links.sql', 'supabase/pending/website-care/20261107_care_function_search_path.sql']
 
 function findBin() {
   if (process.env.PG_BIN) return process.env.PG_BIN
