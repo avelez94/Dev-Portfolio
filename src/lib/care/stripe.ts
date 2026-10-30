@@ -37,12 +37,28 @@ export function stripeMode(): 'test' | 'live' | 'missing' {
   return 'missing'
 }
 
+/** What clients and the admin are told while online payment isn't connected. */
+export const PAYMENT_NOT_CONNECTED = 'Online payment isn’t connected yet. Signed agreements are kept, and payment opens once Stripe is connected.'
+
+/**
+ * True when checkout, subscriptions and billing management can run: a Stripe
+ * key is set (a live key only once live billing is approved), or the demo's
+ * simulated Stripe. Without it those actions are refused server side; the
+ * public site, admin, agreements and documents keep working.
+ */
+export function stripeConfigured(): boolean {
+  if (stripeSim()) return true
+  const mode = stripeMode()
+  if (mode === 'missing') return false
+  return mode === 'test' || process.env.CARE_STRIPE_LIVE_APPROVED === 'true'
+}
+
 export function stripe(): Stripe {
   const sim = stripeSim()
   if (sim) return sim.stripe
   if (cached) return cached
   const key = process.env.STRIPE_SECRET_KEY
-  if (!key) throw new CareError('Stripe is not configured (STRIPE_SECRET_KEY).', 503)
+  if (!key || !stripeConfigured()) throw new CareError(key ? 'A live Stripe key is set but live billing has not been approved (CARE_STRIPE_LIVE_APPROVED).' : PAYMENT_NOT_CONNECTED, 503)
   if (stripeMode() === 'live' && process.env.CARE_STRIPE_LIVE_APPROVED !== 'true') {
     throw new CareError('A live Stripe key is set but live billing has not been approved (CARE_STRIPE_LIVE_APPROVED).', 503)
   }
@@ -173,6 +189,7 @@ export type CheckoutLink = { url: string; id: string; expires_at: string; reused
  * against the agreed amount first; a link is never created with a wrong price.
  */
 export async function openCheckout(siteId: string, actor: string): Promise<CheckoutLink> {
+  if (!stripeConfigured()) throw new CareError(PAYMENT_NOT_CONNECTED, 503)
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
   await livePolicyGate()
   const check = await verifyCheckoutPrice(site)

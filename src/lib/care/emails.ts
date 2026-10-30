@@ -112,7 +112,7 @@ export function billingAttention(p: { client: string; site: string; state: strin
 }
 
 /** The client's persistent private link to read and sign their care agreement. */
-export function agreementLink(p: { name: string; siteLabel: string; siteUrl: string; planName: string; amount: string; includedMinutes: number; link: string; version: string; queuedLine: string; replaced?: boolean; signed?: boolean }): Email {
+export function agreementLink(p: { name: string; siteLabel: string; siteUrl: string; planName: string; amount: string; includedMinutes: number; link: string; version: string; queuedLine: string; replaced?: boolean; signed?: boolean; paymentOpen?: boolean }): Email {
   const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
   if (p.signed) {
     return {
@@ -146,14 +146,16 @@ export function agreementLink(p: { name: string; siteLabel: string; siteUrl: str
         { type: 'p', html: `Here’s your ${p.replaced ? 'new ' : ''}private link to read and sign the Website Care agreement for ${esc(p.siteLabel)}.${p.replaced ? ' The earlier link no longer works.' : ''} It lists the website and checks we agreed on, your plan and price, and the billing, cancellation and refund terms.` },
         { type: 'details', rows: [['Website', `${esc(p.siteLabel)}<br>${esc(p.siteUrl)}`], ['Plan', esc(p.planName)], ['Monthly price', `${esc(p.amount)} a month, billed monthly in advance until you cancel`], ['Included time', `${p.includedMinutes} minutes each month`], ['Agreement', `Version ${esc(p.version)}`]] },
         { type: 'buttons', items: [{ label: 'Read and Sign', href: p.link }], fallbackLink: true },
-        { type: 'note', html: `Once you sign, you’ll get a signed PDF copy by email and the same page lets you start your plan through Stripe. ${esc(p.queuedLine)} This link stays the same, so you can come back to it any time.` },
+        { type: 'note', html: p.paymentOpen === false
+          ? 'Once you sign, you’ll get a signed PDF copy by email. Signing doesn’t charge anything; online payment opens later and I’ll email you when it does. This link stays the same, so you can come back to it any time.'
+          : `Once you sign, you’ll get a signed PDF copy by email and the same page lets you start your plan through Stripe. ${esc(p.queuedLine)} This link stays the same, so you can come back to it any time.` },
       ],
     }),
   }
 }
 
 /** Sent to the client with the signed agreement PDF attached. */
-export function agreementSignedClient(p: { name: string; siteLabel: string; signedDate: string; link: string; queuedLine: string; paid: boolean }): Email {
+export function agreementSignedClient(p: { name: string; siteLabel: string; signedDate: string; link: string; queuedLine: string; paid: boolean; paymentOpen?: boolean }): Email {
   const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
   return {
     subject: oneLine(`Your signed Website Care agreement for ${p.siteLabel}`),
@@ -165,7 +167,9 @@ export function agreementSignedClient(p: { name: string; siteLabel: string; sign
       titleAccent: 'signing.',
       blocks: [
         { type: 'p', html: `Hi ${esc(first)},<br><br>Your signed Website Care agreement for ${esc(p.siteLabel)} is attached as a PDF for your records. You signed it on ${esc(p.signedDate)}.` },
-        ...(p.paid ? [] : [
+        ...(p.paid ? [] : p.paymentOpen === false ? [
+          { type: 'p' as const, html: 'Online payment isn’t open yet, so nothing has been charged. I’ll email you when you can start your plan from the same private link.' },
+        ] : [
           { type: 'p' as const, html: `The next step is starting your plan. ${esc(p.queuedLine)}` },
           { type: 'buttons' as const, items: [{ label: 'Continue to Payment', href: p.link }], fallbackLink: true },
         ]),

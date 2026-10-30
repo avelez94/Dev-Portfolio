@@ -32,7 +32,7 @@ export default function AgreementPanel({ siteId, tz, onChange }: { siteId: strin
   const a = st.data
   if (st.error) return <ErrorBox error={st.error} onRetry={st.reload} />
   if (!a) return <section className="care-panel"><Loading lines={3} /></section>
-  const [label, tone] = STATE[a.state] || [a.state, 'info']
+  const [label, tone] = a.state === 'signed' && a.payment?.open === false ? ['Signed, online payment not connected yet', 'ok'] as const : STATE[a.state] || [a.state, 'info']
   const done = [
     !!a.scope_confirmed,
     !!a.sent || ['signed', 'paid'].includes(a.state),
@@ -67,7 +67,8 @@ export default function AgreementPanel({ siteId, tz, onChange }: { siteId: strin
         <button type="button" className="care-btn small" onClick={() => setPreview(!preview)} aria-expanded={preview}>{preview ? 'Hide' : 'Preview'} what the client signs</button>
         {a.current?.has_pdf && <a className="care-btn small" href={`/api/care/admin/sites/${siteId}/agreements/${a.current.id}/pdf`}>Download signed PDF</a>}
         {a.current?.has_pdf && a.current.email_status !== 'sent' && <Action small label="Email the signed copy again" run={() => careApi(`sites/${siteId}/agreements/${a.current.id}/email`, { method: 'POST', json: {} })} done={refresh} />}
-        {a.state === 'signed' && <Action small label="Copy payment link" run={() => careApi<Row>(`sites/${siteId}/checkout`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
+        {a.state === 'signed' && a.payment?.open === false && <span className="care-muted" data-testid="payment-off">{a.payment.message}</span>}
+        {a.state === 'signed' && a.payment?.open !== false && <Action small label="Copy payment link" run={() => careApi<Row>(`sites/${siteId}/checkout`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
       </div>
       {link && <div className="care-sub" style={{ marginTop: 8 }}><div className="care-label">Payment link (Stripe)</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Payment link" /><small className="care-muted">The client can also pay from their agreement page any time. Only Stripe’s verified payment notice starts the plan and queues the check.</small></div>}
       {preview && (

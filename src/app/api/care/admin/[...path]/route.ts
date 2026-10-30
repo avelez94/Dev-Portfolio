@@ -18,7 +18,7 @@ import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model
 import { reportPdf } from '@/lib/care/report-pdf'
 import { clientCareDocuments } from '@/lib/care/client-docs'
 import { sendPreview, sendReport, markStuckSend } from '@/lib/care/send'
-import { closeCheckout, portalSession, syncSubscription, stripeMode } from '@/lib/care/stripe'
+import { closeCheckout, portalSession, syncSubscription, stripeMode, stripeConfigured } from '@/lib/care/stripe'
 import { deliver } from '@/lib/care/notify'
 import { diffFindings, type FindingRow } from '@/lib/care/findings'
 import { checkUrlResolves } from '@/lib/care/url-safety'
@@ -48,7 +48,7 @@ async function status() {
   const s = await getSettings()
   return ok({
     enabled: true,
-    stripe: { mode: stripeMode(), webhook: !!process.env.STRIPE_WEBHOOK_SECRET, prices: Object.fromEntries(PLAN_IDS.map((p) => [p, !!priceIdFor(p)])) },
+    stripe: { mode: stripeMode(), configured: stripeConfigured(), webhook: !!process.env.STRIPE_WEBHOOK_SECRET, prices: Object.fromEntries(PLAN_IDS.map((p) => [p, !!priceIdFor(p)])) },
     runner: { token: !!process.env.CARE_RUNNER_TOKEN, dispatch: dispatchConfigured() },
     email: { provider: !!process.env.RESEND_API_KEY, clientEmailsLive: process.env.CARE_CLIENT_EMAIL_LIVE === 'true', allowlist: (process.env.CARE_EMAIL_ALLOWLIST || '').split(',').filter(Boolean) },
     calendar: { adminCalendar: true, resendWebhook: !!process.env.RESEND_WEBHOOK_SECRET },

@@ -22,8 +22,9 @@ update public.pricing set name = 'Project Payments' where name = 'Deposit';
 do $$
 begin
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'invoices' and column_name = 'sow_id')
-     and not exists (select sow_id from public.invoices where invoice_type = 'milestone' and sow_id is not null group by sow_id having count(*) > 1) then
-    create unique index if not exists invoices_one_schedule_per_sow on public.invoices (sow_id) where invoice_type = 'milestone' and sow_id is not null;
+     -- Read through to_jsonb so this also compiles where invoices has no sow_id column.
+     and not exists (select 1 from public.invoices i where i.invoice_type = 'milestone' and to_jsonb(i)->>'sow_id' is not null group by to_jsonb(i)->>'sow_id' having count(*) > 1) then
+    execute 'create unique index if not exists invoices_one_schedule_per_sow on public.invoices (sow_id) where invoice_type = ''milestone'' and sow_id is not null';
   else
     raise notice 'Skipped invoices_one_schedule_per_sow: missing column or existing duplicates (see the precheck).';
   end if;
@@ -41,7 +42,7 @@ end $$;
 
 -- Precheck (read only), run first if you like:
 --   select name, price, description from public.pricing order by id;
---   select sow_id, count(*) from public.invoices where invoice_type = 'milestone' and sow_id is not null group by sow_id having count(*) > 1;
+--   select to_jsonb(i)->>'sow_id' sow_id, count(*) from public.invoices i where invoice_type = 'milestone' and to_jsonb(i)->>'sow_id' is not null group by 1 having count(*) > 1;
 --   select notes, count(*) from public.invoices where notes like 'contract_id:%' group by notes having count(*) > 1;
 --   -- Card descriptions that still mention an earlier hourly rate or 50% at delivery (edit them yourself):
 --   select name, description from public.pricing where description ~ '\$(65|75|100)\M' or description ilike '%at delivery%';

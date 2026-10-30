@@ -31,7 +31,7 @@ type Snap = {
   scope: { pages: { label: string; url: string }[]; destinations: { label: string; url: string }[]; checks: { label: string }[] }
   terms: Section[]; billing_disclosure: string
 }
-type View = { step: 'sign' | 'pay' | 'active' | 'unavailable'; message: string; queued_line: string; agreement: { id: string; status: string; snapshot: Snap; snapshot_hash: string; signed_at: string | null; signer_name: string | null } | null }
+type View = { step: 'sign' | 'pay' | 'active' | 'unavailable'; message: string; queued_line: string; payment_open?: boolean; agreement: { id: string; status: string; snapshot: Snap; snapshot_hash: string; signed_at: string | null; signer_name: string | null } | null }
 
 export default function AgreementClient({ token }: { token: string }) {
   const [view, setView] = useState<View | null>(null)
@@ -105,7 +105,7 @@ export default function AgreementClient({ token }: { token: string }) {
         tone="teal"
         eyebrow="Website care • Private link"
         title={a ? `Care agreement for ${a.site.label}.` : 'Your care agreement.'}
-        lede={view.step === 'sign' ? 'Read the agreement below, then sign at the bottom. Payment opens once it’s signed.'
+        lede={view.step === 'sign' ? (view.payment_open === false ? 'Read the agreement below, then sign at the bottom. Online payment opens later; signing doesn’t charge anything.' : 'Read the agreement below, then sign at the bottom. Payment opens once it’s signed.')
           : view.step === 'pay' ? `Signed${view.agreement?.signed_at ? ` on ${new Date(view.agreement.signed_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}. The next step is starting your plan. ${view.queued_line}`
           : view.step === 'active' ? `Your plan is active. ${view.queued_line} I review the results before your report is sent.`
           : view.message}
@@ -118,8 +118,12 @@ export default function AgreementClient({ token }: { token: string }) {
             <section className={s.termsDocSection} aria-labelledby="pay-h">
               <h2 id="pay-h" className={s.termTitle}>Start your plan</h2>
               <p>{a?.plan.name}: {a?.price.label} a month. {a?.billing_disclosure}</p>
-              <p style={{ marginTop: 14 }}><button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={pay} disabled={busy}>{busy ? 'Opening Stripe…' : 'Continue to Payment'}</button></p>
-              <p style={{ marginTop: 8, fontSize: '0.9rem' }}>Payment is handled securely by Stripe.</p>
+              {view.payment_open === false ? (
+                <p style={{ marginTop: 14 }} role="status"><strong>Online payment isn’t open yet.</strong> Your signed agreement is on file and nothing is charged. I’ll email you when you can start your plan here.</p>
+              ) : <>
+                <p style={{ marginTop: 14 }}><button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={pay} disabled={busy}>{busy ? 'Opening Stripe…' : 'Continue to Payment'}</button></p>
+                <p style={{ marginTop: 8, fontSize: '0.9rem' }}>Payment is handled securely by Stripe.</p>
+              </>}
             </section>
           )}
           {view.step === 'active' && (

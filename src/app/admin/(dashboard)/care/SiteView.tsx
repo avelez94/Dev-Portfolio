@@ -267,9 +267,10 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
             <div className="care-muted">Last synced {fmt(site.stripe_synced_at, tz)}</div>
           </div>
           <div className="care-grid">
-            {!site.stripe_subscription_id && !ended && <div className="care-muted">Payment opens on the client’s agreement page once they sign. Their Stripe checkout is created when they choose Continue to payment.</div>}
-            {site.stripe_customer_id && <Action label="Create billing portal link" run={() => careApi<Row>(`sites/${id}/portal`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
-            {site.stripe_subscription_id && <Action label="Refresh from Stripe" run={() => careApi(`sites/${id}/sync`, { method: 'POST', json: {} })} done={reload} />}
+            {status.data?.stripe && !status.data.stripe.configured && <div className="care-sub" role="status" data-testid="stripe-off"><b>Online payment isn’t connected yet.</b> Checkout, subscriptions and the billing portal stay off until Stripe is connected. Agreements can still be sent and signed; nothing is charged, and no paid period or check starts without a verified payment.</div>}
+            {!site.stripe_subscription_id && !ended && status.data?.stripe?.configured !== false && <div className="care-muted">Payment opens on the client’s agreement page once they sign. Their Stripe checkout is created when they choose Continue to payment.</div>}
+            {site.stripe_customer_id && status.data?.stripe?.configured !== false && <Action label="Create billing portal link" run={() => careApi<Row>(`sites/${id}/portal`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
+            {site.stripe_subscription_id && status.data?.stripe?.configured !== false && <Action label="Refresh from Stripe" run={() => careApi(`sites/${id}/sync`, { method: 'POST', json: {} })} done={reload} />}
             {link && <div className="care-sub"><div className="care-label">Link to send the client yourself</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Stripe link" /><small className="care-muted">Nothing was emailed. Opening it doesn’t change anything in their plan.</small></div>}
             {['attention', 'past_due', 'unpaid', 'refunded', 'disputed'].includes(site.billing_state) && (
               <div className="care-sub">

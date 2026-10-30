@@ -23,7 +23,7 @@ import { db, must, CareError, logActivity, putObject, getObject, type Row } from
 import { appUrl, clientEmailAllowed } from './config'
 import { plan as planInfo } from './plans'
 import { setupHash } from './sites'
-import { verifyCheckoutPrice, expectedCharge, openCheckout, closeCheckout, type CheckoutLink } from './stripe'
+import { verifyCheckoutPrice, expectedCharge, openCheckout, closeCheckout, stripeConfigured, PAYMENT_NOT_CONNECTED, type CheckoutLink } from './stripe'
 import { agreementLink, agreementSignedClient, agreementSignedOwner } from './emails'
 import { agreementPdf, type SignatureFacts } from './agreement-pdf'
 import { ownerEmail } from './notify'
@@ -105,9 +105,13 @@ async function issueProblems(site: Row, client: Row): Promise<string[]> {
   else if (site.enrollment_status !== 'confirmed') p.push(site.confirmed_at ? 'The setup changed since it was confirmed. Confirm the technical scope again first.' : 'Confirm the technical scope first: website, client authorization and the manual checklist.')
   else if (site.confirmed_hash !== setupOf(site)) p.push('The setup changed since it was confirmed. Confirm the technical scope again first.')
   if (!site.recipient_email && !client.email) p.push('There is no recipient email. Add one in Website settings.')
-  let check
-  try { check = await verifyCheckoutPrice(site) } catch (e) { check = { ok: false, problems: [String((e as Error).message || e)] } }
-  if (!check.ok) p.push(...check.problems)
+  // The Stripe price is checked against the agreed price whenever Stripe is connected. Until then the
+  // agreement can be issued and signed; checkout verifies the price again before anyone can pay.
+  if (stripeConfigured()) {
+    let check
+    try { check = await verifyCheckoutPrice(site) } catch (e) { check = { ok: false, problems: [String((e as Error).message || e)] } }
+    if (!check.ok) p.push(...check.problems)
+  }
   return p
 }
 
@@ -269,6 +273,7 @@ export async function agreementStatus(siteId: string) {
   const recipient = String(site.recipient_email || client.email || '')
   return {
     state, problems, version: CARE_AGREEMENT_VERSION,
+    payment: stripeConfigured() ? { open: true, message: '' } : { open: false, message: PAYMENT_NOT_CONNECTED },
     scope_confirmed: site.enrollment_status === 'confirmed' && !!site.confirmed_hash && site.confirmed_hash === setupOf(site),
     link: site.agreement_token ? agreementUrl(site.agreement_token) : null,
     recipient: { name: site.recipient_name || client.name || '', email: recipient, allowed: recipient ? clientEmailAllowed(recipient) : { ok: false, reason: 'No recipient email.' } },
@@ -303,7 +308,7 @@ export async function sendAgreementLink(siteId: string, body: { confirm_email?: 
   const replaced = ((await db.from('care_agreement_links').select('id').eq('site_id', siteId).eq('status', 'revoked').limit(1)).data || []).length > 0
   if (!created && site.agreement_sent_at && !body.resend) throw new CareError(`The agreement link was already sent to ${site.agreement_sent_to}. Choose Send again to send a reminder with the same link.`, 409)
   const snap = agreement.snapshot as AgreementSnapshot
-  const m = agreementLink({ name: snap.client.name, siteLabel: snap.site.label, siteUrl: snap.site.url, planName: snap.plan.name, amount: snap.price.label, includedMinutes: snap.plan.included_minutes, link: agreementUrl(token), version: snap.version, queuedLine: CARE_QUEUED_LINE, replaced, signed: agreement.status === 'signed' })
+  const m = agreementLink({ name: snap.client.name, siteLabel: snap.site.label, siteUrl: snap.site.url, planName: snap.plan.name, amount: snap.price.label, includedMinutes: snap.plan.included_minutes, link: agreementUrl(token), version: snap.version, queuedLine: CARE_QUEUED_LINE, replaced, signed: agreement.status === 'signed', paymentOpen: stripeConfigured() })
   const { data, error } = await resend().emails.send(
     { from: BRAND.from, to, replyTo: BRAND.email, subject: m.subject, html: m.html, text: m.text },
     { idempotencyKey: `care-agreement-${agreement.id}-${token.slice(-6)}-${body.resend ? Date.now() : 'first'}` },
@@ -346,7 +351,7 @@ export async function emailSignedCopy(agreementId: string, actor: string) {
   let err: string | null = null
   if (!allowed.ok) { status = 'skipped'; err = allowed.reason || 'Recipient not allowed here.' }
   else {
-    const c = agreementSignedClient({ name: a.signer_name, siteLabel: snap.site.label, signedDate, link: agreementUrl(site.agreement_token), queuedLine: CARE_QUEUED_LINE, paid: subscribed })
+    const c = agreementSignedClient({ name: a.signer_name, siteLabel: snap.site.label, signedDate, link: agreementUrl(site.agreement_token), queuedLine: CARE_QUEUED_LINE, paid: subscribed, paymentOpen: stripeConfigured() })
     const r = await resend().emails.send({ from: BRAND.from, to, replyTo: BRAND.email, subject: c.subject, html: c.html, text: c.text, attachments }, { idempotencyKey: `care-agreement-signed-${a.id}-${actor === 'client' ? 'first' : Date.now()}` })
     if (r.error) { status = 'failed'; err = r.error.message || 'The email provider refused it.' }
   }
@@ -403,6 +408,7 @@ export async function publicAgreement(token: string) {
     step, message,
     agreement: show && cur ? { id: cur.id, status: cur.status, snapshot: cur.snapshot as AgreementSnapshot, snapshot_hash: cur.snapshot_hash, signed_at: cur.signed_at, signer_name: cur.status === 'signed' ? cur.signer_name : null } : null,
     queued_line: CARE_QUEUED_LINE,
+    payment_open: stripeConfigured(),
   }
 }
 
@@ -448,6 +454,7 @@ export async function signAgreement(token: string, body: Row, ip: string) {
 /** Continue to payment: only for a signed agreement that still covers the setup. */
 export async function agreementCheckout(token: string): Promise<CheckoutLink> {
   const { site, client } = await siteForToken(token)
+  if (!stripeConfigured()) throw new CareError('Online payment isn’t open yet. Your signed agreement is on file, and I’ll email you when you can start your plan.', 503)
   const cur = await currentAgreement(site)
   if (!cur || !covers(cur, site, client)) throw new CareError('Payment opens once the current agreement is signed.', 409)
   const link = await openCheckout(site.id, 'client')

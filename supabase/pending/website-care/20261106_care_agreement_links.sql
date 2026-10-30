@@ -44,6 +44,9 @@ alter table public.care_agreements add column if not exists client_id uuid refer
 update public.care_agreements a set client_id = s.client_id from public.care_sites s where a.site_id = s.id and a.client_id is null;
 create index if not exists care_agreements_client on public.care_agreements (client_id, issued_at desc);
 
+-- The task catalog's trigger function is never called directly; only the server key keeps rights to it.
+revoke all on function public.care_preset_guard() from public, anon, authenticated;
+
 alter table public.care_agreement_links enable row level security;
 revoke all on public.care_agreement_links from anon, authenticated;
 grant select, insert, update, delete on public.care_agreement_links to service_role;
