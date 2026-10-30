@@ -91,6 +91,16 @@ The workflow is: you confirm the technical scope, the client gets a persistent p
 
 **Changes after signing:** changing the price, plan or checked scope locks payment (the open checkout link is closed) until a new version is sent and signed. A signed version is never altered; earlier versions are listed under **Earlier versions**. An existing subscriber without a signed current agreement is flagged **Agreement signature needed**; their earlier agreement stays in place until they sign.
 
+### Turn a link off or replace it
+
+Use this when the link went to the wrong address, a contact changed, or you just want a fresh link. In **Care agreement**, choose **Turn off or replace this link**, say **Why**, and tick **I understand the client’s current link stops working**.
+
+- **Turn off only:** the old link stops working at once. The server refuses it for viewing, signing and payment (the client sees “This link is no longer active”, with nothing about the agreement). Any open Stripe checkout started from it is closed so it can’t be paid. Sending the agreement won’t create a new link by itself; choose **Issue a new link** when you’re ready.
+- **Replace link:** the same as above, plus a new private link straight away. Then type the address and press **Send agreement link** (or **Send the new link** if they already signed).
+- **Nothing is signed again because the link changed.** Signed agreements, their PDFs, signatures and the history belong to the website, not the link. A signed but unpaid client keeps payment unlocked on the new link; their email says the earlier link no longer works and nothing needs to be signed again.
+- **Link history** lists every link (by its last characters only), when it was sent and to whom, when and why it was turned off, and which open checkout was closed.
+- If the client had already completed a Stripe payment a moment before you turned the link off, Stripe can’t cancel it; the payment is handled as usual and appears under Subscription and billing.
+
 ### Payment unlocks
 
 ![Payment unlocked](website-care-guide/05d-client-signed.png)
@@ -114,6 +124,7 @@ The client pays on Stripe’s page. Stripe’s verified payment notice then sets
 **Fixing a mistake:** a paid period can’t be deleted from the app. If you added the wrong dates by hand, note it in the review and fix the next one.
 
 **Demo:**
+- **Lakeside Dental** has a ready made signed agreement: open it and press **Download signed PDF**, or find it under **Client documents**. You can also practice **Replace link** there.
 - Stripe is simulated: the same checks and notices run, answered by a stand in. The agreement and signed copy emails appear in **Simulated actions**.
 - Harbor Street Bakery shows a blocked price ($239 agreed, $249 Premium price).
 - After sending the agreement link, **Practice billing events** has **Open the client’s agreement page (play the client)**: sign, then **Continue to Payment** opens the simulated checkout. With an open link it also has **Let the link expire**.
@@ -156,6 +167,11 @@ The admin **Schedule** shows the same reviews under **Monthly care reviews**, an
 **Not verified** lists results the checker couldn’t confirm, such as a booking page that blocks robots. Those are said plainly in the report. **Passed** and **Screenshots** are there for reference.
 
 **Manual checklist:** for each item, choose a **Result**, write **What you found (client sees this)**, and **Save**. **Not checked** and **Could not check** need a reason.
+
+**Suggested wording in each field.** Under the client note, the verification, each manual note or reason, the work description and each estimate field, a **Suggested** line offers wording built from what you already chose. It never fills a field by itself: press **Use suggestion** (or **Replace my text with this** when you’ve written something). Suggestions never set a result, a decision or an approval, and never say work was done.
+- A verification or manual note that says you **checked something by hand** shows **I checked this myself**. The button stays greyed out until you tick it, and the server refuses to save that exact wording without it. Write your own words instead if you did something different.
+- When the latest automated check no longer finds an issue, the verification suggestion says **Rechecked automatically** with the date, and needs no tick.
+- In **Plan time**, an estimate can start from an issue (**Suggest wording from an issue**). Minutes and price stay yours to enter.
 
 ![Manual item](website-care-guide/13-manual-item.png)
 
@@ -417,6 +433,14 @@ The cards are **Business Website**, **Booking & Payments**, **Custom Website or 
 ![Revenue](website-care-guide/48-revenue-schedule.png)
 
 **Demo:** real behavior with simulated email and payments. The sample proposal is Ellis Yoga Studio’s, and Taylor Brooks’s contract can be signed as the client from its link.
+
+## Client documents
+
+**Where:** the client’s profile in **Pipeline** (Documents), and **Client documents** on each of their websites in Website Care. Both show the same list, found by the client’s record, never by name or email.
+
+It lists, newest first: uploaded files, proposals, statements of work, contracts, invoices (with how many milestone payments are in), signed care agreements (with **Download signed PDF**, the stored file) and sent care reports (with their PDF). **Open client profile in Pipeline** and **Website Care: (website)** move between the two.
+
+**Possibly this client’s, not linked** collects older records that only match the client’s email (for example a proposal sent before it was linked to a client record). They aren’t counted as the client’s. Open each one and check it; nothing is merged automatically.
 
 ## Less frequent tasks
 

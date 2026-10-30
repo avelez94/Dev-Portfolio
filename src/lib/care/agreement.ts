@@ -50,6 +50,8 @@ const usd = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minim
 const canonical = (v: unknown): string => Array.isArray(v) ? `[${v.map(canonical).join(',')}]`
   : v && typeof v === 'object' ? `{${Object.keys(v as object).sort().filter((k) => (v as Row)[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonical((v as Row)[k])}`).join(',')}}`
   : JSON.stringify(v ?? null)
+/** Content fingerprint of a snapshot (sorted keys, so stored jsonb hashes the same). */
+export const snapshotHash = (v: unknown) => hashOf(v)
 const hashOf = (v: unknown) => createHash('sha256').update(canonical(v)).digest('hex')
 const setupOf = (site: Row) => setupHash(site as Parameters<typeof setupHash>[0])
 
@@ -109,13 +111,88 @@ async function issueProblems(site: Row, client: Row): Promise<string[]> {
   return p
 }
 
-/** The website's persistent private token, created once. */
-async function ensureToken(site: Row): Promise<string> {
-  if (site.agreement_token) return site.agreement_token
+/**
+ * The website's private link token. Created once and kept; if the owner
+ * turned the link off, a new one is only issued by Replace link (never as a
+ * side effect of sending or issuing a version).
+ */
+async function ensureToken(site: Row, actor = 'system', opts: { allowAfterRevoke?: boolean } = {}): Promise<string> {
+  if (site.agreement_token) {
+    // Links issued before link records existed get one now.
+    await db.from('care_agreement_links').upsert({ site_id: site.id, token: site.agreement_token, created_by: 'backfill', sent_at: site.agreement_sent_at || null, sent_to: site.agreement_sent_to || null }, { onConflict: 'token', ignoreDuplicates: true })
+    return site.agreement_token
+  }
+  if (!opts.allowAfterRevoke) {
+    const prior = (await db.from('care_agreement_links').select('id').eq('site_id', site.id).eq('status', 'revoked').limit(1)).data || []
+    if (prior.length) throw new CareError('The agreement link for this website is turned off. Choose Replace link to issue a new private link first.', 409)
+  }
   const token = randomBytes(24).toString('base64url')
-  const upd = await db.from('care_sites').update({ agreement_token: token, updated_at: new Date().toISOString() }).eq('id', site.id).is('agreement_token', null).select('agreement_token')
-  if (upd.data?.length) return token
+  const upd = await db.from('care_sites').update({ agreement_token: token, agreement_sent_at: null, agreement_sent_to: null, updated_at: new Date().toISOString() }).eq('id', site.id).is('agreement_token', null).select('agreement_token')
+  if (upd.data?.length) {
+    await db.from('care_agreement_links').insert({ site_id: site.id, token, created_by: actor })
+    return token
+  }
   return must(await db.from('care_sites').select('agreement_token').eq('id', site.id).single(), 'Website').agreement_token
+}
+
+const tail = (t: string) => `…${String(t).slice(-6)}`
+
+/**
+ * Turns the website's private link off. The server refuses it from then on
+ * for viewing, signing and payment, and any open checkout started from it is
+ * closed so it can't be paid. Signed agreements, their PDFs and the history
+ * stay with the website.
+ */
+export async function revokeLink(siteId: string, body: { reason?: string; confirm?: boolean }, actor: string, replacing = false) {
+  const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
+  if (!site.agreement_token) throw new CareError('This website has no active agreement link.', 409)
+  const reason = String(body.reason || '').trim().slice(0, 300)
+  if (!replacing && body.confirm !== true) throw new CareError('Tick the box to confirm the client’s current link will stop working.', 422)
+  if (reason.length < 3) throw new CareError('Say why the link is being turned off (for example, sent to the wrong address).', 422)
+  await ensureToken(site, actor) // make sure the link has a record
+  const now = new Date().toISOString()
+  const checkoutSession = site.checkout_session_id as string | null
+  const closed = await closeCheckout(siteId, replacing ? 'Agreement link replaced' : 'Agreement link turned off', actor)
+  await db.from('care_agreement_links').update({
+    status: 'revoked', revoked_at: now, revoked_by: actor, revoked_reason: reason, sent_at: site.agreement_sent_at || null, sent_to: site.agreement_sent_to || null,
+    closed_checkout_session: closed ? checkoutSession : null,
+  }).eq('token', site.agreement_token)
+  await db.from('care_sites').update({ agreement_token: null, agreement_sent_at: null, agreement_sent_to: null, updated_at: now }).eq('id', siteId).eq('agreement_token', site.agreement_token)
+  await logActivity({ site_id: siteId, actor, action: 'agreement_link_revoked', detail: { link: tail(site.agreement_token), reason, replacing, closed_checkout: closed ? checkoutSession : null } })
+  return { revoked: tail(site.agreement_token), closed_checkout: closed }
+}
+
+/**
+ * Replaces the private link: the old one stops working and a new one is
+ * issued for the same agreement. Nothing is signed again because the link
+ * changed: a signed agreement stays signed and payment stays unlocked on the
+ * new link. Send the new link with Send link.
+ */
+export async function replaceLink(siteId: string, body: { reason?: string }, actor: string) {
+  const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
+  if (site.enrollment_status === 'ended') throw new CareError('Care for this website has ended.', 409)
+  const oldToken = site.agreement_token as string | null
+  if (oldToken) await revokeLink(siteId, body, actor, true)
+  else {
+    const prior = (await db.from('care_agreement_links').select('id').eq('site_id', siteId).limit(1)).data || []
+    if (!prior.length) throw new CareError('This website has no agreement link yet. Send the agreement first.', 409)
+  }
+  const fresh = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
+  const token = await ensureToken(fresh, actor, { allowAfterRevoke: true })
+  const link = (await db.from('care_agreement_links').select('id').eq('token', token).single()).data
+  if (oldToken && link) await db.from('care_agreement_links').update({ replaced_by: link.id }).eq('token', oldToken)
+  else if (link) {
+    const last = (await db.from('care_agreement_links').select('id').eq('site_id', siteId).eq('status', 'revoked').is('replaced_by', null).order('revoked_at', { ascending: false }).limit(1)).data?.[0]
+    if (last) await db.from('care_agreement_links').update({ replaced_by: link.id }).eq('id', last.id)
+  }
+  await logActivity({ site_id: siteId, actor, action: 'agreement_link_replaced', detail: { old: oldToken ? tail(oldToken) : null, new: tail(token) } })
+  return { link: agreementUrl(token), token }
+}
+
+/** The website's link records, newest first. Old tokens are shown only by their last characters. */
+async function linkHistory(siteId: string) {
+  const rows = (await db.from('care_agreement_links').select('id, token, status, created_at, created_by, sent_at, sent_to, revoked_at, revoked_by, revoked_reason, replaced_by, closed_checkout_session').eq('site_id', siteId).order('created_at', { ascending: false }).limit(20)).data || []
+  return rows.map((r: Row) => ({ ...r, token: tail(r.token) }))
 }
 
 export const agreementUrl = (token: string) => `${appUrl()}/care/agreement/${token}`
@@ -136,7 +213,7 @@ export async function issueAgreement(siteId: string, actor: string) {
   if (cur && cur.status === 'issued' && cur.setup_hash === site.confirmed_hash && coverage(cur.snapshot) === coverage(snap)) return { agreement: cur, token, created: false }
   await supersedeOpen(siteId, 'A new version was issued for the current scope and price.', actor)
   const ins = await db.from('care_agreements').insert({
-    site_id: siteId, terms_version: CARE_AGREEMENT_VERSION, snapshot: snap, snapshot_hash: hashOf(snap), setup_hash: site.confirmed_hash,
+    site_id: siteId, client_id: site.client_id, terms_version: CARE_AGREEMENT_VERSION, snapshot: snap, snapshot_hash: hashOf(snap), setup_hash: site.confirmed_hash,
     amount_cents: snap.price.amount_cents, issued_by: actor,
   }).select('*').single()
   const a = must(ins, 'Agreement')
@@ -198,6 +275,8 @@ export async function agreementStatus(siteId: string) {
     sent: site.agreement_sent_at ? { at: site.agreement_sent_at, to: site.agreement_sent_to } : null,
     current: cur ? { id: cur.id, status: cur.status, issued_at: cur.issued_at, signed_at: cur.signed_at, signer_name: cur.signer_name, amount_cents: cur.amount_cents, email_status: cur.signed_email_status, email_error: cur.signed_email_error, has_pdf: !!cur.signed_pdf_path, viewed_at: cur.first_viewed_at } : null,
     history,
+    links: await linkHistory(siteId),
+    link_off: !site.agreement_token && (await db.from('care_agreement_links').select('id').eq('site_id', siteId).limit(1)).data?.length ? true : false,
     preview: buildSnapshot(site, client),
   }
 }
@@ -218,18 +297,21 @@ export async function sendAgreementLink(siteId: string, body: { confirm_email?: 
   const allowed = clientEmailAllowed(to)
   if (!allowed.ok) throw new CareError(allowed.reason!, 403)
   const { agreement, token, created } = await issueAgreement(siteId, actor)
-  if (agreement.status === 'signed') throw new CareError('The client already signed the current agreement. Their payment step is open on the same link.', 409)
+  const subscribed = !!site.stripe_subscription_id && !['canceled', 'incomplete_expired'].includes(site.subscription_status || '')
+  if (agreement.status === 'signed' && (subscribed || site.agreement_sent_at)) throw new CareError(subscribed ? 'The client already signed and their plan is active. There is nothing to send.' : 'The client already signed the current agreement. Their payment step is open on the same link.', 409)
+  // A replacement link: the earlier one no longer works, and a signed agreement isn't signed again.
+  const replaced = ((await db.from('care_agreement_links').select('id').eq('site_id', siteId).eq('status', 'revoked').limit(1)).data || []).length > 0
   if (!created && site.agreement_sent_at && !body.resend) throw new CareError(`The agreement link was already sent to ${site.agreement_sent_to}. Choose Send again to send a reminder with the same link.`, 409)
   const snap = agreement.snapshot as AgreementSnapshot
-  const m = agreementLink({ name: snap.client.name, siteLabel: snap.site.label, siteUrl: snap.site.url, planName: snap.plan.name, amount: snap.price.label, includedMinutes: snap.plan.included_minutes, link: agreementUrl(token), version: snap.version, queuedLine: CARE_QUEUED_LINE })
+  const m = agreementLink({ name: snap.client.name, siteLabel: snap.site.label, siteUrl: snap.site.url, planName: snap.plan.name, amount: snap.price.label, includedMinutes: snap.plan.included_minutes, link: agreementUrl(token), version: snap.version, queuedLine: CARE_QUEUED_LINE, replaced, signed: agreement.status === 'signed' })
   const { data, error } = await resend().emails.send(
     { from: BRAND.from, to, replyTo: BRAND.email, subject: m.subject, html: m.html, text: m.text },
-    { idempotencyKey: `care-agreement-${agreement.id}-${body.resend ? Date.now() : 'first'}` },
+    { idempotencyKey: `care-agreement-${agreement.id}-${token.slice(-6)}-${body.resend ? Date.now() : 'first'}` },
   )
   if (error) throw new CareError(`The agreement link wasn’t sent: ${error.message || 'the email provider refused it'}. You can retry.`, 502)
   const now = new Date().toISOString()
   await db.from('care_sites').update({ agreement_sent_at: now, agreement_sent_to: to, updated_at: now }).eq('id', siteId)
-  await logActivity({ site_id: siteId, actor, action: 'agreement_link_sent', detail: { to, agreement: agreement.id, resend: !!body.resend, provider_id: data?.id || null } })
+  await logActivity({ site_id: siteId, actor, action: 'agreement_link_sent', detail: { to, agreement: agreement.id, resend: !!body.resend, replaced, link: tail(token), provider_id: data?.id || null } })
   return { sent_to: to, agreement_id: agreement.id, link: agreementUrl(token) }
 }
 
@@ -273,10 +355,19 @@ export async function emailSignedCopy(agreementId: string, actor: string) {
 /* Client: the private agreement page                                   */
 /* ------------------------------------------------------------------ */
 
+/** What a turned off link shows. It reveals nothing about the agreement. */
+export const LINK_OFF = 'This link is no longer active. If you were expecting an agreement, reply to my last email and I’ll send you the current link.'
+
 async function siteForToken(token: string) {
   if (!TOKEN_RE.test(token)) throw new CareError('Not found', 404)
   const site = (await db.from('care_sites').select('*').eq('agreement_token', token).maybeSingle()).data
-  if (!site) throw new CareError('Not found', 404)
+  if (!site) {
+    const link = (await db.from('care_agreement_links').select('status').eq('token', token).maybeSingle()).data
+    if (link?.status === 'revoked') throw new CareError(LINK_OFF, 410)
+    throw new CareError('Not found', 404)
+  }
+  const rec = (await db.from('care_agreement_links').select('status').eq('token', token).maybeSingle()).data
+  if (rec?.status === 'revoked') throw new CareError(LINK_OFF, 410)
   const client = must(await db.from('clients').select('id, name, email, business').eq('id', site.client_id).single(), 'Client')
   return { site, client }
 }

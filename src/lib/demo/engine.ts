@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import type { PGlite } from '@electric-sql/pglite'
 import { demoScope, type DemoLogEntry, type DemoScope } from './context'
 import { columns, ensureColumns, forgetSchema } from './rest'
-import { adminRows, careRows, DEMO_FILES, UNCONFIRMED_PRESETS } from './fixtures'
+import { adminRows, careRows, careFiles, DEMO_FILES, UNCONFIRMED_PRESETS } from './fixtures'
 
 export type DemoState = {
   v: 1
@@ -25,7 +25,7 @@ export type DemoState = {
   log: DemoLogEntry[]
 }
 
-const MIGRATIONS = ['20261030_website_care.sql', '20261031_care_work_ledger.sql', '20261103_care_report_suggestions.sql', '20261104_care_checkout_invitations.sql', '20261105_care_agreements_and_dispatch.sql']
+const MIGRATIONS = ['20261030_website_care.sql', '20261031_care_work_ledger.sql', '20261103_care_report_suggestions.sql', '20261104_care_checkout_invitations.sql', '20261105_care_agreements_and_dispatch.sql', '20261106_care_agreement_links.sql']
 
 /** The existing dashboard tables (created outside the repo in production), with the columns the app uses. */
 const BASE_SCHEMA = `
@@ -133,7 +133,7 @@ async function seed(e: Awaited<ReturnType<typeof engine>>, scope: DemoScope, aft
     await e.query(`set session_replication_role = origin`)
   }
   await e.query(`update care_task_presets set confirmed_at = now() - interval '20 days', confirmed_by = 'admin' where not (key = any($1::text[]))`, [UNCONFIRMED_PRESETS])
-  for (const [k, f] of Object.entries(DEMO_FILES)) scope.storage.set(k, { type: f.type, data: f.data() })
+  for (const [k, f] of Object.entries({ ...DEMO_FILES, ...careFiles() })) scope.storage.set(k, { type: f.type, data: f.data() })
   await demoScope.run(scope, () => after(scope))
 }
 

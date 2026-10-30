@@ -207,6 +207,24 @@ test('suggestions are flagged outdated when hand checks, findings, work, or esti
   await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note: 'Checked on a laptop.' } })
 })
 
+test('a suggestion that claims a hand check is saved only after you confirm you checked it yourself', { skip }, async () => {
+  const note = 'Checked by hand: desktop appearance looks right.'
+  const r1 = await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note } })
+  assert.equal(r1.status, 422)
+  assert.match(r1.data.error, /I checked this myself/)
+  assert.equal(one(`select note from care_manual_results where cycle_id = ${q(ids.cycle)} and item_id = 'visual'`).note, 'Checked on a laptop.', 'your text is kept')
+  assert.equal((await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note, confirm_checked: true } })).status, 200)
+  assert.equal((await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note: 'Looked on my laptop at 1366 wide.' } })).status, 200, 'your own wording needs no confirmation')
+  // How a fix was verified: the hand check wording needs the same confirmation.
+  const verify = 'Checked by hand after the fix: “desktop appearance looks right” no longer appears on the agreed pages.'
+  const r2 = await api(`cycles/${ids.cycle}/issue`, { method: 'PUT', json: { group_key: 'manual:visual', resolution: 'fixed', verification_note: verify } })
+  assert.equal(r2.status, 422, JSON.stringify(r2.data))
+  assert.equal((await api(`cycles/${ids.cycle}/issue`, { method: 'PUT', json: { group_key: 'manual:visual', resolution: 'fixed', verification_note: verify, confirm_checked: true } })).status, 200)
+  assert.equal(one(`select verification_note from care_issue_notes where cycle_id = ${q(ids.cycle)} and group_key = 'manual:visual'`).verification_note, verify)
+  await api(`cycles/${ids.cycle}/issue`, { method: 'PUT', json: { group_key: 'manual:visual', resolution: null, verification_note: '', client_note: '' } })
+  await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note: 'Checked on a laptop.' } })
+})
+
 test('private notes never appear in suggested text', { skip }, async () => {
   sql(`update care_reports set internal_notes = 'PRIVATE-REPORT-NOTE' where cycle_id = ${q(ids.cycle)}`)
   sql(`update care_issue_notes set internal_note = 'PRIVATE-ISSUE-NOTE' where cycle_id = ${q(ids.cycle)}`)

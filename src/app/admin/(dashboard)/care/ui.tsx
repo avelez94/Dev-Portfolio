@@ -90,6 +90,8 @@ min-height:100vh;background:var(--bg);color:var(--text);font-family:${ADMIN_FONT
 .care-pipe b{display:block;font-size:13px}.care-pipe span{display:block;font-size:12px;color:var(--text3);overflow-wrap:anywhere}
 @media (max-width:760px){.care-pipe{grid-template-columns:1fr 1fr}}
 .care-frame{width:100%;height:520px;border:1px solid var(--border2);border-radius:12px;background:#fff}
+.care-sug{display:grid;gap:4px;margin:6px 0 0;padding:8px 10px;border:1px dashed var(--border2);border-radius:10px;background:var(--surface)}
+.care-sug-text{font-size:13px;color:var(--text)}
 .care-skel{height:14px;border-radius:6px;background:var(--surface2);animation:carepulse 1.2s infinite}
 @keyframes carepulse{50%{opacity:.5}}
 @media (prefers-reduced-motion:reduce){.care-skel{animation:none}}
@@ -292,5 +294,35 @@ export function Pipeline({ steps, tz, label = 'Payment to check' }: { steps: Pip
         </li>
       ))}
     </ol>
+  )
+}
+
+export type FieldSuggestionView = { text: string; needs_confirmation: boolean; basis: string }
+
+/**
+ * A suggestion under a text field. It fills the field only when you choose
+ * it; text you wrote stays unless you choose Replace. Suggestions that say you
+ * checked something by hand need "I checked this myself" first, and the
+ * server refuses to save that text without it.
+ */
+export function SuggestHint({ s, value, onUse, confirmed, onConfirm, id }: {
+  s: FieldSuggestionView | null | undefined; value: string; onUse: (text: string) => void; confirmed?: boolean; onConfirm?: (v: boolean) => void; id: string
+}) {
+  if (!s || s.text.trim() === String(value || '').trim()) return null
+  const custom = String(value || '').trim().length > 0
+  const blocked = s.needs_confirmation && !confirmed
+  return (
+    <div className="care-sug" role="group" aria-labelledby={`${id}-sl`}>
+      <span id={`${id}-sl`} className="care-label">Suggested</span>
+      <span className="care-sug-text">{s.text}</span>
+      <span className="care-muted" style={{ fontSize: 12 }}>{s.basis}</span>
+      <span className="care-row" style={{ gap: 8 }}>
+        {s.needs_confirmation && onConfirm && (
+          <label className="care-row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={!!confirmed} onChange={(e) => onConfirm(e.target.checked)} /> I checked this myself</label>
+        )}
+        <button type="button" className="care-btn small" disabled={blocked} onClick={() => onUse(s.text)}>{custom ? 'Replace my text with this' : 'Use suggestion'}</button>
+        {custom && <span className="care-muted" style={{ fontSize: 12 }}>Your text stays unless you choose Replace.</span>}
+      </span>
+    </div>
   )
 }

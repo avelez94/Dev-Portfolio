@@ -324,6 +324,49 @@ test('a new client: enroll with suggested scope, confirm the technical scope, se
   await close()
 })
 
+test('ready made signed agreement: Lakeside Dental’s signed PDF, its client Documents record in Care and Pipeline, and turning the link off or replacing it', async () => {
+  const { page, close } = await signedIn()
+  const DENTAL = ID(203)
+  const TOKEN_D = 'demoLakesideDentalSignedLink0001'
+  await page.goto(`${APP}/admin/care?site=${DENTAL}`)
+  const agr = page.getByTestId('agreement-panel')
+  await agr.getByText('Signed and paid').waitFor()
+  assert.match(await agr.textContent(), /Signed.*by Avery Kim.*emailed to the client and you/)
+  const [dl] = await Promise.all([page.waitForEvent('download'), agr.getByRole('link', { name: 'Download signed PDF' }).click()])
+  const pdf = await (await import('node:fs/promises')).readFile(await dl.path())
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-')
+  assert.ok(pdf.length > 5000, 'the full signed agreement, not a placeholder')
+  // The client's Documents section, by client id.
+  const docs = page.getByTestId('client-documents')
+  const row = docs.locator('li[data-kind="care_agreement"]')
+  await row.waitFor()
+  assert.match(await row.textContent(), /Website Care agreement care-agreement-2026-11 \(Lakeside Dental\).*Signed by Avery Kim/)
+  const [dl2] = await Promise.all([page.waitForEvent('download'), row.getByRole('link', { name: 'Download PDF' }).click()])
+  assert.deepEqual(await (await import('node:fs/promises')).readFile(await dl2.path()), pdf, 'the same stored file')
+  // The same profile from Pipeline.
+  await page.getByTestId('open-client-profile').click()
+  await page.waitForURL(/\/admin\/pipeline\?client=/)
+  const pdocs = page.getByTestId('client-documents')
+  await pdocs.locator('li[data-kind="care_agreement"]').waitFor()
+  await pdocs.getByRole('link', { name: 'Website Care: Lakeside Dental' }).waitFor()
+  // The client's private page shows the signed, active agreement.
+  await page.goto(`${APP}/care/agreement/${TOKEN_D}`)
+  await page.getByText('You’re all set').waitFor()
+  // Replace the link: the old one is refused, the signature stays.
+  await page.goto(`${APP}/admin/care?site=${DENTAL}`)
+  await agr.getByTestId('link-controls').click()
+  const form = agr.getByTestId('link-form')
+  await form.getByLabel('Why').fill('Practice: rotating the link')
+  await form.getByText('I understand the client’s current link stops working').click()
+  await form.getByRole('button', { name: 'Replace link' }).click()
+  await agr.getByText(/New link issued\. The old link no longer works/).waitFor()
+  await agr.getByText('Signed and paid').waitFor()
+  await agr.getByTestId('agreement-links').getByText('Link history (2)').waitFor()
+  await page.goto(`${APP}/care/agreement/${TOKEN_D}`)
+  await page.getByText(/This link is no longer active/).waitFor()
+  await close()
+})
+
 test('practice billing events: renewal, failed payment, both cancellations, and redelivered notices create nothing twice', async () => {
   const { page, close } = await signedIn()
   const DENTAL = '00000000-0000-4000-8000-000000000203'

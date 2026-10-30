@@ -49,6 +49,11 @@ Vercel previews share the production database, so the admin on a preview runs as
 | Practice renewal, failed payment, and cancellations | Lakeside Dental: `/admin/care?site=00000000-0000-4000-8000-000000000203` |
 | A blocked checkout price ($239 agreed, $249 Premium price) | Harbor Street Bakery (link above) |
 | Full journey: suggested scope, confirm, agreement, sign, pay, check | Enroll **Rivera Garden Design** from Websites, Enroll a website |
+| Ready made signed care agreement (Lakeside Dental, Avery Kim) | `/admin/care?site=00000000-0000-4000-8000-000000000203`, then **Download signed PDF** |
+| The signed agreement PDF itself | `/api/care/admin/sites/00000000-0000-4000-8000-000000000203/agreements/00000000-0000-4000-8000-000000000601/pdf` |
+| Lakeside Dental's client Documents in Pipeline (same list as Care) | `/admin/pipeline?client=00000000-0000-4000-8000-000000000103` |
+| Lakeside Dental's private agreement page (client view, signed and active) | `/care/agreement/demoLakesideDentalSignedLink0001` |
+| Turn off or replace an agreement link | Lakeside Dental, **Care agreement**, **Turn off or replace this link** |
 | My Pricing cards, proposal and contract forms | `/admin/documents` |
 | Proposal with milestone payments (client view, current terms) | `/proposals/00000000-0000-4000-8000-000000000933` |
 | Proposal issued under the October terms (kept as issued) | `/proposals/00000000-0000-4000-8000-000000000932` |
@@ -59,6 +64,8 @@ Vercel previews share the production database, so the admin on a preview runs as
 Client document pages use the demo only when the browser has a demo session (open `/admin` first). Without one they read the real database as before.
 
 A new client to enroll: **Rivera Garden Design** (Casey Rivera) is in the client list without a care website.
+
+The ready made signed agreement is seeded as data: its PDF is built by the real signed agreement code from the stored snapshot when a demo session starts, and its client record is the agreement's client id, so it appears in Lakeside Dental's Documents in both Pipeline and Website Care. Rivera Garden Design stays the separate fresh enrollment walkthrough.
 
 ## Still needs real verification
 

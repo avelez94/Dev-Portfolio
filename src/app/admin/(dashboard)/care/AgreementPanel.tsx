@@ -41,7 +41,9 @@ export default function AgreementPanel({ siteId, tz, onChange }: { siteId: strin
     ['signed', 'paid'].includes(a.state),
     a.state === 'paid',
   ]
-  const canSend = ['ready', 'sent', 'viewed', 'outdated'].includes(a.state) && a.problems.length === 0 && a.recipient.allowed?.ok
+  // After a link is replaced, a signed but unpaid client gets the new link (nothing to sign again).
+  const signedNewLink = a.state === 'signed' && !a.sent && !!a.link
+  const canSend = !a.link_off && (['ready', 'sent', 'viewed', 'outdated'].includes(a.state) || signedNewLink) && (a.problems.length === 0 || signedNewLink) && a.recipient.allowed?.ok
   const again = a.state === 'sent' || a.state === 'viewed'
   const refresh = () => { st.reload(); onChange() }
   return (
@@ -57,7 +59,7 @@ export default function AgreementPanel({ siteId, tz, onChange }: { siteId: strin
       <dl className="care-dl" style={{ marginTop: 10 }}>
         <dt>To</dt><dd>{a.recipient.name ? `${a.recipient.name}, ` : ''}<b>{a.recipient.email || 'no email on file'}</b>{a.recipient.allowed && !a.recipient.allowed.ok && <span style={{ color: 'var(--redText)' }}> · {a.recipient.allowed.reason}</span>}</dd>
         <dt>Plan and price</dt><dd>{a.preview.plan.name}, <b>{usd(a.preview.price.amount_cents)} USD every month</b>, billed in advance</dd>
-        <dt>Private link</dt><dd>{a.link ? <code style={{ overflowWrap: 'anywhere' }}>{a.link}</code> : 'Created when you send it'}</dd>
+        <dt>Private link</dt><dd>{a.link ? <code style={{ overflowWrap: 'anywhere' }}>{a.link}</code> : a.link_off ? <b style={{ color: 'var(--redText)' }}>Turned off. The client’s old link is refused.</b> : 'Created when you send it'}</dd>
         {a.sent && <><dt>Sent</dt><dd>{fmt(a.sent.at, tz)} to {a.sent.to}{a.current?.viewed_at ? ` · opened ${fmt(a.current.viewed_at, tz)}` : ''}</dd></>}
         {a.current?.signed_at && <><dt>Signed</dt><dd>{fmt(a.current.signed_at, tz)} by {a.current.signer_name} · signed copy {a.current.email_status === 'sent' ? 'emailed to the client and you' : a.current.email_status === 'skipped' ? `not emailed (${a.current.email_error})` : `email failed (${a.current.email_error || 'unknown'})`}</dd></>}
       </dl>
@@ -83,18 +85,48 @@ export default function AgreementPanel({ siteId, tz, onChange }: { siteId: strin
         <div className="care-grid" style={{ marginTop: 12 }}>
           <Field label={`Type ${a.recipient.email} to ${again ? 'send a reminder' : 'send the agreement link'}`} id="agr-conf"><input id="agr-conf" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" /></Field>
           <div className="care-row">
-            <Action tone="primary" label={again ? 'Send again' : a.state === 'outdated' ? 'Send updated agreement' : 'Send agreement link'} disabled={typed.trim().toLowerCase() !== a.recipient.email.toLowerCase()}
+            <Action tone="primary" label={again ? 'Send again' : signedNewLink ? 'Send the new link' : a.state === 'outdated' ? 'Send updated agreement' : 'Send agreement link'} disabled={typed.trim().toLowerCase() !== a.recipient.email.toLowerCase()}
               run={() => careApi<Row>(`sites/${siteId}/agreement`, { method: 'POST', json: { confirm_email: typed, resend: again } })} done={(r) => { setMsg(`Agreement link sent to ${(r as Row).sent_to}.`); setTyped(''); refresh() }} />
             {again && <span className="care-muted">Sends the same private link again as a reminder.</span>}
           </div>
         </div>
       )}
       {msg && <div className="care-okmsg" role="status" style={{ marginTop: 10 }}>{msg}</div>}
+      {(a.link || a.link_off) && <LinkControls siteId={siteId} active={!!a.link} signed={a.state === 'signed'} onDone={(m) => { setMsg(m); setLink(null); refresh() }} />}
+      {a.links?.length > 0 && (
+        <details style={{ marginTop: 10 }} data-testid="agreement-links"><summary>Link history ({a.links.length})</summary>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{a.links.map((l: Row) => (
+            <li key={l.id}><code>{l.token}</code>: {l.status === 'active' ? <b>active</b> : 'turned off'}, created {fmt(l.created_at, tz)}{l.sent_at ? `, sent ${fmt(l.sent_at, tz)} to ${l.sent_to}` : ''}{l.revoked_at ? `, turned off ${fmt(l.revoked_at, tz)} (${l.revoked_reason})` : ''}{l.replaced_by ? ', replaced' : ''}{l.closed_checkout_session ? ', its open checkout was closed' : ''}</li>
+          ))}</ul>
+        </details>
+      )}
       {a.history.length > 1 && (
         <details style={{ marginTop: 10 }}><summary>Earlier versions ({a.history.length - 1})</summary>
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{a.history.slice(1).map((h: Row) => <li key={h.id}>{h.terms_version}, {usd(h.amount_cents)}: {h.status}{h.signed_at ? ` ${fmt(h.signed_at, tz)} by ${h.signer_name}` : ''}{h.superseded_reason ? ` (${h.superseded_reason})` : ''}</li>)}</ul>
         </details>
       )}
     </section>
+  )
+}
+
+/** Turn the private link off, or replace it. Signed agreements and their PDFs are kept either way. */
+function LinkControls({ siteId, active, signed, onDone }: { siteId: string; active: boolean; signed: boolean; onDone: (m: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [sure, setSure] = useState(false)
+  if (!open) return <div className="care-row" style={{ marginTop: 10 }}><button type="button" className="care-btn small" onClick={() => setOpen(true)} data-testid="link-controls">{active ? 'Turn off or replace this link' : 'Issue a new link'}</button></div>
+  return (
+    <div className="care-sub" style={{ marginTop: 10 }} data-testid="link-form">
+      <p style={{ margin: '0 0 8px' }}>{active ? 'The client’s current link will stop working for viewing, signing and payment, and any checkout opened from it is closed so it can’t be paid.' : 'Issues a new private link. The old one stays refused.'} {signed ? 'The signed agreement and its PDF stay on file; the client won’t sign again because the link changed.' : 'Nothing already signed is affected.'}</p>
+      <Field label="Why" id="link-reason"><input id="link-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example, sent to the wrong address" /></Field>
+      {active && <label className="care-row" style={{ marginTop: 6 }}><input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} /> I understand the client’s current link stops working</label>}
+      <div className="care-row" style={{ marginTop: 8 }}>
+        <Action tone="primary" label={active ? 'Replace link' : 'Issue new link'} disabled={reason.trim().length < 3 || (active && !sure)}
+          run={() => careApi<Row>(`sites/${siteId}/agreement/replace`, { method: 'POST', json: { reason } })} done={() => { setOpen(false); onDone('New link issued. The old link no longer works. Send the new link when you’re ready.') }} />
+        {active && <Action label="Turn off only" disabled={reason.trim().length < 3 || !sure}
+          run={() => careApi<Row>(`sites/${siteId}/agreement/revoke`, { method: 'POST', json: { reason, confirm: true } })} done={(r) => { setOpen(false); onDone(`Link turned off.${(r as Row).closed_checkout ? ' Its open checkout was closed.' : ''}`) }} />}
+        <button type="button" className="care-btn small" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+    </div>
   )
 }

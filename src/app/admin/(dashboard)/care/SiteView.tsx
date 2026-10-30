@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import WorkPanel from './WorkPanel'
 import AgreementPanel from './AgreementPanel'
 import PracticePanel from './PracticePanel'
+import ClientDocuments from '../_components/ClientDocuments'
 import { useLoad, careApi, Badge, SiteBilling, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, Pipeline } from './ui'
 import { SitesTable } from './CareApp'
 import { requiredChecks, missingRequired, suggestScope } from '@/lib/care/scope'
@@ -225,6 +226,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         <h2>{client?.business || client?.name || 'Unknown client'}</h2>
         <div>{site.label} · <a href={site.site_url} target="_blank" rel="noreferrer noopener">{site.site_url}</a></div>
         <div className="care-muted">Report recipient: {site.recipient_name || 'not set'} &lt;{site.recipient_email || 'no email'}&gt;</div>
+        {client?.id && <div style={{ marginTop: 4 }}><a href={`/admin/pipeline?client=${client.id}`} data-testid="open-client-profile">Open client profile in Pipeline</a></div>}
         <div className="care-row" style={{ marginTop: 8 }}>
           <Badge tone={confirmed ? 'ok' : 'warn'}>{confirmed ? 'Setup confirmed' : ended ? 'Care ended' : site.enrollment_status === 'paused' ? 'Paused' : 'Needs confirmation'}</Badge>
           <SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} />
@@ -298,6 +300,8 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
           </details>
         )}
       </section>
+
+      {client?.id && <section className="care-panel" aria-label="Client documents"><ClientDocuments client={client} heading="Client documents" links={<a href={`/admin/pipeline?client=${client.id}`} style={{ textTransform: 'none', letterSpacing: 0 }}>Same list in Pipeline</a>} /></section>}
 
       <section className="care-panel" aria-labelledby="hist-h">
         <h2 id="hist-h" style={{ marginBottom: 10 }}>Monthly reviews</h2>

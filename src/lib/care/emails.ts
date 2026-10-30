@@ -112,8 +112,27 @@ export function billingAttention(p: { client: string; site: string; state: strin
 }
 
 /** The client's persistent private link to read and sign their care agreement. */
-export function agreementLink(p: { name: string; siteLabel: string; siteUrl: string; planName: string; amount: string; includedMinutes: number; link: string; version: string; queuedLine: string }): Email {
+export function agreementLink(p: { name: string; siteLabel: string; siteUrl: string; planName: string; amount: string; includedMinutes: number; link: string; version: string; queuedLine: string; replaced?: boolean; signed?: boolean }): Email {
   const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
+  if (p.signed) {
+    return {
+      subject: oneLine(`Your new Website Care link for ${p.siteLabel}`),
+      ...renderEmail({
+        audience: 'client',
+        preheader: 'Your signed agreement is on file. Here’s your new private link to start your plan.',
+        eyebrow: 'Website Care',
+        title: 'Your new private',
+        titleAccent: 'care link.',
+        blocks: [
+          { type: 'p', html: `Hi ${esc(first)},` },
+          { type: 'p', html: `I’ve replaced your private Website Care link for ${esc(p.siteLabel)}. The earlier link no longer works. Your signed agreement is still on file and nothing needs to be signed again.` },
+          { type: 'details', rows: [['Website', `${esc(p.siteLabel)}<br>${esc(p.siteUrl)}`], ['Plan', esc(p.planName)], ['Monthly price', `${esc(p.amount)} a month, billed monthly in advance until you cancel`]] },
+          { type: 'buttons', items: [{ label: 'Open My Agreement', href: p.link }], fallbackLink: true },
+          { type: 'note', html: `The page shows your signed agreement and lets you start your plan through Stripe. ${esc(p.queuedLine)}` },
+        ],
+      }),
+    }
+  }
   return {
     subject: oneLine(`Your Website Care agreement for ${p.siteLabel}`),
     ...renderEmail({
@@ -124,7 +143,7 @@ export function agreementLink(p: { name: string; siteLabel: string; siteUrl: str
       titleAccent: 'ready to sign.',
       blocks: [
         { type: 'p', html: `Hi ${esc(first)},` },
-        { type: 'p', html: `Here’s your private link to read and sign the Website Care agreement for ${esc(p.siteLabel)}. It lists the website and checks we agreed on, your plan and price, and the billing, cancellation and refund terms.` },
+        { type: 'p', html: `Here’s your ${p.replaced ? 'new ' : ''}private link to read and sign the Website Care agreement for ${esc(p.siteLabel)}.${p.replaced ? ' The earlier link no longer works.' : ''} It lists the website and checks we agreed on, your plan and price, and the billing, cancellation and refund terms.` },
         { type: 'details', rows: [['Website', `${esc(p.siteLabel)}<br>${esc(p.siteUrl)}`], ['Plan', esc(p.planName)], ['Monthly price', `${esc(p.amount)} a month, billed monthly in advance until you cancel`], ['Included time', `${p.includedMinutes} minutes each month`], ['Agreement', `Version ${esc(p.version)}`]] },
         { type: 'buttons', items: [{ label: 'Read and Sign', href: p.link }], fallbackLink: true },
         { type: 'note', html: `Once you sign, you’ll get a signed PDF copy by email and the same page lets you start your plan through Stripe. ${esc(p.queuedLine)} This link stays the same, so you can come back to it any time.` },

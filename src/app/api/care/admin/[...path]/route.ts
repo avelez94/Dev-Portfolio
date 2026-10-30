@@ -11,10 +11,11 @@ import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCK
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
 import { createCycle, enqueueScan, cancelScan, releaseHeldCycles, retryDispatch, dispatchConfigured } from '@/lib/care/cycles'
 import { pipeline } from '@/lib/care/pipeline'
-import { agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy } from '@/lib/care/agreement'
+import { agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy, revokeLink, replaceLink } from '@/lib/care/agreement'
 import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote, updatePlanTime, suggestionState, refreshSuggestions, acceptSuggestion, dismissSuggestion } from '@/lib/care/report'
 import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
 import { reportPdf } from '@/lib/care/report-pdf'
+import { clientCareDocuments } from '@/lib/care/client-docs'
 import { sendPreview, sendReport, markStuckSend } from '@/lib/care/send'
 import { closeCheckout, portalSession, syncSubscription, stripeMode } from '@/lib/care/stripe'
 import { deliver } from '@/lib/care/notify'
@@ -257,6 +258,18 @@ async function agreement({ seg }: Ctx) {
 }
 async function sendAgreement({ seg, body }: Ctx) {
   return ok(await sendAgreementLink(id(seg[1]), { confirm_email: String(body.confirm_email || ''), resend: body.resend === true }, ACTOR))
+}
+/** Turn the client's private link off: refused from then on, and any open checkout from it is closed. */
+async function agreementRevoke({ seg, body }: Ctx) {
+  return ok(await revokeLink(id(seg[1]), { reason: String(body.reason || ''), confirm: body.confirm === true }, ACTOR))
+}
+/** Replace the private link: the old one stops working; signed agreements and history stay. */
+async function agreementReplace({ seg, body }: Ctx) {
+  return ok(await replaceLink(id(seg[1]), { reason: String(body.reason || '') }, ACTOR))
+}
+/** The client's Website Care documents, by client id (signed agreements and sent reports). */
+async function clientDocs({ seg }: Ctx) {
+  return ok(await clientCareDocuments(id(seg[1])))
 }
 async function agreementPdfRoute({ seg }: Ctx) {
   const { bytes, name } = await signedPdf(id(seg[1]), id(seg[3]))
@@ -551,6 +564,7 @@ const routes: [string, string, Handler][] = [
   ['PUT', 'settings', putSettings],
   ['POST', 'settings/approve-policy', approvePolicy],
   ['GET', 'clients', clients],
+  ['GET', 'clients/:id/documents', clientDocs],
   ['GET', 'template', template],
   ['GET', 'activity', activity],
   ['POST', 'check-url', checkUrl],
@@ -561,6 +575,8 @@ const routes: [string, string, Handler][] = [
   ['POST', 'sites/:id/checkout', checkout],
   ['GET', 'sites/:id/agreement', agreement],
   ['POST', 'sites/:id/agreement', sendAgreement],
+  ['POST', 'sites/:id/agreement/revoke', agreementRevoke],
+  ['POST', 'sites/:id/agreement/replace', agreementReplace],
   ['GET', 'sites/:id/agreements/:aid/pdf', agreementPdfRoute],
   ['POST', 'sites/:id/agreements/:aid/email', agreementResend],
   ['POST', 'sites/:id/portal', portal],

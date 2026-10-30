@@ -13,6 +13,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
 import { available, one, rows, q, sql } from './pg.mjs'
 import { startStack, stopStack, api, APP } from './local-stack.mjs'
 import { startFakeStripe, startFakeResend, startFakeGithub, priceObj } from './fake-services.mjs'
@@ -244,6 +245,113 @@ test('continue to payment opens a checkout for the verified price; a changed pri
   agreementId = v2.agreement.id
   assert.equal(one(`select status from care_agreements where site_id = ${q(ids.site)} order by issued_at limit 1`).status, 'signed', 'the earlier signed version is kept as signed')
   assert.equal((await pub(token, '/checkout', { method: 'POST' })).status, 200)
+})
+
+test('the owner can turn the private link off or replace it: old links are refused everywhere, open checkouts are closed, and nothing is signed again', { skip }, async () => {
+  const old = token
+  const sess1 = site(ids.site).checkout_session_id
+  assert.ok(sess1 && stripe.sessions[sess1].status === 'open', 'a checkout is open from the current link')
+  const signedBefore = one(`select id, signed_pdf_sha256, signed_at from care_agreements where id = ${q(agreementId)}`)
+  const agreementsBefore = rows(`select id from care_agreements where site_id = ${q(ids.site)}`).length
+  assert.equal((await api(`sites/${ids.site}/agreement/revoke`, { method: 'POST', json: { reason: 'Sent to the wrong person' } })).status, 422, 'needs explicit confirmation')
+  assert.equal((await api(`sites/${ids.site}/agreement/revoke`, { method: 'POST', json: { reason: '', confirm: true } })).status, 422, 'needs a reason')
+  const off = await api(`sites/${ids.site}/agreement/revoke`, { method: 'POST', json: { reason: 'Sent to the wrong person', confirm: true } })
+  assert.equal(off.status, 200, JSON.stringify(off.data))
+  assert.equal(off.data.closed_checkout, true)
+  assert.equal(stripe.sessions[sess1].status, 'expired', 'the open checkout from the revoked link was closed in Stripe')
+  assert.equal(site(ids.site).checkout_session_id, null)
+  // Refused for viewing, signing and payment, without revealing anything.
+  const v = await pub(old)
+  assert.equal(v.status, 410)
+  assert.match(v.data.error, /no longer active/)
+  assert.equal(v.data.agreement, undefined)
+  assert.equal((await pub(old, '', { method: 'POST', json: { agreement_id: agreementId, snapshot_hash: 'x', signer_name: 'Someone', signature_image: SIG, agree: true } })).status, 410)
+  const n = sessionsCreated().length
+  assert.equal((await pub(old, '/checkout', { method: 'POST' })).status, 410)
+  assert.equal(sessionsCreated().length, n, 'no checkout is created from a revoked link')
+  const st = (await api(`sites/${ids.site}/agreement`)).data
+  assert.equal(st.link, null)
+  assert.equal(st.link_off, true)
+  assert.equal(st.state, 'signed', 'the signature still stands')
+  const blocked = await api(`sites/${ids.site}/agreement`, { method: 'POST', json: { confirm_email: 'frontdesk@example.com' } })
+  assert.equal(blocked.status, 409)
+  assert.match(blocked.data.error, /turned off/, 'sending never issues a new link by itself')
+  assert.equal(site(ids.site).agreement_token, null)
+
+  // Replace: a new private link for the same signed agreement.
+  const rep = await api(`sites/${ids.site}/agreement/replace`, { method: 'POST', json: { reason: 'New contact at the clinic' } })
+  assert.equal(rep.status, 200, JSON.stringify(rep.data))
+  token = site(ids.site).agreement_token
+  assert.match(token, /^[A-Za-z0-9_-]{32}$/)
+  assert.notEqual(token, old)
+  const nv = await pub(token)
+  assert.equal(nv.data.step, 'pay', 'payment stays unlocked; no new signature because the link changed')
+  assert.equal(nv.data.agreement.id, agreementId)
+  assert.equal(rows(`select id from care_agreements where site_id = ${q(ids.site)}`).length, agreementsBefore, 'no new version')
+  assert.deepEqual(one(`select id, signed_pdf_sha256, signed_at from care_agreements where id = ${q(agreementId)}`), signedBefore, 'the signed agreement and its PDF are untouched')
+  assert.equal((await pub(old)).status, 410, 'the old link stays refused')
+  // The new link is sent with copy that says nothing needs signing again.
+  const sent = await api(`sites/${ids.site}/agreement`, { method: 'POST', json: { confirm_email: 'frontdesk@example.com' } })
+  assert.equal(sent.status, 200, JSON.stringify(sent.data))
+  const mail = resend.emails.at(-1)
+  assert.equal(mail.subject, 'Your new Website Care link for Northside Physio')
+  assert.ok(mail.text.includes(`/care/agreement/${token}`) && !mail.text.includes(old))
+  assert.match(mail.text, /earlier link no longer works.*nothing needs to be signed again/s)
+  assert.doesNotMatch(mail.text + mail.subject, /[–—]/)
+  const pay2 = await pub(token, '/checkout', { method: 'POST' })
+  assert.equal(pay2.status, 200)
+  const sess2 = site(ids.site).checkout_session_id
+  assert.equal(stripe.sessions[sess2].cancel_url, `http://localhost:3230/care/agreement/${token}`)
+
+  // Replacing an active link closes its open checkout too.
+  const mid = token
+  assert.equal((await api(`sites/${ids.site}/agreement/replace`, { method: 'POST', json: { reason: 'Rotating the link' } })).status, 200)
+  token = site(ids.site).agreement_token
+  assert.equal(stripe.sessions[sess2].status, 'expired')
+  assert.equal((await pub(mid, '/checkout', { method: 'POST' })).status, 410)
+  assert.equal((await pub(token, '/checkout', { method: 'POST' })).status, 200)
+
+  // History: every link, who turned it off and why, and which checkout was closed.
+  const links = (await api(`sites/${ids.site}/agreement`)).data.links
+  assert.equal(links.length, 3)
+  assert.deepEqual(links.map((l) => l.status), ['active', 'revoked', 'revoked'])
+  assert.ok(links.every((l) => l.token.length === 7), 'tokens are only shown by their last characters')
+  assert.equal(links[2].revoked_reason, 'Sent to the wrong person')
+  assert.equal(links[2].closed_checkout_session, sess1)
+  assert.equal(links[1].closed_checkout_session, sess2)
+  assert.ok(links[2].replaced_by && links[1].replaced_by)
+  const acts = rows(`select action from care_activity where site_id = ${q(ids.site)} and action like 'agreement_link%'`).map((r) => r.action)
+  for (const a of ['agreement_link_revoked', 'agreement_link_replaced', 'agreement_link_sent']) assert.ok(acts.includes(a), a)
+})
+
+test('the client’s Documents list shows their signed care agreements by client id, with the stored PDF; unlinked records are flagged, not attributed', { skip }, async () => {
+  const clientId = site(ids.site).client_id
+  const r = await api(`clients/${clientId}/documents`)
+  assert.equal(r.status, 200, JSON.stringify(r.data))
+  const ag = r.data.documents.filter((x) => x.kind === 'care_agreement')
+  const signed = rows(`select id from care_agreements where site_id = ${q(ids.site)} and signed_at is not null`)
+  assert.equal(ag.length, signed.length, 'every signed version is listed; unsigned replaced versions are not')
+  assert.ok(ag.every((x) => x.client_id === undefined && x.site_label === 'Northside Physio'))
+  const cur = ag.find((x) => x.id === agreementId)
+  assert.match(cur.status, /^Signed by Sam Patel/)
+  const dl = await fetch(`${APP}${cur.pdf}`, { headers: { cookie: 'admin_token=care-local-admin' } })
+  assert.equal(dl.status, 200)
+  const bytes = Buffer.from(await dl.arrayBuffer())
+  assert.equal(bytes.subarray(0, 5).toString(), '%PDF-')
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), one(`select signed_pdf_sha256 from care_agreements where id = ${q(agreementId)}`).signed_pdf_sha256, 'the stored signed file')
+  assert.deepEqual(r.data.sites.map((x) => x.id), [ids.site])
+  assert.deepEqual(r.data.unlinked, [])
+  // Another client sees none of these.
+  const other = one(`insert into clients (name, email) values ('Other Client', 'other@example.com') returning id`).id
+  assert.deepEqual((await api(`clients/${other}/documents`)).data.documents, [])
+  // A record without a client id is flagged for checking, not listed as theirs.
+  sql(`update care_agreements set client_id = null where id = ${q(agreementId)}`)
+  const u = (await api(`clients/${clientId}/documents`)).data
+  assert.ok(!u.documents.some((x) => x.id === agreementId))
+  assert.equal(u.unlinked.length, 1)
+  assert.match(u.unlinked[0].reason, /no client id recorded/)
+  sql(`update care_agreements set client_id = ${q(clientId)} where id = ${q(agreementId)}`)
+  assert.equal((await api(`clients/${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}/documents`)).status, 404)
 })
 
 test('a verified successful payment immediately queues and dispatches the scan; redelivered and out of order notices add nothing', { skip }, async () => {

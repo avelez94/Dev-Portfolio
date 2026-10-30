@@ -18,8 +18,9 @@ import { fmtMoney, fmtShort } from '../../_lib/format'
 import { PIPELINE_STAGES, STAGE_LABELS } from '../../_lib/leads'
 import { invoiceStatusLabel, markInvoicePaid, markMilestonePaid, sendInvoiceEmail, sendMilestoneEmail } from '../../_lib/invoices'
 import { milestonePDF } from '../../_lib/pdf'
-import { downloadDoc, deleteDocument } from '../../_lib/files'
-import type { Client, Document, Invoice, InvoiceMilestone, Meeting } from '../../_lib/types'
+import ClientDocuments from '../../_components/ClientDocuments'
+import CareLinks from '../../_components/CareLinks'
+import type { Client, Invoice, InvoiceMilestone, Meeting } from '../../_lib/types'
 import ClientInvoiceForm from './ClientInvoiceForm'
 import EmailDialog from './EmailDialog'
 import InvoiceDialog from '../../revenue/_parts/InvoiceDialog'
@@ -49,8 +50,7 @@ export default function ClientPanel({ client, onAdvance, onLost, onSaved, onPrev
   const msIds = invoices.rows.filter((i) => i.invoice_type === 'milestone').map((i) => i.id)
   const milestones = useRows<InvoiceMilestone>(() => (msIds.length ? supabase.from('invoice_milestones').select('*').in('invoice_id', msIds).order('created_at', { ascending: true }) : Promise.resolve({ data: [], error: null })), [msIds.join(',')])
   const meetings = useRows<Meeting>(() => supabase.from('meetings').select('*').eq('client_id', client.id).order('scheduled_at', { ascending: false }), [client.id])
-  const docs = useRows<Document>(() => supabase.from('documents').select('*').eq('client_id', client.id).order('created_at', { ascending: false }), [client.id])
-  const loadError = invoices.error || meetings.error || docs.error || milestones.error
+  const loadError = invoices.error || meetings.error || milestones.error
 
   async function scheduleMeeting() {
     if (!meetingForm.date || !meetingForm.time) return
@@ -207,19 +207,7 @@ export default function ClientPanel({ client, onAdvance, onLost, onSaved, onPrev
           </div>
         )}
       </div>
-      {docs.rows.length > 0 && (
-        <div>
-          <div style={{ ...miniLabel, color: d.text3 }}>Documents</div>
-          {docs.rows.map((doc) => (
-            <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: d.surface, borderRadius: 10, marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: d.text3 }}>doc</span>
-              <span style={{ flex: 1, fontSize: 12, color: d.text }}>{doc.name}</span>
-              <button aria-label="Download" className="icon-btn" style={{ color: d.accent, fontSize: 12 }} onClick={() => downloadDoc(doc.storage_path, doc.name)}>↓</button>
-              <button aria-label="Remove" className="icon-btn" style={{ color: d.text3 }} onClick={async () => { await deleteDocument(doc.id, doc.storage_path); await docs.reload() }}>x</button>
-            </div>
-          ))}
-        </div>
-      )}
+      <ClientDocuments client={client} links={<CareLinks clientId={client.id} />} />
       {showEmail && <EmailDialog client={client} onClose={() => setShowEmail(false)} />}
       {viewing && <InvoiceDialog invoice={viewing} client={client} onClose={() => setViewing(null)} />}
     </>
