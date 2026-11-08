@@ -96,7 +96,7 @@ export async function createFixedFeeInvoice(client: ClientRef, f: FixedFeeForm, 
     total_fee: fee, deposit_amount: fee, amount: fee, due_date: f.due_date || null, service_desc: f.service_desc || null, status: 'pending',
   }])
   const inv = invRows?.[0] as Invoice | undefined
-  if (action === 'download') fixedFeePDF(f, client.name, fee)
+  if (action === 'download') fixedFeePDF(f, client.name, client.email, fee)
   else if (inv) await sendInvoiceEmail(client, inv)
   return true
 }

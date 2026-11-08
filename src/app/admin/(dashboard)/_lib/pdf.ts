@@ -33,7 +33,7 @@ export function makePDF(brand?: { docType: string; title: string; subtitle?: str
     }
     const addSpace = (n = 1) => pdf.space(n * 3.4)
     const addDivider = () => pdf.divider()
-    return { doc: pdf.doc, addLine, addSpace, addDivider, save: (name: string) => { pdf.finish(); pdf.doc.save(name) } }
+    return { doc: pdf.doc, addLine, addSpace, addDivider, finish: () => pdf.finish(), save: (name: string) => { pdf.finish(); pdf.doc.save(name) } }
   }
   const doc = new jsPDF()
   const lm = 20, rm = 190, lineH = 7
@@ -54,64 +54,141 @@ export function makePDF(brand?: { docType: string; title: string; subtitle?: str
     doc.setDrawColor(196, 112, 74); doc.setLineWidth(0.3)
     doc.line(lm, y, rm, y); y += lineH
   }
-  return { doc, addLine, addSpace, addDivider, save: (name: string) => doc.save(name) }
+  return { doc, addLine, addSpace, addDivider, finish: () => {}, save: (name: string) => doc.save(name) }
 }
 
 export type InvoiceFields = { invoice_number: string; due_date: string; service_desc: string; hours: string; hourly_rate: string }
 
-export function clientInvoicePDF(f: InvoiceFields, clientName: string, clientEmail: string, type: string, totalFee: number, depositAmount: number, branded = true) {
-  const { addLine, addSpace, addDivider, save } = makePDF(branded ? { docType: 'Invoice', title: 'Invoice #' + f.invoice_number, subtitle: 'Prepared for ' + clientName } : undefined)
+/**
+ * Invoice dates read "November 8, 2026". A plain YYYY-MM-DD (what the date
+ * fields and the database store) is that calendar day in every time zone.
+ * Anything that isn't a date (for example "Upon receipt") is kept as written.
+ */
+export function invoiceDate(value: string | null | undefined, fallback: string) {
+  const s = (value || '').trim()
+  if (!s) return fallback
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
+  const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)) : new Date(s)
+  if (isNaN(d.getTime())) return s
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
+const amount = (n: number) => money(Number(n) || 0)
+
+/** A line that only names the invoice type; the fixed fee layout prints that label itself. */
+const TYPE_ONLY = /^(fixed[\s-]*fee\s*)?change[\s-]*order$|^fixed[\s-]*fee(\s+invoice)?$/i
+
+/**
+ * The SERVICE section of a fixed fee invoice, from the Description exactly as
+ * entered: the first line is the service title and any further lines are the
+ * scope. A single line is the title alone; nothing is added to it. A trailing
+ * " — Change Order" on the title, or a line that only repeats the invoice
+ * type, is dropped because the layout already says "Fixed-Fee Change Order".
+ */
+export function fixedFeeService(desc: string | null | undefined) {
+  const lines = String(desc || '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !TYPE_ONLY.test(l))
+  const [first = '', ...scope] = lines
+  const title = first.replace(/\s*[|:–—-]\s*(fixed[\s-]*fee\s*)?change[\s-]*order$/i, '').trim()
+  return { title: title || 'Web development services', scope: scope.join('\n') }
+}
+
+/** Everything an invoice PDF needs, for any invoice type. */
+export type InvoiceDoc = {
+  type: string
+  invoice_number: string
+  due_date: string | null | undefined
+  service_desc: string | null | undefined
+  client_name: string
+  client_email: string
+  total_fee: number
+  deposit_amount?: number
+  hours?: string | number | null
+  hourly_rate?: string | number | null
+}
+
+/**
+ * One builder for every invoice type. The type decides the sections and the
+ * billing language; nothing hourly ever appears unless the invoice is hourly.
+ *   fixed_fee  SERVICE (title, "Fixed-Fee Change Order", scope), CHANGE ORDER (fixed fee, Total Due)
+ *   project    SERVICE, PAYMENT BREAKDOWN (total, deposit now, balance on delivery)
+ *   revision   SERVICE, REVISION BILLING (hours x rate, Total Due)
+ *   milestone  SERVICE, MILESTONE SCHEDULE (schedule total; each milestone has its own invoice)
+ *   other      SERVICE, AMOUNT DUE (hours shown only if the record has hours)
+ */
+export function buildInvoicePDF(v: InvoiceDoc, branded = true) {
+  const pdf = makePDF(branded ? { docType: 'Invoice', title: 'Invoice #' + v.invoice_number, subtitle: 'Prepared for ' + v.client_name } : undefined)
+  const { addLine, addSpace, addDivider } = pdf
+  const total = Number(v.total_fee) || 0
+  const hours = Number(v.hours) || 0
   addLine('INVOICE', 16, true, true)
   addLine('Alante Velez | Full Stack Web Developer', 10)
   addDivider(); addSpace()
-  addLine('INVOICE #' + f.invoice_number, 12, true); addSpace(0.5)
-  addLine('Due Date: ' + (f.due_date || 'Upon receipt'))
+  addLine('INVOICE #' + v.invoice_number, 12, true); addSpace(0.5)
+  addLine('Due Date: ' + invoiceDate(v.due_date, 'Upon receipt'))
   addSpace(); addDivider()
   addLine('BILL TO', 10, true, true); addSpace(0.5)
-  addLine(clientName); addLine(clientEmail)
+  addLine(v.client_name)
+  if (v.client_email) addLine(v.client_email)
   addSpace(); addDivider()
   addLine('SERVICE', 10, true, true); addSpace(0.5)
-  addLine(f.service_desc || 'Web development services')
-  addSpace(); addDivider()
-  if (type === 'project') {
-    addLine('PAYMENT BREAKDOWN', 10, true, true); addSpace(0.5)
-    addLine('Total Project Fee: $' + totalFee.toLocaleString()); addSpace(0.5)
-    addLine('Deposit Due Now (50%): $' + depositAmount.toLocaleString(), 11, true)
-    addLine('Balance Due on Delivery (50%): $' + (totalFee - depositAmount).toLocaleString(), 11, true)
-    addSpace(0.5)
-    addLine('Note: Final deliverables will be transferred upon receipt of the balance payment.', 10)
+  if (v.type === 'fixed_fee') {
+    const service = fixedFeeService(v.service_desc)
+    addLine(service.title)
+    addLine('Fixed-Fee Change Order', 9, true)
+    if (service.scope) addLine(service.scope, 9.5)
+    addSpace(); addDivider()
+    addLine('CHANGE ORDER', 10, true, true); addSpace(0.5)
+    addLine('Pricing: Fixed fee'); addSpace(0.5)
+    addLine('Total Due: ' + amount(total), 12, true)
   } else {
-    addLine('REVISION BILLING', 10, true, true); addSpace(0.5)
-    addLine('Hours: ' + f.hours + ' hrs x $' + f.hourly_rate + '/hr')
-    addLine('Total Due: $' + totalFee.toLocaleString(), 12, true)
+    addLine(v.service_desc || 'Web development services')
+    addSpace(); addDivider()
+    if (v.type === 'project') {
+      const deposit = Number(v.deposit_amount) || 0
+      addLine('PAYMENT BREAKDOWN', 10, true, true); addSpace(0.5)
+      addLine('Total Project Fee: $' + total.toLocaleString()); addSpace(0.5)
+      addLine('Deposit Due Now (50%): $' + deposit.toLocaleString(), 11, true)
+      addLine('Balance Due on Delivery (50%): $' + (total - deposit).toLocaleString(), 11, true)
+      addSpace(0.5)
+      addLine('Note: Final deliverables will be transferred upon receipt of the balance payment.', 10)
+    } else if (v.type === 'revision') {
+      addLine('REVISION BILLING', 10, true, true); addSpace(0.5)
+      addLine('Hours: ' + v.hours + ' hrs x $' + v.hourly_rate + '/hr')
+      addLine('Total Due: $' + total.toLocaleString(), 12, true)
+    } else if (v.type === 'milestone') {
+      addLine('MILESTONE SCHEDULE', 10, true, true); addSpace(0.5)
+      addLine('Schedule total: ' + amount(total), 12, true)
+      addSpace(0.5)
+      addLine('Each milestone is invoiced separately with its own amount and due date.', 10)
+    } else {
+      addLine('AMOUNT DUE', 10, true, true); addSpace(0.5)
+      if (hours > 0) addLine('Hours: ' + v.hours + ' hrs x $' + v.hourly_rate + '/hr')
+      addLine('Total Due: ' + amount(total), 12, true)
+    }
   }
   addSpace(); addDivider()
   addLine('PAYMENT', 10, true, true); addSpace(0.5)
   addLine('Stripe, PayPal, Zelle, or Wise')
-  addLine('Reference: Invoice #' + f.invoice_number + ' | ' + clientName)
-  save('Invoice_' + f.invoice_number + '_' + clientName.replace(/\s+/g, '_') + '.pdf')
+  // Fixed fee invoices carry no reference line; the other types keep theirs.
+  if (v.type !== 'fixed_fee') addLine('Reference: Invoice #' + v.invoice_number + ' | ' + v.client_name)
+  return pdf
 }
 
-export function fixedFeePDF(f: { invoice_number: string; due_date: string; service_desc: string }, clientName: string, fee: number) {
-  const { addLine, addSpace, addDivider, save } = makePDF({ docType: 'Invoice', title: 'Invoice #' + f.invoice_number, subtitle: 'Prepared for ' + clientName })
-  addLine('INVOICE', 16, true, true)
-  addLine('Alante Velez | Full Stack Web Developer', 10)
-  addDivider(); addSpace()
-  addLine('INVOICE #' + f.invoice_number, 12, true); addSpace(0.5)
-  addLine('Due Date: ' + (f.due_date || 'Upon receipt'))
-  addSpace(); addDivider()
-  addLine('BILL TO', 10, true, true); addSpace(0.5)
-  addLine(clientName)
-  addSpace(); addDivider()
-  addLine('SERVICE', 10, true, true); addSpace(0.5)
-  addLine(f.service_desc || 'Web development services')
-  addSpace(); addDivider()
-  addLine('PAYMENT', 10, true, true); addSpace(0.5)
-  addLine('Total due: $' + fee.toLocaleString(), 12, true)
-  addSpace(0.5)
-  addLine('Payment method: Zelle')
-  addLine('Reference: Invoice #' + f.invoice_number + ' | ' + clientName)
-  save('Invoice_' + f.invoice_number + '_' + clientName.replace(/\s+/g, '_') + '.pdf')
+export const invoiceFileName = (invoiceNumber: string, clientName: string) => 'Invoice_' + invoiceNumber + '_' + clientName.replace(/\s+/g, '_') + '.pdf'
+
+/** Builds and downloads any invoice type. */
+export function invoicePDF(v: InvoiceDoc, branded = true) {
+  buildInvoicePDF(v, branded).save(invoiceFileName(v.invoice_number, v.client_name))
+}
+
+/** Project (deposit / balance) and revision (hourly) invoices from the admin form. */
+export function clientInvoicePDF(f: InvoiceFields, clientName: string, clientEmail: string, type: string, totalFee: number, depositAmount: number, branded = true) {
+  invoicePDF({ type, invoice_number: f.invoice_number, due_date: f.due_date, service_desc: f.service_desc, client_name: clientName, client_email: clientEmail, total_fee: totalFee, deposit_amount: depositAmount, hours: f.hours, hourly_rate: f.hourly_rate }, branded)
+}
+
+/** Fixed fee (change order) invoices from the admin form: Total Fee is the Total Due. */
+export function fixedFeePDF(f: { invoice_number: string; due_date: string; service_desc: string }, clientName: string, clientEmail: string, fee: number) {
+  invoicePDF({ type: 'fixed_fee', invoice_number: f.invoice_number, due_date: f.due_date, service_desc: f.service_desc, client_name: clientName, client_email: clientEmail, total_fee: fee })
 }
 
 export function milestonePDF(clientName: string, clientEmail: string, milestone: InvoiceMilestone, invoiceNumber: string, totalCount: number, index: number) {
@@ -121,7 +198,7 @@ export function milestonePDF(clientName: string, clientEmail: string, milestone:
   addLine('Alante Velez | Full Stack Web Developer', 10)
   addDivider(); addSpace()
   addLine('INVOICE #' + invoiceNumber + '  |  ' + milestoneLabel(milestone, index, totalCount), 12, true); addSpace(0.5)
-  addLine('Due Date: ' + (milestone.due_date || 'Upon completion'))
+  addLine('Due Date: ' + invoiceDate(milestone.due_date, 'Upon completion'))
   addSpace(); addDivider()
   addLine('BILL TO', 10, true, true); addSpace(0.5)
   addLine(clientName); addLine(clientEmail)

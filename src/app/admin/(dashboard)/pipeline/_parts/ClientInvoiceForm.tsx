@@ -82,7 +82,7 @@ export default function ClientInvoiceForm({ client, onClose, onSaved, onPreview 
             <Field label="Invoice #"><input style={inputStyle} value={fixed.invoice_number} onChange={(e) => setFixed({ ...fixed, invoice_number: e.target.value })} placeholder="INV-164" /></Field>
             <Field label="Total Fee ($)"><input style={inputStyle} type="number" value={fixed.total_fee} onChange={(e) => setFixed({ ...fixed, total_fee: e.target.value })} placeholder="650" /></Field>
             <Field label="Due date"><input style={inputStyle} type="date" value={fixed.due_date} onChange={(e) => setFixed({ ...fixed, due_date: e.target.value })} /></Field>
-            <Field label="Description" wide><input style={inputStyle} value={fixed.service_desc} onChange={(e) => setFixed({ ...fixed, service_desc: e.target.value })} placeholder="V7 Site Restructure — Change Order" /></Field>
+            <Field label="Description" wide><textarea style={{ ...inputStyle, minHeight: 96, resize: 'vertical', lineHeight: 1.5 }} rows={4} value={fixed.service_desc} onChange={(e) => setFixed({ ...fixed, service_desc: e.target.value })} placeholder={'Service title on the first line\nScope of the work on the next lines'} /></Field>
           </div>
           <div className="form-actions">
             {back}
