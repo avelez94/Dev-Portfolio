@@ -61,10 +61,10 @@ export default function Home() {
           <Sparkle className={s.heroSparkleB} />
           <div className={s.portraitArch}>
             <Image
-              src="/Alante.PNG"
+              src="/alante-headshot.jpg"
               alt="Portrait of Alante Velez smiling softly, wearing a black blazer"
-              width={1086}
-              height={1448}
+              width={1122}
+              height={1402}
               preload
               sizes="(max-width: 1000px) 70vw, 420px"
               className={s.portraitImg}

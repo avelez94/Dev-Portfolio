@@ -10,7 +10,7 @@ const jsonLd = {
   name: 'Alante Velez',
   url: SITE_URL,
   email: CONTACT_EMAIL,
-  image: `${SITE_URL}/Alante.PNG`,
+  image: `${SITE_URL}/alante-headshot.jpg`,
   description:
     'Website design, website redesigns, custom web development, and ongoing website care for small businesses, service providers, consultants, and creators.',
   areaServed: { '@type': 'Country', name: 'United States' },

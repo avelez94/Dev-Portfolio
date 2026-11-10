@@ -31,10 +31,10 @@ export default function AboutPage() {
         <div className={s.aboutPhotoWrap}>
           <div className={s.aboutPhoto}>
             <Image
-              src="/Alante.PNG"
+              src="/alante-headshot.jpg"
               alt="Portrait of Alante Velez"
-              width={1086}
-              height={1448}
+              width={1122}
+              height={1402}
               preload
               sizes="(max-width: 1000px) 60vw, 340px"
               className={s.aboutImg}
