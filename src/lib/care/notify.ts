@@ -86,6 +86,42 @@ export async function queueBillingNotice(site: Row, key: string, state: string, 
   })
 }
 
+const HOLD_LABEL: Record<string, string> = {
+  enrollment: 'The website setup has never been confirmed.',
+  setup_changed: 'The agreed setup changed and has not been confirmed again.',
+  paused: 'Care for this website is paused.',
+  ended: 'Care for this website has ended, but a payment was received.',
+}
+
+/** A paid period that can't be scanned yet: flagged to the owner straight away. */
+export async function queueHoldNotice(site: Row, cycle: Row, reason: string, renewal: boolean) {
+  const client = (await db.from('clients').select('name, business').eq('id', site.client_id).maybeSingle()).data
+  const settings = await getSettings()
+  return queue({
+    dedupe_key: `hold:${cycle.id}`, kind: 'paid_review_held', cycle_id: cycle.id, subject: 'hold',
+    payload: {
+      client: client?.business || client?.name || site.label, site: site.label, siteUrl: site.site_url, reason, reasonText: HOLD_LABEL[reason] || reason, renewal,
+      period: `${formatInTz(cycle.period_start, settings.timezone, { dateStyle: 'medium' })} to ${formatInTz(cycle.period_end, settings.timezone, { dateStyle: 'medium' })}`,
+      due: formatInTz(cycle.review_due_at, settings.timezone), link: reviewLink(cycle.id),
+    },
+  })
+}
+
+/** The scan for a paid review couldn't be started after the allowed attempts. */
+export async function queueDispatchBlocked(runId: string, error: string) {
+  const run = (await db.from('care_scan_runs').select('id, cycle_id, site_id, dispatch_attempts').eq('id', runId).single()).data
+  if (!run) return null
+  const site = (await db.from('care_sites').select('*').eq('id', run.site_id).single()).data
+  const cycle = (await db.from('care_cycles').select('*').eq('id', run.cycle_id).single()).data
+  if (!site || !cycle) return null
+  const client = (await db.from('clients').select('name, business').eq('id', site.client_id).maybeSingle()).data
+  const settings = await getSettings()
+  return queue({
+    dedupe_key: `dispatch:${runId}`, kind: 'dispatch_blocked', cycle_id: cycle.id, run_id: runId, subject: 'dispatch',
+    payload: { client: client?.business || client?.name || site.label, site: site.label, siteUrl: site.site_url, error, attempts: run.dispatch_attempts, due: formatInTz(cycle.review_due_at, settings.timezone), link: reviewLink(cycle.id) },
+  })
+}
+
 function render(n: { kind: string; payload: Row }) {
   // Payloads are written by this module (queueScanNotification, queueReminder, queueBillingNotice).
   const p = n.payload as never
@@ -95,6 +131,8 @@ function render(n: { kind: string; payload: Row }) {
     case 'review_start':
     case 'review_overdue': return mail.reviewReminder(p)
     case 'billing_attention': return mail.billingAttention(p)
+    case 'paid_review_held': return mail.paidReviewHeld(p)
+    case 'dispatch_blocked': return mail.dispatchBlocked(p)
     default: throw new Error(`Unknown notification ${n.kind}`)
   }
 }

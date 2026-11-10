@@ -19,6 +19,8 @@ import { processEvent } from '@/lib/care/stripe'
 import { expireLink, payCheckout, runScenario, type Scenario } from './stripe-sim'
 import { completeRun } from '@/lib/care/runs'
 import { recordWork } from '@/lib/care/work-server'
+import { loadBundle, buildSnapshot, hashSnapshot, markReady, approve } from '@/lib/care/report'
+import { sendReport } from '@/lib/care/send'
 import * as careRoute from '@/app/api/care/admin/[...path]/route'
 import * as invoicesSend from '@/app/api/invoices/send/route'
 import * as emailSend from '@/app/api/email/send/route'
@@ -31,6 +33,8 @@ import * as debtPayoff from '@/app/api/debt-payoff/route'
 import * as proposalDoc from '@/app/api/proposals/[id]/route'
 import * as sowDoc from '@/app/api/sows/[id]/route'
 import * as contractDoc from '@/app/api/contracts/[id]/route'
+import * as agreementDoc from '@/app/api/care/agreement/[token]/route'
+import * as agreementPay from '@/app/api/care/agreement/[token]/checkout/route'
 import { DEMO_PUBLIC_DOCS } from './mode'
 
 export type DemoRequest = { method: string; path: string; search: string; headers: Record<string, string>; body: string }
@@ -100,10 +104,10 @@ async function demoScenario(siteId: string, scenario: string) {
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
   try {
     if (scenario === 'expire_link') {
-      if (!site.checkout_session_id) return { error: 'There is no open checkout link to expire. Send an invitation first.', status: 409 }
+      if (!site.checkout_session_id) return { error: 'There is no open checkout link to expire. Have the client sign and choose Continue to payment first.', status: 409 }
       const delivered = await expireLink(processEvent, siteId, site.checkout_session_id)
       note('payment', `Simulated: the checkout link for ${site.label} expired before it was used. Stripe's notice was processed: ${delivered.map((d) => `${d.type} (${d.status})`).join(', ')}.`)
-      return { summary: 'The checkout link expired. Send a new invitation to give the client a fresh link.', delivered }
+      return { summary: 'The checkout link expired. Continue to payment on the agreement page makes a fresh one.', delivered }
     }
     if (!site.stripe_subscription_id) return { error: 'This website has no subscription to practice with. Use Lakeside Dental, or complete a simulated checkout first.', status: 409 }
     const r = await runScenario(processEvent, siteId, site.stripe_subscription_id, scenario as Scenario)
@@ -184,6 +188,14 @@ export async function dispatchDemo(r: DemoRequest, origin: string, cookie: strin
 
   // Client document pages opened from a demo session: the real handlers, on demo data.
   const doc = r.path.match(DEMO_PUBLIC_DOCS)
+  if (doc && doc[2] === 'agreement') {
+    // The client's care agreement page: read, sign (real signing, PDF and simulated email), then pay on the simulated checkout.
+    const pay = r.path.endsWith('/checkout')
+    const token = r.path.split('/')[4]
+    const h = ((pay ? agreementPay : agreementDoc) as unknown as RouteModule)[r.method as 'GET']
+    if (!h) return reply(405, { error: 'Method not allowed' })
+    return fromResponse(await h(new NextRequest(url, init), { params: Promise.resolve({ token }) }))
+  }
   if (doc) {
     const m = ({ proposals: proposalDoc, sows: sowDoc, contracts: contractDoc } as unknown as Record<string, RouteModule>)[doc[1]]
     const h = m?.[r.method as 'GET']
@@ -204,6 +216,31 @@ export async function seedWork() {
     batch_key: 'demo-seed-physio-images', confirmed: true, completed_on: new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10),
     lines: [{ source: 'preset', preset_id: preset.id, quantity: 2, client_description: 'Replaced two treatment room photos you supplied.' }],
   }, 'admin')
+  await recordWork(DEMO_IDS.cycles.physioPrev, {
+    batch_key: 'demo-seed-physio-prev', confirmed: true, completed_on: new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 10),
+    lines: [{ source: 'preset', preset_id: preset.id, quantity: 1, client_description: 'Replaced the front desk photo you supplied.' }],
+  }, 'admin')
   // The checks finish last, so the suggested Report text starts from the seeded work too.
   await simulateRunner()
+  // Last month's send is history, not something that happened in this session: keep it out of Simulated actions.
+  const log = demoScope.getStore()?.log
+  const before = log?.length ?? 0
+  await finishPreviousMonth()
+  log?.splice(before)
+}
+
+/** Northside Physio's previous month, reviewed, approved and sent with the real functions, then dated to last month. */
+async function finishPreviousMonth() {
+  const cycle = DEMO_IDS.cycles.physioPrev
+  const ago = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString()
+  await markReady(cycle, 'admin')
+  const snap = await buildSnapshot(await loadBundle(cycle))
+  await approve(cycle, { snapshot_hash: hashSnapshot(snap), signoff: true, approver: 'Alante Velez' }, 'admin')
+  const report = must(await db.from('care_reports').select('id, current_approval_id').eq('cycle_id', cycle).single(), 'Report')
+  await sendReport(cycle, { approval_id: report.current_approval_id, confirm_email: 'frontdesk@example.com', subject: 'Your website health report', message: 'Hi Sam, here is last month’s report for Northside Physio.' }, 'admin')
+  await db.from('care_scan_runs').update({ started_at: ago(33), finished_at: ago(33), created_at: ago(33) }).eq('cycle_id', cycle)
+  await db.from('care_report_approvals').update({ approved_at: ago(28) }).eq('report_id', report.id)
+  await db.from('care_report_sends').update({ created_at: ago(27), finished_at: ago(27) }).eq('report_id', report.id)
+  await db.from('care_cycles').update({ completed_at: ago(27) }).eq('id', cycle)
+  await db.from('care_work_entries').update({ recorded_at: ago(31) }).eq('cycle_id', cycle)
 }

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const ROOT = new URL('../..', import.meta.url).pathname
-const MIGRATIONS = ['supabase/pending/website-care/20261030_website_care.sql', 'supabase/pending/website-care/20261031_care_work_ledger.sql', 'supabase/pending/website-care/20261103_care_report_suggestions.sql', 'supabase/pending/website-care/20261104_care_checkout_invitations.sql']
+const MIGRATIONS = ['supabase/pending/website-care/20261030_website_care.sql', 'supabase/pending/website-care/20261031_care_work_ledger.sql', 'supabase/pending/website-care/20261103_care_report_suggestions.sql', 'supabase/pending/website-care/20261104_care_checkout_invitations.sql', 'supabase/pending/website-care/20261105_care_agreements_and_dispatch.sql', 'supabase/pending/website-care/20261106_care_agreement_links.sql', 'supabase/pending/website-care/20261107_care_function_search_path.sql']
 
 function findBin() {
   if (process.env.PG_BIN) return process.env.PG_BIN
@@ -34,7 +34,8 @@ let dir = null
 // initdb refuses to run as root; use the postgres account when running as root.
 const asDbUser = (cmd) => (process.getuid?.() === 0 ? spawnSync('su', ['postgres', '-c', cmd], { encoding: 'utf8' }) : spawnSync('sh', ['-c', cmd], { encoding: 'utf8' }))
 
-export async function startDb() {
+/** `raw: true` starts an empty cluster (no stand ins, no migrations), for the release rehearsal. */
+export async function startDb({ raw = false } = {}) {
   dir = mkdtempSync(join(tmpdir(), 'care-pg-'))
   chmodSync(dir, 0o777)
   const data = join(dir, 'data')
@@ -42,6 +43,7 @@ export async function startDb() {
   if (r.status !== 0) throw new Error('initdb failed: ' + r.stderr)
   r = asDbUser(`${BIN}/pg_ctl -D ${data} -o "-p ${PORT} -k ${dir} -c listen_addresses=''" -l ${dir}/log -w start >/dev/null`)
   if (r.status !== 0) throw new Error('pg_ctl start failed: ' + r.stderr + readFileSync(join(dir, 'log'), 'utf8'))
+  if (raw) return
   // Stand ins for what Supabase provides, plus the existing tables the care migration references.
   sql(`create role anon; create role authenticated; create role service_role;
        create table public.clients (id uuid primary key default gen_random_uuid(), name text, email text, business text);

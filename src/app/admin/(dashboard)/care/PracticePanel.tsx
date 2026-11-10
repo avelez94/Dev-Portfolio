@@ -18,7 +18,7 @@ const SCENARIOS: [string, string, string][] = [
   ['repeat', 'Send the last notice again', 'Stripe redelivers the same notice. Nothing is created twice.'],
 ]
 
-export default function PracticePanel({ site, onChange }: { site: Row; onChange: () => void }) {
+export default function PracticePanel({ site, onChange, agreementLink }: { site: Row; onChange: () => void; agreementLink?: string | null }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [out, setOut] = useState<Row | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -33,6 +33,11 @@ export default function PracticePanel({ site, onChange }: { site: Row; onChange:
     <section className="care-sub" aria-labelledby="prac-h" data-testid="practice-panel" style={{ marginTop: 12, borderStyle: 'dashed' }}>
       <h3 id="prac-h" style={{ margin: '0 0 4px', fontSize: 15 }}>Practice billing events (demo)</h3>
       <p className="care-muted" style={{ margin: '0 0 10px' }}>Simulated Stripe notices, handled by the same code as real ones. Nothing reaches Stripe and no email leaves the demo.</p>
+      {!site.stripe_subscription_id && agreementLink && (
+        <div className="care-row" style={{ marginBottom: 10 }}>
+          <a className="care-btn small" href={agreementLink.replace(/^https?:\/\/[^/]+/, '')}>Open the client’s agreement page (play the client)</a>
+        </div>
+      )}
       {linkOpen && (
         <div className="care-row" style={{ marginBottom: 10 }}>
           <a className="care-btn small" href={site.checkout_url}>Open the simulated checkout (play the client)</a>
@@ -48,7 +53,7 @@ export default function PracticePanel({ site, onChange }: { site: Row; onChange:
             </div>
           ))}
         </div>
-      ) : !linkOpen && <p className="care-muted" style={{ margin: 0 }}>Send a subscription invitation first, then play the client on the simulated checkout. Lakeside Dental already has a subscription to practice with.</p>}
+      ) : !linkOpen && <p className="care-muted" style={{ margin: 0 }}>Confirm the technical scope and send the agreement link first, then play the client: sign the agreement and pay on the simulated checkout. Lakeside Dental already has a subscription to practice with.</p>}
       {err && <div role="alert" style={{ color: 'var(--redText)', fontSize: 13, marginTop: 8 }}>{err}</div>}
       {out && (
         <div className="care-okmsg" role="status" style={{ marginTop: 10 }}>

@@ -40,8 +40,11 @@ export const providerExamples = [
   { name: 'A student portal', body: 'May need hosting, a database, email delivery, and payment processing, with usage charges that grow as it grows.' },
 ]
 
+import { careBillingFaq } from './care-terms'
+
 export const guideFaqs = [
   { q: 'Do I have to buy a care plan?', a: 'No. Care plans are optional. Your domain, hosting, and other provider charges still apply either way.' },
+  { q: careBillingFaq.q, a: careBillingFaq.a },
   { q: 'Can I request changes later?', a: 'Yes. Changes are estimated first and billed as occasional support or a fixed project quote, once you approve the estimate.' },
   { q: 'Can you give me an exact quote?', a: 'Yes, after we talk through your requirements. A written proposal confirms what is included and what is not.' },
   { q: 'Can you look after a site you didn’t build?', a: 'Possibly. I start with an initial review before agreeing to ongoing support. The review is scoped and quoted like any other work.' },

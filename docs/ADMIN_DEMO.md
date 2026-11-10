@@ -26,11 +26,11 @@ Vercel previews share the production database, so the admin on a preview runs as
   - Database and storage calls go to the demo database.
   - Resend email, Zoom meetings and GitHub runner dispatch are simulated and listed under **Simulated actions**.
   - DNS lookups return example.com's address.
-  - Stripe is answered by the simulated Stripe (`stripe-sim.ts`): prices, customers, checkout sessions, subscriptions, and invoices kept in the demo database. The real checkout, invitation, and webhook code runs against it.
+  - Stripe is answered by the simulated Stripe (`stripe-sim.ts`): prices, customers, checkout sessions, subscriptions, and invoices kept in the demo database. The real agreement, checkout, and webhook code runs against it.
   - Everything else is refused, including any raw http(s) connection.
 - **Demo versions of some actions** (in `dispatch.ts`):
   - The check runner finishes queued checks with fictional results.
-  - **Send subscription invitation** and **Copy checkout link instead** run the real price check and link handling; the link opens a simulated checkout page (what the client would see). **Pay (simulated)** there completes the simulated session and delivers Stripe's `checkout.session.completed` and `invoice.paid` notices to the real `processEvent`.
+  - **Send agreement link** runs the real scope and price checks and issues the agreement. **Open the client’s agreement page** (Practice billing events) shows the client’s private page on demo data: signing is real (signature, stored signed PDF, simulated emails), and **Continue to Payment** opens a simulated checkout page. **Pay (simulated)** there completes the simulated session and delivers Stripe's `checkout.session.completed` and `invoice.paid` notices to the real `processEvent`, which queues and dispatches the check (the dispatch is simulated) before the simulated runner finishes it.
   - **Practice billing events (demo)** on a website's page: renewal, failed payment, cancel at period end, cancel immediately, let the link expire, and send the last notice again. Each changes the simulated subscription and delivers Stripe style notices to the real `processEvent`; redelivered notices keep their event ids, as Stripe's retries do.
   - Simulated checks report each site's second agreed page as too wide for phones, so every review has an issue to handle.
   - The Stripe billing portal is acknowledged only. **Refresh from Stripe** reads the simulated subscription.
@@ -48,6 +48,15 @@ Vercel previews share the production database, so the admin on a preview runs as
 | Owner's guide | `/admin/care/guide` |
 | Practice renewal, failed payment, and cancellations | Lakeside Dental: `/admin/care?site=00000000-0000-4000-8000-000000000203` |
 | A blocked checkout price ($239 agreed, $249 Premium price) | Harbor Street Bakery (link above) |
+| Full journey: suggested scope, confirm, agreement, sign, pay, check | Enroll **Rivera Garden Design** from Websites, Enroll a website |
+| Ready made signed care agreement (Lakeside Dental, Avery Kim) | `/admin/care?site=00000000-0000-4000-8000-000000000203`, then **Download signed PDF** |
+| The signed agreement PDF itself | `/api/care/admin/sites/00000000-0000-4000-8000-000000000203/agreements/00000000-0000-4000-8000-000000000601/pdf` |
+| Lakeside Dental's client Documents in Pipeline (same list as Care) | `/admin/pipeline?client=00000000-0000-4000-8000-000000000103` |
+| Lakeside Dental's private agreement page (client view, signed and active) | `/care/agreement/demoLakesideDentalSignedLink0001` |
+| Review history with last month completed (checks, manual review, work, sent report) | `/admin/care?site=00000000-0000-4000-8000-000000000201#review-history` |
+| Last month's review (Northside Physio) | `/admin/care?cycle=00000000-0000-4000-8000-000000000304` |
+| Review history from the client profile | `/admin/pipeline?client=00000000-0000-4000-8000-000000000101`, **Website Care: Northside Physio** |
+| Turn off or replace an agreement link | Lakeside Dental, **Care agreement**, **Turn off or replace this link** |
 | My Pricing cards, proposal and contract forms | `/admin/documents` |
 | Proposal with milestone payments (client view, current terms) | `/proposals/00000000-0000-4000-8000-000000000933` |
 | Proposal issued under the October terms (kept as issued) | `/proposals/00000000-0000-4000-8000-000000000932` |
@@ -58,6 +67,8 @@ Vercel previews share the production database, so the admin on a preview runs as
 Client document pages use the demo only when the browser has a demo session (open `/admin` first). Without one they read the real database as before.
 
 A new client to enroll: **Rivera Garden Design** (Casey Rivera) is in the client list without a care website.
+
+The ready made signed agreement is seeded as data: its PDF is built by the real signed agreement code from the stored snapshot when a demo session starts, and its client record is the agreement's client id, so it appears in Lakeside Dental's Documents in both Pipeline and Website Care. Rivera Garden Design stays the separate fresh enrollment walkthrough.
 
 ## Still needs real verification
 

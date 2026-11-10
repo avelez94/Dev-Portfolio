@@ -1,6 +1,6 @@
 'use client'
 /**
- * Demo stand in for Stripe Checkout, opened from the link in the invitation
+ * Demo stand in for Stripe Checkout, opened from Continue to payment on the client’s agreement page
  * (or the copied link). It reads the simulated checkout session, so an
  * expired or already used link behaves like Stripe's. "Pay" plays the client
  * paying; Stripe's notices then go through the real webhook processing.
@@ -37,9 +37,9 @@ export default function DemoCheckout() {
         <section className="care-panel">
           <Badge tone="coral">Simulated Stripe checkout</Badge>
           <h1 style={{ fontSize: 22, margin: '10px 0 4px' }}>What the client sees</h1>
-          <p className="care-muted" style={{ marginBottom: 12 }}>In real use this is Stripe’s own page, opened from the invitation email. Nothing here contacts Stripe.</p>
+          <p className="care-muted" style={{ marginBottom: 12 }}>In real use this is Stripe’s own page, opened from Continue to payment on the signed agreement. Nothing here contacts Stripe.</p>
           <ErrorBox error={err || sess.error || site.error} />
-          {!sid ? <p>This checkout link is missing its session. Open it from the invitation or the copied link.</p> : !sess.data || !s ? <Loading /> : (
+          {!sid ? <p>This checkout link is missing its session. Open it from the agreement page or the copied link.</p> : !sess.data || !s ? <Loading /> : (
             <div className="care-grid">
               <div className="care-sub">
                 <div className="care-label">Subscription</div>
@@ -52,7 +52,7 @@ export default function DemoCheckout() {
                   <a href={back}>Back to the website</a>
                 </div>
               ) : sess.data.status === 'expired' ? (
-                <p className="care-err" role="alert">This checkout link has expired. Nothing was charged. Ask for a new invitation. <a href={back}>Back to the website</a></p>
+                <p className="care-err" role="alert">This checkout link has expired. Nothing was charged. Open the agreement page again for a fresh link. <a href={back}>Back to the website</a></p>
               ) : sess.data.status === 'complete' ? (
                 <p>This checkout link was already used. <a href={back}>Back to the website</a></p>
               ) : (

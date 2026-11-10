@@ -10,7 +10,8 @@
  * catalog; the numbers shown here are the same formula, for review.
  */
 import { useMemo, useState } from 'react'
-import { useLoad, careApi, Badge, Field, Loading, ErrorBox, Empty, Action, fmt } from './ui'
+import { useLoad, careApi, Badge, Field, Loading, ErrorBox, Empty, Action, fmt, SuggestHint } from './ui'
+import { workDescription, estimateFromIssue } from '@/lib/care/field-suggest'
 import { useUnsaved } from '../_components/unsaved'
 import { STANDARD_HOURLY_RATE, formatRate } from '@/lib/terms'
 import { EXCLUDED_LABEL, describeCalc, draftSummary, estimateProblems, lineTotals, money, type Allowance, type DraftLine, type MinuteRule, type Preset } from '@/lib/care/work'
@@ -228,7 +229,10 @@ function QuickAdd({ data, estimate, corrects, onDone, onCancel }: { data: WorkDa
                   </Field>
                 </div>
                 <div className="care-two">
-                  <Field label="Client facing description" id={`d-${l.key}`}><input id={`d-${l.key}`} value={l.client_description} onChange={(e) => update(l.key, { client_description: e.target.value })} /></Field>
+                  <Field label="Client facing description" id={`d-${l.key}`}>
+                    <input id={`d-${l.key}`} value={l.client_description} onChange={(e) => update(l.key, { client_description: e.target.value })} />
+                    <SuggestHint id={`ds-${l.key}`} s={workDescription({ preset_description: l.preset?.client_description, name: l.name, quantity: l.quantity }, { estimateTitle: data.openEstimates.find((x) => x.id === estimateId)?.title || null })} value={l.client_description} onUse={(t) => update(l.key, { client_description: t })} />
+                  </Field>
                   <Field label="Private note (never in the report)" id={`p-${l.key}`}><input id={`p-${l.key}`} value={l.private_note} onChange={(e) => update(l.key, { private_note: e.target.value })} style={{ borderColor: 'var(--amberText)' }} /></Field>
                 </div>
                 <div className="care-calc care-muted">{describeCalc(l, l.quantity, l.testing_shared)} standard minutes{l.excluded_reason ? ` (${EXCLUDED_LABEL[l.excluded_reason]})` : ''} · task {t.work}, testing {t.testing}</div>
@@ -450,6 +454,14 @@ function EstimateForm({ siteId, cycleId, available, planHasTime, initial, revisi
   })
   useUnsaved(true)
   const set = (k: string, v: unknown) => setF((x) => ({ ...x, [k]: v }))
+  // Suggested wording from an issue in this month's check (you pick which); minutes and price stay yours.
+  const review = useLoad<Row>(cycleId ? `cycles/${cycleId}` : null)
+  const issues: Row[] = [...((review.data?.groups || []) as Row[]).filter((g) => g.severity === 'issue'), ...((review.data?.manualIssues || []) as Row[]).map((m) => ({ ...m, pages: [], devices: [] }) as Row)]
+    .sort((a, b) => Number(b.note?.resolution === 'approval') - Number(a.note?.resolution === 'approval'))
+  const [fromIssue, setFromIssue] = useState('')
+  const picked = issues.find((g) => g.key === fromIssue)
+  const sug = picked ? estimateFromIssue(picked as never) : null
+  const scheduleSug = sug?.schedule || estimateFromIssue({ title: f.title || 'this work' }).schedule
   const additional = Math.max(Number(f.standard_minutes) - Number(f.included_minutes), 0)
   const cents = f.additional_price === '' ? null : Math.round(Number(f.additional_price) * 100)
   const problems = estimateProblems({ ...f, standard_minutes: Number(f.standard_minutes), included_minutes: Number(f.included_minutes), additional_price_cents: cents }, revisionOf ? null : available, planHasTime)
@@ -459,12 +471,32 @@ function EstimateForm({ siteId, cycleId, available, planHasTime, initial, revisi
       <div className="care-between"><h3 id="est-h">{revisionOf ? `Revise: ${revisionOf.title}` : initial ? 'Edit estimate' : 'New estimate'}</h3><button className="care-btn small" onClick={onCancel}>Close</button></div>
       <p className="care-muted" style={{ margin: '4px 0 12px' }}>A draft reserves nothing. When you record the client’s approval, the included minutes are reserved in this billing period. Plan time is counted in standard minutes, which don’t set a price. Additional work is priced at the standard rate ({ADDITIONAL_RATE}) or as a fixed quote the client agrees to.{revisionOf ? ' Approving this revision replaces the earlier version and releases its unused reservation.' : ''}</p>
       <div className="care-grid">
-        <Field label="Title" id="e-title"><input id="e-title" value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Team section rebuild" /></Field>
+        {issues.length > 0 && (
+          <Field label="Suggest wording from an issue (optional)" id="e-from" hint="Fills nothing until you choose a suggestion. Minutes and price are always yours to enter.">
+            <select id="e-from" value={fromIssue} onChange={(e) => setFromIssue(e.target.value)}>
+              <option value="">No issue</option>
+              {issues.map((g) => <option key={g.key} value={g.key}>{g.title}{g.note?.resolution === 'approval' ? ' (needs approval)' : ''}</option>)}
+            </select>
+          </Field>
+        )}
+        <Field label="Title" id="e-title">
+          <input id="e-title" value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Team section rebuild" />
+          <SuggestHint id="e-title-s" s={sug?.title} value={f.title} onUse={(t) => set('title', t)} />
+        </Field>
         <div className="care-two">
-          <Field label="Scope" id="e-scope"><textarea id="e-scope" value={f.scope} onChange={(e) => set('scope', e.target.value)} /></Field>
-          <Field label="Expected deliverables" id="e-del"><textarea id="e-del" value={f.deliverables} onChange={(e) => set('deliverables', e.target.value)} /></Field>
+          <Field label="Scope" id="e-scope">
+            <textarea id="e-scope" value={f.scope} onChange={(e) => set('scope', e.target.value)} />
+            <SuggestHint id="e-scope-s" s={sug?.scope} value={f.scope} onUse={(t) => set('scope', t)} />
+          </Field>
+          <Field label="Expected deliverables" id="e-del">
+            <textarea id="e-del" value={f.deliverables} onChange={(e) => set('deliverables', e.target.value)} />
+            <SuggestHint id="e-del-s" s={sug?.deliverables} value={f.deliverables} onUse={(t) => set('deliverables', t)} />
+          </Field>
         </div>
-        <Field label="Agreed schedule" id="e-sch"><input id="e-sch" value={f.schedule} onChange={(e) => set('schedule', e.target.value)} placeholder="Done within a week of approval" /></Field>
+        <Field label="Agreed schedule" id="e-sch">
+          <input id="e-sch" value={f.schedule} onChange={(e) => set('schedule', e.target.value)} placeholder="Done within a week of approval" />
+          <SuggestHint id="e-sch-s" s={scheduleSug} value={f.schedule} onUse={(t) => set('schedule', t)} />
+        </Field>
         <div className="care-two">
           <Field label="Total standard minutes, including testing" id="e-std"><input id="e-std" type="number" min={1} value={f.standard_minutes} onChange={(e) => set('standard_minutes', e.target.value)} /></Field>
           <Field label="Included minutes proposed" id="e-inc" hint={planHasTime ? `${Math.max(available, 0)} available now.` : 'This plan has no included time.'}><input id="e-inc" type="number" min={0} disabled={!planHasTime} value={f.included_minutes} onChange={(e) => set('included_minutes', e.target.value)} /></Field>

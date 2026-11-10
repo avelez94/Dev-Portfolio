@@ -207,6 +207,24 @@ test('suggestions are flagged outdated when hand checks, findings, work, or esti
   await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note: 'Checked on a laptop.' } })
 })
 
+test('a suggestion that claims a hand check is saved only after you confirm you checked it yourself', { skip }, async () => {
+  const note = 'Checked by hand: desktop appearance looks right.'
+  const r1 = await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note } })
+  assert.equal(r1.status, 422)
+  assert.match(r1.data.error, /I checked this myself/)
+  assert.equal(one(`select note from care_manual_results where cycle_id = ${q(ids.cycle)} and item_id = 'visual'`).note, 'Checked on a laptop.', 'your text is kept')
+  assert.equal((await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note, confirm_checked: true } })).status, 200)
+  assert.equal((await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note: 'Looked on my laptop at 1366 wide.' } })).status, 200, 'your own wording needs no confirmation')
+  // How a fix was verified: the hand check wording needs the same confirmation.
+  const verify = 'Checked by hand after the fix: “desktop appearance looks right” no longer appears on the agreed pages.'
+  const r2 = await api(`cycles/${ids.cycle}/issue`, { method: 'PUT', json: { group_key: 'manual:visual', resolution: 'fixed', verification_note: verify } })
+  assert.equal(r2.status, 422, JSON.stringify(r2.data))
+  assert.equal((await api(`cycles/${ids.cycle}/issue`, { method: 'PUT', json: { group_key: 'manual:visual', resolution: 'fixed', verification_note: verify, confirm_checked: true } })).status, 200)
+  assert.equal(one(`select verification_note from care_issue_notes where cycle_id = ${q(ids.cycle)} and group_key = 'manual:visual'`).verification_note, verify)
+  await api(`cycles/${ids.cycle}/issue`, { method: 'PUT', json: { group_key: 'manual:visual', resolution: null, verification_note: '', client_note: '' } })
+  await api(`cycles/${ids.cycle}/manual/visual`, { method: 'PUT', json: { status: 'passed', note: 'Checked on a laptop.' } })
+})
+
 test('private notes never appear in suggested text', { skip }, async () => {
   sql(`update care_reports set internal_notes = 'PRIVATE-REPORT-NOTE' where cycle_id = ${q(ids.cycle)}`)
   sql(`update care_issue_notes set internal_note = 'PRIVATE-ISSUE-NOTE' where cycle_id = ${q(ids.cycle)}`)
@@ -225,4 +243,65 @@ test('updating suggestions on an approved report returns it to draft for approva
   const rep = report()
   assert.equal(rep.status, 'draft')
   assert.equal(rep.version, v + 1, 'a new version, so the approved one stays distinct')
+})
+
+test('each website has its own review history: every billing period’s checks, manual review, findings, work and report, with earlier results and versions openable', { skip }, async () => {
+  // An earlier, completed period: its own check, a finding, an approved and sent report.
+  const old = one(`insert into care_cycles (site_id, source, period_start, period_end, plan, review_due_at, included_minutes, agreed_price, scan_state, completed_at)
+    values (${q(ids.site)}, 'manual', now() - interval '64 days', now() - interval '34 days', 'business', now() - interval '31 days', 30, 129, 'done', now() - interval '30 days') returning id`).id
+  const run = one(`insert into care_scan_runs (cycle_id, site_id, trigger, status, config, started_at, finished_at, summary)
+    values (${q(old)}, ${q(ids.site)}, 'scheduled', 'succeeded', '{"pages":[{"label":"Home","url":"https://physio.example.com/"}],"destinations":[]}', now() - interval '60 days', now() - interval '60 days', '{"counts":{"passed":1,"failed":1}}') returning id`).id
+  sql(`insert into care_findings (run_id, cycle_id, site_id, check_key, issue_code, fingerprint, url, viewport, status, observed, explanation, checked_at)
+    values (${q(run)}, ${q(old)}, ${q(ids.site)}, 'images', 'broken', 'old-img', 'https://physio.example.com/', 'desktop', 'failed', 'Two images did not load', 'seeded', now() - interval '60 days'),
+           (${q(run)}, ${q(old)}, ${q(ids.site)}, 'page_load', 'ok', 'old-load', 'https://physio.example.com/', 'desktop', 'passed', 'Loaded', 'seeded', now() - interval '60 days')`)
+  sql(`update care_findings set evidence = '{"screenshot":"evidence/old-home.png"}' where fingerprint = 'old-load'`)
+  sql(`insert into care_manual_results (cycle_id, item_id, label, category, status, note, confirmed_at) values (${q(old)}, 'visual', 'Desktop appearance looks right', 'Visual', 'passed', 'Fine', now() - interval '59 days')`)
+  sql(`insert into care_issue_notes (cycle_id, group_key, resolution, verification_note) values (${q(old)}, 'images:broken', 'fixed', 'Rechecked on a laptop')`)
+  const rep = one(`insert into care_reports (cycle_id, status, version, content) values (${q(old)}, 'sent', 2, '{}') returning id`).id
+  const a1 = one(`insert into care_report_approvals (report_id, version, snapshot, snapshot_hash, pdf_path, pdf_sha256, approved_by, approved_at, invalidated_at, invalidated_reason) values (${q(rep)}, 1, '{}', 'h1', 'x/1.pdf', 's1', 'Owner', now() - interval '33 days', now() - interval '32 days', 'Text changed') returning id`).id
+  const a2 = one(`insert into care_report_approvals (report_id, version, snapshot, snapshot_hash, pdf_path, pdf_sha256, approved_by, approved_at) values (${q(rep)}, 2, '{}', 'h2', 'x/2.pdf', 's2', 'Owner', now() - interval '31 days') returning id`).id
+  sql(`insert into care_report_sends (report_id, approval_id, recipient_email, subject, message, pdf_path, pdf_sha256, status, sent_by, created_at, finished_at) values (${q(rep)}, ${q(a2)}, 'frontdesk@example.com', 'Report', 'Hi', 'x/2.pdf', 's2', 'accepted', 'admin', now() - interval '30 days', now() - interval '30 days')`)
+  assert.ok(a1)
+
+  const h = await api(`sites/${ids.site}/history`)
+  assert.equal(h.status, 200, JSON.stringify(h.data))
+  const ps = h.data.periods
+  assert.ok(ps.length >= 2)
+  assert.ok(ps.every((p, i) => i === 0 || p.period_start <= ps[i - 1].period_start), 'chronological, newest first')
+  const cur = ps.find((p) => p.cycle_id === ids.cycle)
+  const prev = ps.find((p) => p.cycle_id === old)
+  // The current period: checks, findings, manual review, work and the report.
+  assert.ok(cur.checks.runs.length >= 1 && cur.checks.latest_run_id)
+  assert.equal(cur.findings.issues, 1)
+  assert.equal(cur.findings.unverified, 1)
+  assert.equal(cur.manual.total, 1)
+  assert.ok(cur.work.entries >= 1 && cur.work.minutes > 0, 'recorded work is part of the history')
+  assert.ok(cur.work.estimates.length >= 1)
+  assert.ok(cur.report)
+  // The earlier period, as it was.
+  assert.deepEqual(prev.checks.runs.map((r) => [r.status, r.has_results]), [['succeeded', true]])
+  assert.equal(prev.findings.issues, 1)
+  assert.equal(prev.findings.fixed, 1)
+  assert.deepEqual([prev.manual.recorded, prev.manual.passed], [1, 1])
+  assert.equal(prev.report.status, 'sent')
+  assert.deepEqual(prev.report.approvals.map((a) => [a.version, !!a.replaced]), [[1, true], [2, false]], 'every approved version, including replaced ones')
+  assert.equal(prev.report.approvals[0].pdf, `/api/care/admin/cycles/${old}/pdf?version=1&download=1`)
+  assert.deepEqual(prev.report.sends.map((s) => [s.version, s.status, s.to]), [[2, 'accepted', 'frontdesk@example.com']])
+  // An earlier check's stored results open read only.
+  const rr = await api(`runs/${run}`)
+  assert.equal(rr.status, 200)
+  assert.equal(rr.data.run.cycle_id, old)
+  assert.deepEqual(rr.data.findings.map((f) => f.observed).sort(), ['Loaded', 'Two images did not load'])
+  assert.equal(rr.data.groups.length, 1)
+  assert.deepEqual(rr.data.screenshots, [{ url: 'https://physio.example.com/', viewport: 'desktop', path: 'evidence/old-home.png' }], 'its screenshots open too')
+  assert.equal((await api(`runs/${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}`)).status, 404)
+
+  // A second website for the same client keeps its own history; the client profile lists both.
+  const second = one(`insert into care_sites (client_id, label, site_url, approved_domains, plan, agreed_monthly_price, enrollment_status, recipient_email) values (${q(ids.client)}, 'Northside Physio Shop', 'https://shop.example.com/', '{shop.example.com}', 'business', 129, 'confirmed', 'frontdesk@example.com') returning id`).id
+  const c3 = one(`insert into care_cycles (site_id, source, period_start, period_end, plan, review_due_at, included_minutes, agreed_price) values (${q(second)}, 'manual', now() - interval '2 days', now() + interval '28 days', 'business', now() + interval '5 days', 30, 129) returning id`).id
+  const h2 = (await api(`sites/${second}/history`)).data
+  assert.deepEqual(h2.periods.map((p) => p.cycle_id), [c3])
+  assert.ok(!(await api(`sites/${ids.site}/history`)).data.periods.some((p) => p.cycle_id === c3), 'histories never mix websites')
+  const docs = (await api(`clients/${ids.client}/documents`)).data
+  assert.deepEqual(docs.sites.map((s) => [s.label, s.reviews]).sort((a, b) => a[0].localeCompare(b[0])), [['Northside Physio', ps.length], ['Northside Physio Shop', 1]])
 })

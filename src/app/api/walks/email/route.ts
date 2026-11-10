@@ -185,3 +185,8 @@ ${
     );
   }
 }
+
+// Vercel cron jobs send GET requests. Reuse the same handler so the scheduled run works.
+export async function GET(request: NextRequest) {
+  return POST(request);
+}

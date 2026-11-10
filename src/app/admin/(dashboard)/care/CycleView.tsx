@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, STATUS_TEXT, statusTone } from './ui'
+import { RunResults } from './HistoryPanel'
+import { useLoad, careApi, Badge, BillingBadge, Field, Loading, ErrorBox, Empty, Action, fmt, workStatus, STATUS_TEXT, statusTone, Pipeline, SuggestHint } from './ui'
+import { issueClientNote, verificationNote, manualSuggestion } from '@/lib/care/field-suggest'
 import ReportView from '@/components/care/ReportView'
 import WorkPanel from './WorkPanel'
 
@@ -55,6 +57,7 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
   const issueGroups = (data.groups as Row[]).filter((g) => g.severity === 'issue')
   const unverifiedGroups = (data.groups as Row[]).filter((g) => g.severity === 'unverified')
   const manualDone = data.manual.filter((m: Row) => m.status).length
+  const recheck = data.latest?.finished_at ? new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(data.latest.finished_at)) : null
   return (
     <>
       <button className="care-btn small" onClick={() => go({ site: site.id })} style={{ marginBottom: 12 }}>← {site.label}</button>
@@ -73,6 +76,7 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
             {sentOk && <div className="care-muted">Sent {fmt(sentOk.finished_at, tz)}</div>}
           </div>
         </div>
+        <Pipeline steps={data.pipeline} tz={tz} />
         <div className="care-steps">
           <div className="care-step"><span>Billing</span>{cycle.billing_flag ? <Badge tone="bad">{cycle.billing_flag.replace(/_/g, ' ')}</Badge> : cycle.source === 'manual' ? <Badge>Billed outside Stripe</Badge> : <Badge tone="ok">Period paid</Badge>} <BillingBadge state={site.billing_state} /></div>
           <div className="care-step"><span>Automated check</span><Badge tone={cycle.scan_state === 'done' ? 'ok' : cycle.scan_state === 'failed' ? 'bad' : cycle.scan_state === 'partial' ? 'warn' : 'info'}>{cycle.scan_state.replace(/_/g, ' ')}</Badge></div>
@@ -81,8 +85,14 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
         </div>
       </div>
 
-      {cycle.hold_reason === 'enrollment' && (
-        <div className="care-sub" style={{ marginBottom: 16 }}><b>Waiting for setup confirmation.</b> This period is paid, but no check runs until you confirm the website setup. <button className="care-btn small" onClick={() => go({ site: site.id })}>Confirm setup</button></div>
+      {cycle.hold_reason && (
+        <div className="care-err" role="alert" style={{ marginBottom: 16 }}>
+          <b>Paid review on hold. </b>
+          {cycle.hold_reason === 'paused' ? 'Care for this website is paused. Resume it to queue the check.'
+            : cycle.hold_reason === 'ended' ? 'Care for this website has ended, but this period was paid. Decide how to handle it; nothing was refunded.'
+            : 'The agreed setup isn’t confirmed (it was never confirmed, or it changed). Confirm it and the check is queued straight away.'}
+          {' '}The paid review is kept and nothing was scanned. <button className="care-btn small" onClick={() => go({ site: site.id })}>Open website</button>
+        </div>
       )}
 
       <ScanSummary data={data} reload={reload} />
@@ -92,7 +102,7 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
           <Section id="sec-issues" title="Issues found" open counts={<><Badge tone={issueGroups.length + data.manualIssues.length ? 'bad' : 'ok'}>{issueGroups.length + data.manualIssues.length} {issueGroups.length + data.manualIssues.length === 1 ? 'issue' : 'issues'}</Badge><span className="care-muted">grouped from {sc.failed || 0} failed automated results{data.manualIssues.length ? ` and ${data.manualIssues.length} hand check` : ''}</span></>}>
             {issueGroups.length === 0 && data.manualIssues.length === 0 ? <Empty>No failed results in the latest check.</Empty> : (
               <div className="care-grid">
-                {issueGroups.map((g) => <GroupCard key={g.key} g={g} cycleId={cycle.id} tz={tz} reload={reload} />)}
+                {issueGroups.map((g) => <GroupCard key={g.key} g={{ ...g, recheckedOn: recheck }} cycleId={cycle.id} tz={tz} reload={reload} />)}
                 {data.manualIssues.map((m: Row) => <GroupCard key={m.key} g={{ key: m.key, title: m.title, severity: 'issue', what: 'Failed when checked by hand.', why: '', pages: [], devices: [], count: 1, note: m.note, items: [] }} cycleId={cycle.id} tz={tz} reload={reload} />)}
               </div>
             )}
@@ -100,7 +110,7 @@ export default function CycleView({ id, go }: { id: string; go: Go }) {
           {data.cleared.length > 0 && (
             <Section id="sec-cleared" title="Cleared on recheck" open counts={<Badge tone="ok">{data.cleared.length}</Badge>}>
               <p className="care-muted" style={{ marginBottom: 8 }}>An earlier check this month found these, and the latest check no longer does. Mark one Fixed if you fixed it, and the report shows “Fixed and verified”. Otherwise it simply counts as passing.</p>
-              <div className="care-grid">{data.cleared.map((g: Row) => <GroupCard key={g.key} g={g} cycleId={cycle.id} tz={tz} reload={reload} />)}</div>
+              <div className="care-grid">{data.cleared.map((g: Row) => <GroupCard key={g.key} g={{ ...g, recheckedOn: recheck }} cycleId={cycle.id} tz={tz} reload={reload} />)}</div>
             </Section>
           )}
           <Section id="sec-unverified" title="Not verified" counts={<><Badge tone={unverifiedGroups.length ? 'warn' : 'ok'}>{unverifiedGroups.length} {unverifiedGroups.length === 1 ? 'group' : 'groups'}</Badge><span className="care-muted">{sc.needs_review || 0} needs review, {sc.could_not_check || 0} could not check</span></>}>
@@ -183,8 +193,14 @@ function ScanSummary({ data, reload }: { data: Row; reload: () => void }) {
           <p className="care-muted">{latest ? `Last finished ${fmt(latest.finished_at, tz)} (${latest.status === 'partial' ? 'partly finished' : 'finished'})` : 'No completed check yet.'}</p>
         </div>
         {current ? <Action label={current.status === 'queued' ? 'Cancel queued check' : 'Stop check'} run={() => careApi(`cycles/${cycle.id}/cancel-scan`, { method: 'POST', json: {} })} done={reload} />
-          : site.enrollment_status === 'confirmed' && <Action label={runs.length ? 'Run the check again' : 'Run check now'} run={() => careApi(`cycles/${cycle.id}/rerun`, { method: 'POST', json: {} })} done={reload} />}
+          : site.enrollment_status === 'confirmed' && !cycle.hold_reason && <Action label={runs.length ? 'Run the check again' : 'Run check now'} run={() => careApi(`cycles/${cycle.id}/rerun`, { method: 'POST', json: {} })} done={reload} />}
       </div>
+      {current && current.status === 'queued' && ['failed', 'blocked'].includes(current.dispatch_status) && (
+        <div className="care-err" role="alert" style={{ margin: '10px 0' }}>
+          <b>{current.dispatch_status === 'blocked' ? 'The runner couldn’t be started.' : 'Starting the runner failed; retrying automatically.'}</b> {current.dispatch_error} (attempt {current.dispatch_attempts}). The paid review and its queued check are kept.
+          <div style={{ marginTop: 6 }}><Action small label="Retry start" run={() => careApi(`cycles/${cycle.id}/dispatch`, { method: 'POST', json: {} })} done={reload} /></div>
+        </div>
+      )}
       {current && (
         <div className="care-sub" role="status" aria-live="polite" style={{ margin: '10px 0' }}>
           <b>{current.status === 'queued' ? 'Queued' : 'Running'}</b> (attempt {current.attempts || 1} of {current.max_attempts}) {current.progress?.total ? `· ${current.progress.done} of ${current.progress.total} · ${current.progress.step}` : current.status === 'queued' ? `· waiting for the runner (from ${fmt(current.available_at, tz)})` : ''}
@@ -217,6 +233,10 @@ function ScanSummary({ data, reload }: { data: Row; reload: () => void }) {
 function GroupCard({ g, cycleId, tz, reload }: { g: Row; cycleId: string; tz: string; reload: () => void }) {
   const n = g.note || {}
   const [s, setS] = useState({ resolution: n.resolution || '', client_note: n.client_note || '', verification_note: n.verification_note || '', internal_note: n.internal_note || '' })
+  const [checked, setChecked] = useState(false)
+  // Suggestions follow the decision you chose and the latest check; they never choose for you.
+  const sugNote = issueClientNote(g as never, s.resolution)
+  const sugVerify = verificationNote(g as never, s.resolution, { clearedOnRecheck: g.severity === 'cleared', recheckedOn: g.recheckedOn || null })
   const dirty = s.resolution !== (n.resolution || '') || s.client_note !== (n.client_note || '') || s.verification_note !== (n.verification_note || '') || s.internal_note !== (n.internal_note || '')
   const red = g.severity === 'issue'
   const cleared = g.severity === 'cleared'
@@ -236,16 +256,18 @@ function GroupCard({ g, cycleId, tz, reload }: { g: Row; cycleId: string; tz: st
         </Field>
         <Field label={s.resolution === 'client_input' ? 'What you need from the client' : s.resolution === 'approval' ? 'The work needing approval' : 'Note for the client (optional)'} id={`gc-${g.key}`}>
           <input id={`gc-${g.key}`} value={s.client_note} onChange={(e) => setS({ ...s, client_note: e.target.value })} />
+          <SuggestHint id={`gcs-${g.key}`} s={sugNote} value={s.client_note} onUse={(t) => setS({ ...s, client_note: t })} />
         </Field>
       </div>
       {s.resolution === 'fixed' && !cleared && (
         <Field label="How you verified the fix" id={`gv-${g.key}`} hint="Required unless a rerun shows it’s gone. Shown to the client as “Verified: …”.">
-          <input id={`gv-${g.key}`} value={s.verification_note} onChange={(e) => setS({ ...s, verification_note: e.target.value })} placeholder="Rechecked on desktop and phone after the change" />
+          <input id={`gv-${g.key}`} value={s.verification_note} onChange={(e) => { setS({ ...s, verification_note: e.target.value }); setChecked(false) }} placeholder="Rechecked on desktop and phone after the change" />
+          <SuggestHint id={`gvs-${g.key}`} s={sugVerify} value={s.verification_note} confirmed={checked} onConfirm={setChecked} onUse={(t) => setS({ ...s, verification_note: t })} />
         </Field>
       )}
       <div className="care-row" style={{ marginTop: 6, alignItems: 'flex-end' }}>
         <div style={{ flex: 1, minWidth: 200 }}><Field label={s.resolution === 'not_an_issue' ? 'Private reason (required)' : 'Private note'} id={`gi-${g.key}`}><input id={`gi-${g.key}`} value={s.internal_note} onChange={(e) => setS({ ...s, internal_note: e.target.value })} placeholder="Only you see this" /></Field></div>
-        <Action small tone={dirty ? 'primary' : undefined} disabled={!dirty} label="Save" run={() => careApi(`cycles/${cycleId}/issue`, { method: 'PUT', json: { group_key: g.key, ...s } })} done={reload} />
+        <Action small tone={dirty ? 'primary' : undefined} disabled={!dirty} label="Save" run={() => careApi(`cycles/${cycleId}/issue`, { method: 'PUT', json: { group_key: g.key, ...s, confirm_checked: checked } })} done={reload} />
       </div>
       {g.items?.length > 0 && (
         <details style={{ marginTop: 8 }}>
@@ -311,24 +333,33 @@ function Shots({ findings }: { findings: Row[] }) {
 
 function RunTable({ data }: { data: Row }) {
   const { runs, timezone: tz } = data
+  const [open, setOpen] = useState<string | null>(null)
   if (!runs.length) return <Empty>No checks have run for this period yet.</Empty>
   return (
+    <>
     <div className="care-scroll" tabIndex={0}><table className="care-table">
-      <thead><tr><th>Started</th><th>Why</th><th>Result</th><th>Results by status</th></tr></thead>
+      <thead><tr><th>Started</th><th>Why</th><th>Result</th><th>Runner start</th><th>Results by status</th><th></th></tr></thead>
       <tbody>{runs.map((r: Row) => (
         <tr key={r.id}>
           <td>{fmt(r.started_at || r.created_at, tz)}</td>
-          <td>{r.trigger === 'rerun' ? 'Rerun' : 'Scheduled'}</td>
+          <td>{r.trigger === 'rerun' ? 'Rerun' : 'Paid period check'}</td>
           <td><Badge tone={r.status === 'succeeded' ? 'ok' : r.status === 'failed' ? 'bad' : r.status === 'partial' || r.status === 'canceled' ? 'warn' : 'info'}>{r.status}</Badge></td>
+          <td className="care-muted">{({ pending: 'Pending', dispatched: 'Started', failed: 'Failed, retrying', blocked: 'Blocked', not_needed: 'Picked up' } as Record<string, string>)[r.dispatch_status] || r.dispatch_status}{r.dispatch_attempts ? ` (${r.dispatch_attempts})` : ''}</td>
           <td className="care-muted">{r.summary?.counts ? ['passed', 'failed', 'needs_review', 'could_not_check', 'not_applicable'].filter((k) => r.summary.counts[k]).map((k) => `${r.summary.counts[k]} ${STATUS_TEXT[k].toLowerCase()}`).join(', ') : ''}{r.error ? ` ${r.error}` : ''}</td>
+          <td>{['succeeded', 'partial', 'failed', 'canceled'].includes(r.status) && <button type="button" className="care-btn small" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Hide results' : 'View results'}</button>}</td>
         </tr>
       ))}</tbody>
     </table></div>
+    {open && <RunResults runId={open} tz={tz} />}
+    </>
   )
 }
 
 function ManualItem({ m, cycleId, reload }: { m: Row; cycleId: string; reload: () => void }) {
   const [s, setS] = useState({ status: m.status || '', note: m.note || '', reason: m.reason || '', internal_note: m.internal_note || '' })
+  const [checked, setChecked] = useState(false)
+  // Only after you choose a result: the note or reason that matches it. Hand check claims need your confirmation.
+  const sug = manualSuggestion({ label: m.label, status: s.status })
   const needsReason = s.status === 'not_checked' || s.status === 'could_not_check'
   const dirty = s.status !== (m.status || '') || s.note !== (m.note || '') || s.reason !== (m.reason || '') || s.internal_note !== (m.internal_note || '')
   return (
@@ -342,12 +373,20 @@ function ManualItem({ m, cycleId, reload }: { m: Row; cycleId: string; reload: (
             {['passed', 'failed', 'needs_review', 'could_not_check', 'not_applicable', 'not_checked'].map((k) => <option key={k} value={k}>{STATUS_TEXT[k]}</option>)}
           </select>
         </Field>
-        <Field label="What you found (client sees this)" id={`mn-${m.id}`}><input id={`mn-${m.id}`} value={s.note} onChange={(e) => setS({ ...s, note: e.target.value })} /></Field>
+        <Field label="What you found (client sees this)" id={`mn-${m.id}`}>
+          <input id={`mn-${m.id}`} value={s.note} onChange={(e) => { setS({ ...s, note: e.target.value }); setChecked(false) }} />
+          <SuggestHint id={`mns-${m.id}`} s={sug.note} value={s.note} confirmed={checked} onConfirm={setChecked} onUse={(t) => setS({ ...s, note: t })} />
+        </Field>
       </div>
-      {needsReason && <Field label="Reason it wasn’t checked (required)" id={`mr-${m.id}`}><input id={`mr-${m.id}`} value={s.reason} onChange={(e) => setS({ ...s, reason: e.target.value })} /></Field>}
+      {needsReason && (
+        <Field label="Reason it wasn’t checked (required)" id={`mr-${m.id}`}>
+          <input id={`mr-${m.id}`} value={s.reason} onChange={(e) => setS({ ...s, reason: e.target.value })} />
+          <SuggestHint id={`mrs-${m.id}`} s={sug.reason} value={s.reason} onUse={(t) => setS({ ...s, reason: t })} />
+        </Field>
+      )}
       <div className="care-row" style={{ marginTop: 6, alignItems: 'flex-end' }}>
         <div style={{ flex: 1, minWidth: 200 }}><Field label="Private note" id={`mi-${m.id}`}><input id={`mi-${m.id}`} value={s.internal_note} onChange={(e) => setS({ ...s, internal_note: e.target.value })} /></Field></div>
-        <Action small tone={dirty ? 'primary' : undefined} disabled={!dirty} label="Save" run={() => careApi(`cycles/${cycleId}/manual/${m.item_id}`, { method: 'PUT', json: s })} done={reload} />
+        <Action small tone={dirty ? 'primary' : undefined} disabled={!dirty} label="Save" run={() => careApi(`cycles/${cycleId}/manual/${m.item_id}`, { method: 'PUT', json: { ...s, confirm_checked: checked } })} done={reload} />
       </div>
     </div>
   )

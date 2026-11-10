@@ -7,14 +7,20 @@
 import 'server-only'
 import { TERMS_VERSION } from '@/lib/terms'
 import { seedSubscription } from './stripe-sim'
+import { deflateSync, crc32 } from 'node:zlib'
+import { createHash } from 'node:crypto'
+import { setupHash } from '@/lib/care/sites'
+import { buildSnapshot, snapshotHash } from '@/lib/care/agreement'
+import { agreementPdf } from '@/lib/care/agreement-pdf'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 export const DEMO_IDS = {
   clients: { physio: id(101), bakery: id(102), dental: id(103), studio: id(104), garden: id(105), tutor: id(106) },
   sites: { physio: id(201), bakery: id(202), dental: id(203) },
-  cycles: { physio: id(301), bakery: id(302), dental: id(303) },
+  cycles: { physio: id(301), bakery: id(302), dental: id(303), physioPrev: id(304) },
   estimates: { physioTeam: id(401) },
+  agreements: { dental: id(601) },
   leads: { booked: id(501), pending: id(502), inquiry: id(503) },
   bookings: { booked: id(511) },
   documents: { pendingProposal: id(933), acceptedProposal: id(934), legacyProposal: id(932), signedContract: id(943), unsignedContract: id(944), legacyContract: id(941), scheduleInvoice: id(805), unsignedInvoice: id(806) },
@@ -135,6 +141,69 @@ export const DEMO_FILES: Record<string, { type: string; data: () => Buffer }> = 
   'freelance-docs/clients/demo/garden-brief.pdf': { type: 'application/pdf', data: () => samplePdf('Rivera Garden Design brief') },
 }
 
+/**
+ * Lakeside Dental's signed care agreement: a fixed private link, the signed
+ * version, its link record, and the stored signed PDF (built by the real PDF
+ * code from the stored snapshot), so it can be opened straight away.
+ */
+export const DEMO_AGREEMENT_TOKEN = 'demoLakesideDentalSignedLink0001'
+
+/** A drawn looking signature as a PNG data URL (fictional). */
+function signaturePng() {
+  const w = 240, h = 70
+  const px = Buffer.alloc((w * 4 + 1) * h, 0)
+  for (let y = 0; y < h; y++) px[y * (w * 4 + 1)] = 0
+  const dot = (x: number, y: number) => {
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const X = Math.round(x) + dx, Y = Math.round(y) + dy
+      if (X < 0 || Y < 0 || X >= w || Y >= h) continue
+      const o = Y * (w * 4 + 1) + 1 + X * 4
+      px[o] = 22; px[o + 1] = 34; px[o + 2] = 64; px[o + 3] = 255
+    }
+  }
+  for (let t = 0; t <= 1; t += 0.0008) {
+    const x = 12 + t * 210
+    const y = 38 - 18 * Math.sin(t * 19) * Math.exp(-t * 1.4) + 6 * Math.sin(t * 61)
+    dot(x, y)
+  }
+  for (let t = 0; t <= 1; t += 0.002) dot(30 + t * 180, 58 - t * 4)
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length)
+    const td = Buffer.concat([Buffer.from(type), data])
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td) >>> 0)
+    return Buffer.concat([len, td, crc])
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(px)), chunk('IEND', Buffer.alloc(0))])
+  return 'data:image/png;base64,' + png.toString('base64')
+}
+
+let seededFiles: Record<string, { type: string; data: () => Buffer }> = {}
+/** Files built with the latest careRows() call (the signed agreement PDF). */
+export const careFiles = () => seededFiles
+
+function dentalAgreement(site: Record<string, unknown>) {
+  const S = DEMO_IDS.sites
+  const A = DEMO_IDS.agreements.dental
+  const client = { id: DEMO_IDS.clients.dental, name: 'Avery Kim', email: 'office@example.com', business: 'Lakeside Dental' }
+  const snapshot = buildSnapshot(site, client)
+  snapshot.issued_on = new Date(at(-57)).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })
+  const hash = snapshotHash(snapshot)
+  const signedAt = at(-56, 16)
+  const sig = signaturePng()
+  const pdf = agreementPdf(snapshot, { signer_name: 'Avery Kim', signer_email: 'office@example.com', signed_at: signedAt, signer_ip: '198.51.100.24', signature_image: sig, agreement_id: A, snapshot_hash: hash })
+  const path = `${S.dental}/${A}.pdf`
+  seededFiles = { [`care-agreements/${path}`]: { type: 'application/pdf', data: () => pdf } }
+  return {
+    care_agreements: [{
+      id: A, site_id: S.dental, client_id: client.id, terms_version: snapshot.version, snapshot, snapshot_hash: hash, setup_hash: site.confirmed_hash, amount_cents: snapshot.price.amount_cents,
+      status: 'signed', issued_at: at(-57), issued_by: 'admin', first_viewed_at: at(-57, 18), signer_name: 'Avery Kim', signer_email: 'office@example.com', signature_image: sig, signer_ip: '198.51.100.24',
+      signed_at: signedAt, signed_pdf_path: path, signed_pdf_sha256: createHash('sha256').update(pdf).digest('hex'), signed_email_status: 'sent', signed_emailed_at: at(-56, 16), created_at: at(-57),
+    }],
+    care_agreement_links: [{ site_id: S.dental, token: DEMO_AGREEMENT_TOKEN, status: 'active', created_at: at(-57), created_by: 'admin', sent_at: at(-57), sent_to: 'office@example.com' }],
+  }
+}
+
 const physioPages = [{ label: 'Home', url: 'https://physio.example.com/' }, { label: 'Team', url: 'https://physio.example.com/team' }, { label: 'Book', url: 'https://physio.example.com/book' }]
 const physioDest = [{ label: 'Online booking', url: 'https://booking.example.com/northside', kind: 'booking' }]
 const dentalPages = [{ label: 'Home', url: 'https://dental.example.com/' }, { label: 'Insurance', url: 'https://dental.example.com/insurance' }]
@@ -150,35 +219,50 @@ export function careRows(): Rows {
   ]
   // Northside Physio and Harbor Street Bakery are billed by hand (paid periods added under
   // "Billed outside Stripe?"); Lakeside Dental pays through a (simulated) Stripe subscription.
-  const site = (o: Record<string, unknown>) => ({ enrollment_status: 'confirmed', manual_checklist: checklist, confirmed_at: at(-90), authorization_note: 'Signed care agreement (demo)', billing_state: 'not_started', ...o })
+  // Confirmed sites carry the fingerprint of the setup that was confirmed, as confirmSite records it.
+  const site = (o: Record<string, unknown>) => {
+    const row: Record<string, unknown> = { enrollment_status: 'confirmed', manual_checklist: checklist, confirmed_at: at(-90), authorization_note: 'Signed care agreement (demo)', billing_state: 'not_started', scan_limits: {}, ...o }
+    return { ...row, confirmed_hash: setupHash(row as unknown as Parameters<typeof setupHash>[0]) }
+  }
+  const dental = site({ id: S.dental, client_id: C.dental, label: 'Lakeside Dental', site_url: 'https://dental.example.com/', approved_domains: ['dental.example.com'], plan: 'premium', agreed_monthly_price: 249, pages: dentalPages, destinations: [], recipient_name: 'Avery Kim', recipient_email: 'office@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed care agreement care-agreement-2026-11 (Avery Kim, demo)', care_terms_reviewed_at: at(-56), next_review_due: at(8), created_at: at(-58),
+    stripe_customer_id: 'cus_demo_000203', stripe_subscription_id: 'sub_demo_000203', subscription_status: 'active', billing_state: 'active', stripe_synced_at: at(-1),
+    current_period_start: startOfDay(-1), current_period_end: startOfDay(29), paid_through: startOfDay(29),
+    agreement_id: DEMO_IDS.agreements.dental, agreement_token: DEMO_AGREEMENT_TOKEN, agreement_sent_at: at(-57), agreement_sent_to: 'office@example.com' })
   return {
+    ...dentalAgreement(dental),
     care_sites: [
       site({ id: S.physio, client_id: C.physio, label: 'Northside Physio', site_url: 'https://physio.example.com/', approved_domains: ['physio.example.com'], plan: 'business', agreed_monthly_price: 129, pages: physioPages, destinations: physioDest, recipient_name: 'Sam Patel', recipient_email: 'frontdesk@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed the current care agreement (demo)', care_terms_reviewed_at: at(-30), next_review_due: at(3), created_at: at(-100) }),
       site({ id: S.bakery, client_id: C.bakery, label: 'Harbor Street Bakery', site_url: 'https://bakery.example.com/', approved_domains: ['bakery.example.com'], plan: 'premium', agreed_monthly_price: 239, pages: [{ label: 'Home', url: 'https://bakery.example.com/' }, { label: 'Menu', url: 'https://bakery.example.com/menu' }], destinations: [{ label: 'Order online', url: 'https://orders.example.com/harbor', kind: 'checkout' }], recipient_name: 'Jordan Reyes', recipient_email: 'owner@example.com', care_terms_version: 'care-2026-06', care_terms_note: 'Original care agreement (demo)', next_review_due: at(-1), created_at: at(-190) }),
-      site({ id: S.dental, client_id: C.dental, label: 'Lakeside Dental', site_url: 'https://dental.example.com/', approved_domains: ['dental.example.com'], plan: 'premium', agreed_monthly_price: 249, pages: dentalPages, destinations: [], recipient_name: 'Avery Kim', recipient_email: 'office@example.com', care_terms_version: 'care-flex-2026-11', care_terms_note: 'Signed at launch (demo)', care_terms_reviewed_at: at(-55), next_review_due: at(8), created_at: at(-58),
-        stripe_customer_id: 'cus_demo_000203', stripe_subscription_id: 'sub_demo_000203', subscription_status: 'active', billing_state: 'active', stripe_synced_at: at(-1),
-        current_period_start: startOfDay(-1), current_period_end: startOfDay(29), paid_through: startOfDay(29) }),
+      dental,
     ],
     // The simulated Stripe's side of Lakeside Dental's subscription, so the practice scenarios can renew, fail, or cancel it.
     demo_stripe: seedSubscription({ siteId: S.dental, clientId: C.dental, plan: 'premium', customer: 'cus_demo_000203', sub: 'sub_demo_000203', invoice: 'in_demo_000203_first', start: Math.floor(Date.parse(startOfDay(-1)) / 1000), end: Math.floor(Date.parse(startOfDay(29)) / 1000) }),
     care_cycles: [
+      // The previous month for Northside Physio: checked, reviewed, work recorded and the report sent (completed in seedWork with the real functions).
+      { id: Y.physioPrev, site_id: S.physio, source: 'manual', period_start: startOfDay(-34), period_end: startOfDay(-4), plan: 'business', review_due_at: at(-27), included_minutes: 30, agreed_price: 129, paid_at: at(-34), scan_state: 'queued' },
       { id: Y.physio, site_id: S.physio, source: 'manual', period_start: startOfDay(-4), period_end: startOfDay(26), plan: 'business', review_due_at: at(3), included_minutes: 30, agreed_price: 129, paid_at: at(-4), scan_state: 'queued' },
       { id: Y.bakery, site_id: S.bakery, source: 'manual', period_start: startOfDay(-10), period_end: startOfDay(20), plan: 'premium', review_due_at: at(-1), included_minutes: 90, agreed_price: 239, paid_at: at(-10), scan_state: 'queued' },
       { id: Y.dental, site_id: S.dental, source: 'stripe', stripe_invoice_id: 'in_demo_000203_first', stripe_subscription_id: 'sub_demo_000203', amount_paid: 24900, currency: 'usd', period_start: startOfDay(-1), period_end: startOfDay(29), plan: 'premium', review_due_at: at(8), included_minutes: 90, agreed_price: 249, paid_at: at(-1), scan_state: 'not_started' },
     ],
     care_scan_runs: [
+      { id: id(320), cycle_id: Y.physioPrev, site_id: S.physio, trigger: 'scheduled', status: 'queued', config: { pages: physioPages, destinations: physioDest }, available_at: at(-33) },
       { id: id(321), cycle_id: Y.physio, site_id: S.physio, trigger: 'scheduled', status: 'queued', config: { pages: physioPages, destinations: physioDest }, available_at: at(-1) },
       { id: id(322), cycle_id: Y.bakery, site_id: S.bakery, trigger: 'scheduled', status: 'queued', config: { pages: [{ label: 'Home', url: 'https://bakery.example.com/' }, { label: 'Menu', url: 'https://bakery.example.com/menu' }], destinations: [{ label: 'Order online', url: 'https://orders.example.com/harbor', kind: 'checkout' }] }, available_at: at(-1) },
     ],
     care_reports: [
+      { cycle_id: Y.physioPrev, content: { summary: 'Your site is in good shape. I fixed the team page on phones and checked it after the change.', investigated: 'Home, Team and Book on desktop and phone, and the booking page.' } },
       { cycle_id: Y.physio, content: { summary: 'One issue needs your approval: the team page doesn’t fit phone screens.' } },
       { cycle_id: Y.bakery, content: {} },
       { cycle_id: Y.dental, content: {} },
     ],
     care_manual_results: [
+      { cycle_id: Y.physioPrev, item_id: 'visual', label: 'Desktop appearance looks right', category: 'Visual', status: 'passed', note: 'Looked right on a laptop.', confirmed_at: at(-31) },
+      { cycle_id: Y.physioPrev, item_id: 'phone', label: 'Phone layout looks right', category: 'Visual', status: 'passed', note: 'Looked right on my phone after the fix.', confirmed_at: at(-31) },
+      { cycle_id: Y.physioPrev, item_id: 'form', label: 'Contact form sends a test message', category: 'Forms', status: 'passed', note: 'Sent a test message; it arrived.', confirmed_at: at(-31) },
       { cycle_id: Y.physio, item_id: 'visual', label: 'Desktop appearance looks right', category: 'Visual', status: 'passed', note: 'Checked on a laptop.', confirmed_at: at(-1) },
     ],
     care_issue_notes: [
+      { cycle_id: Y.physioPrev, group_key: 'overflow:overflow', resolution: 'fixed', client_note: 'Fixed the team page so it fits phone screens', verification_note: 'Checked on a phone after the change: the team page fits.' },
       { cycle_id: Y.physio, group_key: 'overflow:overflow', resolution: 'approval', client_note: 'the team section rebuild (estimate below)' },
     ],
     care_estimates: [

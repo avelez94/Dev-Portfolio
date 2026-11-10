@@ -1,11 +1,13 @@
 /**
- * The hourly care tick (Vercel cron). Every step is idempotent, so a missed or
- * repeated run is harmless: it recovers stalled scans, queues scans that were
- * missed during an outage, sends start and overdue reminders within their
- * limits, and retries owner notifications.
+ * The care tick (Vercel cron, every 3 hours). A recovery mechanism only: paid
+ * periods queue and dispatch their scan from the payment webhook. Every step
+ * is idempotent, so a missed or repeated run is harmless: it recovers stalled
+ * scans, queues scans that were missed, retries failed dispatches within
+ * their limits, sends start and overdue reminders, and retries owner
+ * notifications.
  */
 import { db, getSettings, EVIDENCE_BUCKET } from './db'
-import { enqueueScan, dispatchRunner } from './cycles'
+import { enqueueScan, dispatchPending } from './cycles'
 import { queueReminder, queueBillingNotice, retryPendingNotifications } from './notify'
 
 export async function careTick(now = new Date()) {
@@ -34,8 +36,8 @@ export async function careTick(now = new Date()) {
   }
   out.queued = queued
 
-  const ready = (await db.from('care_scan_runs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('available_at', now.toISOString())).count || 0
-  out.dispatch = ready ? await dispatchRunner() : 'none waiting'
+  // Recovery for dispatches that failed, never ran, or were never picked up.
+  out.dispatch = await dispatchPending(now)
 
   // Reminders. Start reminder once per cycle; overdue reminders spaced and capped.
   const open = (await db.from('care_cycles').select('*').is('completed_at', null).is('hold_reason', null).lte('review_start_at', now.toISOString())).data || []

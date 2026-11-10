@@ -8,6 +8,8 @@
 import { createHash } from 'node:crypto'
 import { db, must, CareError, logActivity, getSettings, putObject, REPORTS_BUCKET, type Row } from './db'
 import { plan as planInfo, type PlanId } from './plans'
+import { groupFindings } from './report-model'
+import { verificationNote, manualSuggestion, needsConfirmation } from './field-suggest'
 import { buildReport, modelProblems, type Snapshot, type ModelInput, type FindingIn, type ManualIn, type IssueNoteIn, type WorkEntryIn, type EstimateIn } from './report-model'
 import { formatDateOnly } from './schedule'
 import { DRAFT_FIELDS, draftReportText, draftSource, type DraftField } from './report-draft'
@@ -130,9 +132,37 @@ export async function readinessProblems(b: Bundle): Promise<string[]> {
 export const RESOLUTIONS = ['fixed', 'client_input', 'approval', 'investigating', 'not_an_issue'] as const
 
 /** Your decision on a grouped issue. Client visible changes clear an approval. */
+/**
+ * The issue group a decision belongs to, with whether a later automated check
+ * cleared it. Used to check suggested verification text before it's saved.
+ */
+async function issueContext(cycleId: string, groupKey: string) {
+  const b = await loadBundle(cycleId)
+  const cfg = b.latest?.config || { pages: b.site.pages || [], destinations: b.site.destinations || [] }
+  const latest = groupFindings(b.findings.map((f: Row) => ({ ...f, client_visible: true })) as FindingIn[], cfg.pages || [], cfg.destinations || [])
+  const earlier = groupFindings(b.earlierFindings.map((f: Row) => ({ ...f, client_visible: true })) as FindingIn[], cfg.pages || [], cfg.destinations || [])
+  let g: { title: string; pages?: string[]; devices?: string[] } | undefined = latest.find((x) => x.key === groupKey)
+  const cleared = !g && earlier.some((x) => x.key === groupKey)
+  if (!g) g = earlier.find((x) => x.key === groupKey)
+  if (!g && groupKey.startsWith('manual:')) {
+    const m = b.manual.find((x: Row) => `manual:${x.item_id}` === groupKey)
+    if (m) g = { title: m.label, pages: [], devices: [] }
+  }
+  const settings = await getSettings()
+  return { g, cleared, recheckedOn: b.latest?.finished_at ? formatDateOnly(b.latest.finished_at, settings.timezone) : null }
+}
+
 export async function updateIssueNote(cycleId: string, groupKey: string, body: Record<string, unknown>, actor: string) {
   if (!/^[a-z_]+:[\w-]{1,60}$/.test(groupKey)) throw new CareError('Unknown issue.', 400)
   const cur = (await db.from('care_issue_notes').select('*').eq('cycle_id', cycleId).eq('group_key', groupKey).maybeSingle()).data
+  // A suggested hand check verification is saved only once you confirm you checked it yourself.
+  if (typeof body.verification_note === 'string' && body.verification_note.trim() && body.verification_note.trim() !== String(cur?.verification_note || '').trim() && body.confirm_checked !== true) {
+    const ctx = await issueContext(cycleId, groupKey)
+    const res = 'resolution' in body ? (body.resolution as string | null) : cur?.resolution
+    if (ctx.g && needsConfirmation(body.verification_note, [verificationNote(ctx.g, res, { clearedOnRecheck: ctx.cleared, recheckedOn: ctx.recheckedOn })])) {
+      throw new CareError('That verification says you checked the fix by hand. Tick “I checked this myself” to save it, or write what you actually did.', 422)
+    }
+  }
   const next: Record<string, unknown> = { cycle_id: cycleId, group_key: groupKey, updated_at: new Date().toISOString() }
   let changedClient = false
   if ('resolution' in body) {
@@ -204,6 +234,13 @@ export async function updatePlanTime(cycleId: string, body: Record<string, unkno
 
 export async function updateManual(cycleId: string, itemId: string, body: Record<string, unknown>, actor: string) {
   const m = must(await db.from('care_manual_results').select('*').eq('cycle_id', cycleId).eq('item_id', itemId).single(), 'Checklist item')
+  // A suggested note that says you checked this by hand is saved only once you confirm you did.
+  if (typeof body.note === 'string' && body.note.trim() && body.note.trim() !== String(m.note || '').trim() && body.confirm_checked !== true) {
+    const status = 'status' in body ? (body.status as string | null) : m.status
+    if (needsConfirmation(body.note, [manualSuggestion({ label: m.label, status }).note])) {
+      throw new CareError('That note says you checked this by hand. Tick “I checked this myself” to save it, or write what you actually did.', 422)
+    }
+  }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   let changedClient = false
   if ('status' in body) {
