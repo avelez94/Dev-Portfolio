@@ -215,11 +215,59 @@ test("notifications, audit log and sign out", async ({ page }) => {
   await expect(page).toHaveURL(/\/admin\/login$/);
 });
 
+test("documents: files upload privately, open through an audited link, W9 is owner or admin only", async ({ page, browser }) => {
+  const [c] = await sql<{ id: string }>(`insert into public.carrier_leads (company_name, source) values ('Patapsco Haulers', 'manual') returning id`);
+  await signIn(page);
+  await page.goto(`/admin/carriers/${c.id}`);
+  const pdf = Buffer.from("%PDF-1.4\n% test certificate of insurance\n%%EOF\n");
+  // Wrong file types are refused before anything is uploaded.
+  await page.locator("#d-type").selectOption("insurance_certificate");
+  await page.locator("#d-file").setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hello") });
+  await page.getByRole("button", { name: "Save document" }).click();
+  await expect(page.getByText("Upload a PDF or a photo (JPG, PNG, WEBP or HEIC).")).toBeVisible();
+  // A PDF uploads, is recorded with its real size, and downloads through the app.
+  await page.locator("#d-ref").fill("Policy 55-1209");
+  await page.locator("#d-file").setInputFiles({ name: "coi 2027.pdf", mimeType: "application/pdf", buffer: pdf });
+  await page.getByRole("button", { name: "Save document" }).click();
+  await expect(page.getByText("Document uploaded.")).toBeVisible();
+  const [doc] = await sql<{ id: string; storage_path: string; file_size: number; file_name: string }>(`select id, storage_path, file_size, file_name from public.documents where entity_id = $1 and doc_type = 'insurance_certificate'`, [c.id]);
+  expect(doc.storage_path).toMatch(new RegExp(`^carrier_lead/${c.id}/[0-9a-f-]{36}\\.pdf$`));
+  expect(doc.file_size).toBe(pdf.length);
+  expect(doc.file_name).toBe("coi 2027.pdf");
+  await expect(page.getByRole("link", { name: /Download Insurance certificate, coi 2027\.pdf/ })).toBeVisible();
+  const res = await page.request.get(`/admin/documents/${doc.id}`);
+  expect(res.status()).toBe(200);
+  expect(Buffer.from(await res.body()).equals(pdf)).toBe(true);
+  const [opened] = await sql<{ n: number }>(`select count(*)::int n from public.audit_events where action = 'document.opened' and metadata->>'document_id' = $1`, [doc.id]);
+  expect(opened.n).toBe(1);
+  // Signed out requests get nothing.
+  const anon = await browser.newContext({ baseURL: PRELAUNCH });
+  const out = await anon.request.get(`/admin/documents/${doc.id}`, { maxRedirects: 0 });
+  expect(out.status()).toBe(307);
+  expect(out.headers().location).toContain("/admin/login");
+  await anon.close();
+  // W9 files: uploaded by the owner, hidden from staff, refused on direct request.
+  await page.locator("#d-type").selectOption("w9");
+  await page.locator("#d-file").setInputFiles({ name: "w9.pdf", mimeType: "application/pdf", buffer: pdf });
+  await page.getByRole("button", { name: "Save document" }).click();
+  await expect(page.getByText("Document uploaded.")).toBeVisible();
+  const [w9] = await sql<{ id: string }>(`select id from public.documents where entity_id = $1 and doc_type = 'w9'`, [c.id]);
+  const staff = await browser.newContext({ baseURL: PRELAUNCH });
+  const sp = await staff.newPage();
+  await signIn(sp, STAFF);
+  await sp.goto(`/admin/carriers/${c.id}`);
+  await expect(sp.getByText("Owner or admin only")).toBeVisible();
+  expect((await sp.request.get(`/admin/documents/${w9.id}`, { maxRedirects: 0 })).status()).toBe(403);
+  expect((await sp.request.get(`/admin/documents/${doc.id}`)).status()).toBe(200);
+  await staff.close();
+});
+
 test("axe: main dashboard screens have no WCAG A/AA violations", async ({ page }) => {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
   await signIn(page);
   const [sh] = await sql<{ id: string }>("select id from public.shipper_prospects limit 1");
-  for (const path of ["/admin", "/admin/tasks", "/admin/shippers", `/admin/shippers/${sh.id}`, "/admin/insights?tab=sales", "/admin/reports", "/admin/settings"]) {
+  const [ca] = await sql<{ id: string }>("select id from public.carrier_leads order by created_at limit 1");
+  for (const path of ["/admin", "/admin/tasks", "/admin/shippers", `/admin/shippers/${sh.id}`, `/admin/carriers/${ca.id}`, "/admin/insights?tab=sales", "/admin/reports", "/admin/settings"]) {
     await page.goto(path);
     await page.waitForTimeout(1200);
     const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CircleAlert, CircleCheck, ExternalLink } from "lucide-react";
 import { isAdminRole, requireStaff } from "@/lib/auth";
-import { fmtDate, fmtDateTime, label, verificationStatuses } from "@/config/admin";
+import { fmtDate, label, verificationStatuses } from "@/config/admin";
 import { equipmentOptions } from "@/lib/validation";
 import { fmtMoney, pct } from "@/lib/money";
 import { businessToday } from "@/lib/metrics/period";
@@ -12,7 +12,8 @@ import { CarrierLeadForm } from "@/components/admin/record-forms";
 import { NotesPanel, TasksPanel } from "@/components/admin/panels";
 import { ActivityForm, Timeline, type TimelineEvent } from "@/components/admin/crm-panels";
 import { ActionForm } from "@/components/admin/action-form";
-import { recordDocument, recordVerification } from "@/app/admin/crm-actions";
+import { recordVerification } from "@/app/admin/crm-actions";
+import { DocumentsPanel } from "@/components/admin/documents-panel";
 
 export const metadata = { title: "Carrier" };
 
@@ -119,18 +120,7 @@ export default async function CarrierPage({ params }: { params: Promise<{ id: st
           </Panel>
           <TasksPanel s={s} entityType="carrier_lead" entityId={id} />
           <NotesPanel s={s} entityType="carrier_lead" entityId={id} />
-          <Panel title="Documents">
-            <ActionForm action={recordDocument} submitLabel="Record document" variant="navy" resetOnSuccess className="mb-4">
-              <input type="hidden" name="entity_type" value="carrier_lead" /><input type="hidden" name="entity_id" value={id} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AdminField label="Type" htmlFor="d-type"><select id="d-type" name="doc_type" className={adminInput}><option value="insurance_certificate">Insurance certificate</option><option value="carrier_agreement">Carrier agreement</option><option value="w9">W9 (received through secure channel)</option><option value="other">Other</option></select></AdminField>
-                <AdminField label="Expires on" htmlFor="d-exp"><input id="d-exp" name="expires_on" type="date" className={adminInput} /></AdminField>
-                <AdminField label="Reference" htmlFor="d-ref" className="sm:col-span-2"><input id="d-ref" name="reference" maxLength={200} placeholder="Where the file is stored securely" className={adminInput} /></AdminField>
-              </div>
-            </ActionForm>
-            {docs.data?.length ? <ul className="space-y-1 text-sm">{docs.data.map((d) => <li key={d.id} className="flex justify-between"><span className="capitalize">{d.doc_type.replace("_", " ")}{d.reference ? ` · ${d.reference}` : ""}</span><span className="text-xs text-slate-muted">{d.expires_on ? `Expires ${fmtDate(d.expires_on)}` : fmtDateTime(d.received_at)}</span></li>)}</ul> : <p className="text-sm text-slate-muted">No documents recorded.</p>}
-            <p className="mt-3 text-xs text-slate-muted">Records metadata only. Bank account details are never stored in this system.</p>
-          </Panel>
+          <DocumentsPanel entityType="carrier_lead" entityId={id} docs={docs.data ?? []} docTypes={["insurance_certificate", "carrier_agreement", "w9", "other"]} showExpiry admin={isAdminRole(s.role)} idPrefix="d" note="Files are private. W9 forms open for owners and admins only, and each download is recorded in the audit log." />
           {(shipments.data?.length ?? 0) > 0 && (
             <Panel title="Assigned shipments">
               <ul className="space-y-1.5 text-sm">{shipments.data!.map((x) => <li key={x.id} className="flex justify-between gap-2"><Link href={`/admin/shipments/${x.id}`} className="font-mono text-xs text-brand-red-dark underline">{x.reference}</Link><span className="text-xs">{x.origin_city} to {x.dest_city}</span><StatusBadge value={x.status} label={x.status.replace("_", " ")} /></li>)}</ul>

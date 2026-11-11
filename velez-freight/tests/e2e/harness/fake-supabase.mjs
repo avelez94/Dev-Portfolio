@@ -1,4 +1,4 @@
-// TEST ONLY. A minimal stand in for the Supabase REST (PostgREST) and Auth APIs, backed by a
+// TEST ONLY. A minimal stand in for the Supabase REST (PostgREST), Auth and Storage APIs, backed by a
 // local Postgres database that has the real migration applied. It implements only the request
 // shapes this app sends, and it executes every query under the caller's Postgres role
 // (anon, authenticated or service_role) with the JWT subject set, so grants and Row Level
@@ -246,6 +246,86 @@ async function handleRest(req, res, url, body) {
 }
 
 // ---------------------------------------------------------------------------
+// Storage (private bucket): signed upload, object info, signed download, remove.
+// Mirrors the bucket rules in the migration: accepted types and a 15 MB limit. Files live in
+// memory for the life of the test run.
+// ---------------------------------------------------------------------------
+const files = new Map(); // "<bucket>/<path>" -> { buf, type }
+const uploadTokens = new Map(); // token -> key
+const downloadTokens = new Map(); // token -> { key, exp }
+const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+const MAX_BYTES = 15 * 1024 * 1024;
+const storageError = (res, status, error, message) => send(res, status, { statusCode: String(status), error, message });
+
+async function handleStorage(req, res, url, raw) {
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-headers", "*");
+  res.setHeader("access-control-allow-methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+  const p = url.pathname.replace("/storage/v1", "");
+  const token = (req.headers.authorization ?? "").replace(/^Bearer /i, "") || req.headers.apikey;
+  const isService = verifyJwt(token)?.role === "service_role";
+  const keyOf = (m) => `${m[1]}/${decodeURIComponent(m[2])}`;
+  let m;
+  if ((m = p.match(/^\/object\/upload\/sign\/([^/]+)\/(.+)$/))) {
+    if (req.method === "POST") {
+      if (!isService) return storageError(res, 403, "Unauthorized", "new row violates row-level security policy");
+      const t = randomUUID();
+      uploadTokens.set(t, keyOf(m));
+      return send(res, 200, { url: `/object/upload/sign/${m[1]}/${m[2]}?token=${t}` });
+    }
+    if (req.method === "PUT") {
+      const key = keyOf(m);
+      const t = url.searchParams.get("token");
+      if (!t || uploadTokens.get(t) !== key) return storageError(res, 400, "InvalidSignature", "The signature is invalid");
+      uploadTokens.delete(t);
+      const fd = await new Response(raw, { headers: { "content-type": String(req.headers["content-type"] ?? "") } }).formData();
+      const file = [...fd.values()].find((v) => typeof v !== "string");
+      if (!file) return storageError(res, 400, "InvalidRequest", "No file");
+      const buf = Buffer.from(await file.arrayBuffer());
+      if (!ALLOWED_TYPES.has(file.type)) return storageError(res, 415, "invalid_mime_type", `mime type ${file.type} is not supported`);
+      if (buf.length > MAX_BYTES) return storageError(res, 413, "Payload too large", "The object exceeded the maximum allowed size");
+      if (files.has(key)) return storageError(res, 409, "Duplicate", "The resource already exists");
+      files.set(key, { buf, type: file.type });
+      return send(res, 200, { Key: key });
+    }
+  }
+  if (req.method === "GET" && (m = p.match(/^\/object\/info\/([^/]+)\/(.+)$/))) {
+    if (!isService) return storageError(res, 403, "Unauthorized", "Unauthorized");
+    const f = files.get(keyOf(m));
+    if (!f) return storageError(res, 404, "not_found", "Object not found");
+    return send(res, 200, { name: decodeURIComponent(m[2]), size: f.buf.length, content_type: f.type, metadata: { size: f.buf.length, mimetype: f.type } });
+  }
+  if ((m = p.match(/^\/object\/sign\/([^/]+)\/(.+)$/))) {
+    const key = keyOf(m);
+    if (req.method === "POST") {
+      if (!isService) return storageError(res, 403, "Unauthorized", "Unauthorized");
+      if (!files.has(key)) return storageError(res, 404, "not_found", "Object not found");
+      const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
+      const t = randomUUID();
+      downloadTokens.set(t, { key, exp: Date.now() + Number(body.expiresIn ?? 60) * 1000 });
+      return send(res, 200, { signedURL: `/object/sign/${m[1]}/${m[2]}?token=${t}` });
+    }
+    if (req.method === "GET") {
+      const d = downloadTokens.get(url.searchParams.get("token") ?? "");
+      if (!d || d.key !== key || d.exp < Date.now()) return storageError(res, 400, "InvalidJWT", "jwt expired or invalid");
+      const f = files.get(key);
+      if (!f) return storageError(res, 404, "not_found", "Object not found");
+      const name = url.searchParams.get("download");
+      res.writeHead(200, { "content-type": f.type, "content-length": f.buf.length, ...(name !== null ? { "content-disposition": `attachment; filename="${name || key.split("/").pop()}"` } : {}) });
+      return res.end(f.buf);
+    }
+  }
+  if (req.method === "DELETE" && (m = p.match(/^\/object\/([^/]+)$/))) {
+    if (!isService) return storageError(res, 403, "Unauthorized", "Unauthorized");
+    const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
+    const removed = (body.prefixes ?? []).filter((x) => files.delete(`${m[1]}/${x}`)).map((name) => ({ name }));
+    return send(res, 200, removed);
+  }
+  return storageError(res, 404, "not_found", "Not found");
+}
+
+// ---------------------------------------------------------------------------
 function send(res, status, body) {
   if (body === null) { res.writeHead(status); return res.end(); }
   res.writeHead(status, { "content-type": "application/json" });
@@ -254,10 +334,12 @@ function send(res, status, body) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  let raw = "";
-  for await (const chunk of req) raw += chunk;
-  const body = raw ? JSON.parse(raw) : {};
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const raw = Buffer.concat(chunks);
   try {
+    if (url.pathname.startsWith("/storage/v1")) return await handleStorage(req, res, url, raw);
+    const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
     if (url.pathname === "/__seed" && req.method === "POST") {
       for (const { email, password } of body.users ?? []) passwords.set(email, password);
       return send(res, 200, { ok: true });

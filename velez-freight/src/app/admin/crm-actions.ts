@@ -147,21 +147,3 @@ export async function recordVerification(_: ActionState, fd: FormData): Promise<
     return fail(e);
   }
 }
-
-export async function recordDocument(_: ActionState, fd: FormData): Promise<ActionState> {
-  const s = await requireStaff();
-  try {
-    const v = z.object({
-      entity_type: z.enum(["shipment", "carrier_lead", "shipper_prospect"]), entity_id: uuid,
-      doc_type: z.enum(["rate_confirmation", "bol", "pod", "insurance_certificate", "carrier_agreement", "w9", "other"]),
-      reference: opt(200), expires_on: z.string().optional().transform((x) => x || null), notes: opt(1000),
-    }).parse(form(fd));
-    const { error } = await s.db.from("documents").insert({ ...v, recorded_by: s.userId });
-    if (error) throw error;
-    await audit({ actorType: "admin", actorId: s.userId, action: "document.recorded", entityType: v.entity_type, entityId: v.entity_id, metadata: { type: v.doc_type } });
-    revalidatePath("/admin", "layout");
-    return { ok: true, message: "Document recorded." };
-  } catch (e) {
-    return fail(e);
-  }
-}

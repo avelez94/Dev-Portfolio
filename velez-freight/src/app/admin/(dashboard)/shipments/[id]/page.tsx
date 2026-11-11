@@ -5,7 +5,7 @@ import { fmtDateTime } from "@/config/admin";
 import { fmtMoney } from "@/lib/money";
 import { qualifiedCarriers } from "@/lib/ops";
 import { assignCarrier, createInvoice, openException, recordShipmentEvent, resolveException, setShipmentStatus } from "@/app/admin/ops-actions";
-import { recordDocument } from "@/app/admin/crm-actions";
+import { DocumentsPanel } from "@/components/admin/documents-panel";
 import { ActionForm } from "@/components/admin/action-form";
 import { AdminField, Panel, StatusBadge, adminInput, adminTextarea } from "@/components/admin/admin-ui";
 import { PageHeader } from "@/components/admin/page-header";
@@ -96,16 +96,7 @@ export default async function ShipmentPage({ params }: { params: Promise<{ id: s
               </details>
             )}
           </Panel>
-          <Panel title="Documents">
-            <ActionForm action={recordDocument} submitLabel="Record document" variant="navy" resetOnSuccess className="mb-3">
-              <input type="hidden" name="entity_type" value="shipment" /><input type="hidden" name="entity_id" value={id} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AdminField label="Type" htmlFor="sd-type"><select id="sd-type" name="doc_type" className={adminInput}><option value="pod">Proof of delivery</option><option value="bol">Bill of lading</option><option value="rate_confirmation">Rate confirmation</option><option value="other">Other</option></select></AdminField>
-                <AdminField label="Reference" htmlFor="sd-ref"><input id="sd-ref" name="reference" maxLength={200} placeholder="Where the file is stored" className={adminInput} /></AdminField>
-              </div>
-            </ActionForm>
-            {docs?.length ? <ul className="space-y-1 text-sm">{docs.map((d) => <li key={d.id} className="flex justify-between"><span className="uppercase">{d.doc_type.replace("_", " ")}</span><span className="text-xs text-slate-muted">{fmtDateTime(d.received_at)}</span></li>)}</ul> : <p className="text-sm text-slate-muted">No documents recorded.</p>}
-          </Panel>
+          <DocumentsPanel entityType="shipment" entityId={id} docs={docs ?? []} docTypes={["pod", "bol", "rate_confirmation", "other"]} admin={admin} idPrefix="sd" />
           {admin && ["delivered", "completed"].includes(x.status) && (
             <Panel title="Billing">
               {inv?.length ? <p className="text-sm">Invoice <Link href={`/admin/invoices/${inv[0].id}`} className="font-semibold underline">{inv[0].number}</Link> ({inv[0].status}).</p> : (

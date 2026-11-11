@@ -2,6 +2,7 @@
 // overdue logic, stage history, notifications and disabled report schedules.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID as randomId } from "node:crypto";
 import { addDays, freshDatabase, OWNER, STAFF } from "./helpers.mjs";
 
 let h;
@@ -171,4 +172,23 @@ test("staff cannot read or write financial tables, and cannot call refresh as an
   await h.as("authenticated", OWNER, async (db) => {
     assert.ok((await db.query(`select count(*)::int n from public.operating_expenses`)).rows[0].n >= 1);
   });
+});
+
+test("document files must live under their own record's folder with a random name", async () => {
+  const c = await carrier(false);
+  const other = await carrier(false);
+  const id = "0b5a2c3e-1f2d-4c5b-8a9e-112233445566";
+  const ins = (path, extra = {}) => h.db.query(
+    `insert into public.documents (entity_type, entity_id, doc_type, storage_path, file_name, file_size, content_type)
+     values ('carrier_lead', $1, 'insurance_certificate', $2, $3, $4, $5) returning id`,
+    [c, path, extra.name ?? "coi.pdf", extra.size ?? 1000, extra.type ?? "application/pdf"]);
+  assert.ok((await ins(`carrier_lead/${c}/${id}.pdf`)).rows[0].id);
+  await assert.rejects(ins(`carrier_lead/${other}/${randomId()}.pdf`), /documents_storage_path_format/);
+  await assert.rejects(ins(`carrier_lead/${c}/coi-final.pdf`), /documents_storage_path_format/);
+  await assert.rejects(ins(`carrier_lead/${c}/${randomId()}.exe`), /documents_storage_path_format/);
+  await assert.rejects(ins(`carrier_lead/${c}/${randomId()}.pdf`, { type: "text/html" }), /content_type/);
+  await assert.rejects(ins(`carrier_lead/${c}/${id}.pdf`), /documents_storage_path_idx|duplicate/);
+  // A record without a file stays valid; a file without its details does not.
+  await h.db.query(`insert into public.documents (entity_type, entity_id, doc_type) values ('carrier_lead', $1, 'w9')`, [c]);
+  await assert.rejects(h.db.query(`insert into public.documents (entity_type, entity_id, doc_type, storage_path) values ('carrier_lead', $1, 'w9', $2)`, [c, `carrier_lead/${c}/${randomId()}.pdf`]), /documents_file_details/);
 });
