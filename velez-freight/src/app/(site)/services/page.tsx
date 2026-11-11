@@ -23,7 +23,7 @@ export default async function ServicesPage() {
       <PageHero
         eyebrow="Services"
         title="Transportation Solutions Built Around Your Business"
-        intro="No two shipments are exactly alike. Different freight requires different equipment, timelines, and transportation arrangements."
+        intro="No two shipments are exactly alike. We start by understanding yours: the freight, the timeline, and what matters most to you."
         image={images.whiteTruckMotion.src}
         imageAlt={images.whiteTruckMotion.alt}
         position="50% 60%"
@@ -33,16 +33,16 @@ export default async function ServicesPage() {
         <div className="container-site space-y-6">
           {!settings.operational && (
             <PrelaunchNotice title="Planned services">
-              {copy.prelaunch.title} The services below describe how we will work once our broker registration is complete. We are not arranging transportation, accepting freight orders, or providing quotes yet.
+              These are the services we’ll offer once our broker registration is complete. {copy.prelaunch.short}
             </PrelaunchNotice>
           )}
           <p className="max-w-3xl font-serif text-2xl leading-snug text-navy">
-            Mary’s Logistics Group focuses on understanding those details and helping businesses navigate their transportation needs with confidence.
+            Our job is to sweat those details for you, so you can make transportation decisions with confidence.
           </p>
           <div className="rounded-[var(--radius-card)] border border-line bg-white p-6 sm:p-8">
             <h2 className="text-2xl font-bold">What a freight broker does</h2>
             <p className="mt-3 max-w-3xl leading-relaxed text-charcoal">
-              A freight broker arranges transportation between a shipper and an authorized motor carrier. Mary’s Logistics Group does not own trucks or employ drivers. Our role is to understand your shipment, select an appropriately authorized and insured carrier, and coordinate communication from pickup through delivery.
+              A freight broker arranges transportation between a shipper and an authorized motor carrier. We don’t own trucks or employ drivers. Instead, we understand your shipment, choose a carrier whose authority, insurance, and equipment fit the job, and stay in touch with you from pickup through delivery. You get one point of contact for the whole move.
             </p>
           </div>
         </div>
@@ -83,14 +83,14 @@ export default async function ServicesPage() {
         <div className="container-site grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="eyebrow eyebrow-light">Next step</p>
-            <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Looking for Transportation Support?</h2>
+            <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Not Sure Which Service Fits?</h2>
             <p className="mt-3 max-w-xl text-white/85">
-              {settings.operational ? "Tell us about your freight requirements and desired timeline." : `${copy.prelaunch.invite}`}
+              {settings.operational ? "Tell us about your freight and timeline, and we’ll help you sort out the right approach." : "Tell us how your freight moves today. We’ll talk it through with you and reply personally."}
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href={settings.operational ? "/request-quote" : "/contact"} className={buttonVariants({ size: "lg" })}>
-              {settings.operational ? "Request a Freight Quote" : "Contact Us"} <ArrowRight aria-hidden="true" />
+              {settings.operational ? "Request a Freight Quote" : "Let’s Talk Freight"} <ArrowRight aria-hidden="true" />
             </Link>
             <Link href="/shippers" className={buttonVariants({ variant: "outlineLight", size: "lg" })}>Information for Shippers</Link>
           </div>

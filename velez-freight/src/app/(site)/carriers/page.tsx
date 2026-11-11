@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Check, FileSignature, Handshake, LockKeyhole, Mail, MessagesSquare, Truck } from "lucide-react";
 import { getSettings } from "@/lib/data/settings";
 import { images } from "@/config/images";
-import { copy } from "@/config/site";
 import { PageHero, PrelaunchNotice, SectionHeading } from "@/components/site/page-hero";
 import { CarrierForm } from "@/components/forms/carrier-form";
 
@@ -53,11 +52,11 @@ export default async function CarriersPage() {
         <div className="container-site grid gap-12 lg:grid-cols-2">
           <div className="space-y-6">
             <p className="font-serif text-2xl leading-snug text-navy">
-              Mary’s Logistics Group aims to build relationships with authorized motor carriers who value communication, safety, professionalism, and consistent service.
+              We want to work with authorized carriers who take pride in their work, and to be a broker you actually enjoy hauling for.
             </p>
             {!settings.operational && (
               <PrelaunchNotice>
-                {copy.prelaunch.title} We are not offering loads yet and do not have an established carrier network. You are welcome to introduce your company now. Submitting an inquiry does not create a carrier agreement.
+                We’re not offering loads yet and are just beginning to build our carrier network, so this is a great time to introduce yourself. Submitting an inquiry doesn’t create a carrier agreement.
               </PrelaunchNotice>
             )}
           </div>
@@ -122,7 +121,7 @@ export default async function CarriersPage() {
           <div>
             <p className="eyebrow">Carrier inquiry</p>
             <h2 id="carrier-form-title" className="mt-3 text-3xl font-bold sm:text-4xl">Interested in Partnering With Us?</h2>
-            <p className="mt-4 text-lg leading-relaxed">Introduce your company and equipment.</p>
+            <p className="mt-4 text-lg leading-relaxed">Tell us about your company, equipment, and the lanes you like to run. We’ll follow up personally.</p>
             <p className="mt-4 text-sm leading-relaxed text-slate-muted">Inquiries do not constitute approval or guarantee freight opportunities.</p>
             {settings.publicEmail && (
               <p className="mt-6 flex items-center gap-2 text-sm"><Mail aria-hidden="true" className="size-4 text-brand-red" /> Questions? <a className="font-semibold text-brand-red-dark underline" href={`mailto:${settings.publicEmail}`}>{settings.publicEmail}</a></p>

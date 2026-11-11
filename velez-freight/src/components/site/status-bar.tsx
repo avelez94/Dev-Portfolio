@@ -10,10 +10,9 @@ export function StatusBar({ operational, message }: { operational: boolean; mess
       <p className="container-site flex items-start gap-2 py-2 text-[0.8rem] leading-snug sm:items-center sm:justify-center sm:text-center">
         <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand-red sm:mt-0" />
         <span>
-          {message ??
-            `${copy.prelaunch.title} We are not yet arranging transportation or accepting freight orders. ${copy.prelaunch.invite}`}{" "}
+          {message ?? copy.prelaunch.notice}{" "}
           <Link href="/contact" className="font-semibold underline decoration-brand-red underline-offset-2 hover:text-white">
-            Contact us
+            Let’s talk
           </Link>
         </span>
       </p>

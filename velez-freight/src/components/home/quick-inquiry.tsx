@@ -112,11 +112,9 @@ function PrelaunchQuick() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8" aria-label="Launch notification sign up">
-      <Heading eyebrow="Opening soon" title="Stay Informed as We Launch" />
+      <Heading eyebrow={copy.stayConnected.eyebrow} title={copy.stayConnected.title} />
       <div className="flex-1 space-y-4">
-        <p className="text-sm text-charcoal">
-          <strong className="text-navy">{copy.prelaunch.title}</strong> {copy.prelaunch.body} We are <strong>not yet arranging transportation or providing quotes.</strong> Leave your details and we will let you know personally when we begin operating.
-        </p>
+        <p className="text-sm leading-relaxed text-charcoal">{copy.stayConnected.body}</p>
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field id="ln-name" label="Name" required error={errors.name?.message}>
             <Input autoComplete="name" {...register("name")} />
@@ -136,14 +134,14 @@ function PrelaunchQuick() {
         </div>
         <label className="flex items-start gap-2.5 text-xs text-charcoal">
           <input type="checkbox" className="mt-0.5 size-4 accent-brand-red" aria-invalid={errors.privacyAck ? true : undefined} aria-describedby={errors.privacyAck ? "ln-privacy-error" : undefined} {...register("privacyAck")} />
-          <span>I agree to be contacted about the launch and have read the <a href="/privacy" className="font-semibold text-brand-red-dark underline">privacy notice</a>.</span>
+          <span>Yes, you may contact me about the launch. I’ve read the <a href="/privacy" className="font-semibold text-brand-red-dark underline">privacy notice</a>.</span>
         </label>
         {errors.privacyAck && <p id="ln-privacy-error" className="text-xs font-medium text-brand-red-dark">{errors.privacyAck.message}</p>}
         <Honeypot inputRef={honeypot} />
         {result && <FormAlert tone={result.ok ? "success" : "error"}>{result.text}</FormAlert>}
       </div>
       <Button type="submit" size="lg" disabled={pending} className="lg:self-center">
-        <SubmitLabel pending={pending} idle={<>Notify Me at Launch <ArrowRight aria-hidden="true" /></>} />
+        <SubmitLabel pending={pending} idle={<>Keep Me Posted <ArrowRight aria-hidden="true" /></>} />
       </Button>
     </form>
   );

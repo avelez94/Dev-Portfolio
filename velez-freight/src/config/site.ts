@@ -52,42 +52,61 @@ export const shipmentTypes = [
 export const copy = {
   tagline: "Rooted in family. Driven by purpose.",
   hero: {
-    body: "Personalized freight coordination, clear communication, and transportation solutions tailored to your business.",
+    // Owner supplied. The dash in the source is written as a comma per the no dashes preference.
+    body: [
+      "Your business depends on more than getting freight from one place to another. It depends on communication, thoughtful coordination, and a transportation partner who understands what’s at stake.",
+      "At Mary’s Logistics Group, relationships come first, and every shipment matters.",
+    ],
   },
   quick: {
     title: "Tell Us About Your Shipment",
-    body: "From pickup to delivery, every detail matters. Share your freight requirements, and our team will review your transportation needs.",
+    body: "Share where it’s going, what it is, and when it needs to be there. A real person will review it and reach out to talk through options.",
+  },
+  stayConnected: {
+    eyebrow: "Stay in touch",
+    title: "Let’s Stay Connected",
+    body: "We’re completing our broker registration now. Leave your details and we’ll reach out personally when we’re ready to move freight. No commitment, and we won’t share your information.",
   },
   servicesIntro: {
     title: "Transportation Solutions for Your Business",
-    body: "From urgent deliveries to ongoing transportation needs, Mary’s Logistics Group is being built to provide flexible freight coordination for businesses across different industries.",
+    body: "Every business moves freight a little differently. Whether it’s an urgent delivery or a regular shipment, we start by learning what yours needs and plan around it.",
   },
   why: {
     heading: "Why Choose Mary’s Logistics Group?",
     title: "Freight Coordination With a Personal Commitment",
-    body: "We believe successful freight transportation begins with understanding the customer, not simply moving a shipment from one point to another.",
+    body: "Good freight coordination starts with listening. We take the time to understand your business, your customers, and what a late or mishandled load would mean for you.",
   },
   storyTeaser: {
     title: "A Legacy That Moves Us Forward",
     body: [
-      "Named in honor of Mary, our company reflects a family tradition of entrepreneurship, integrity, and building lasting relationships.",
+      "Named in honor of Mary, our company carries forward a family tradition of entrepreneurship, integrity, and lasting relationships.",
     ],
+    founder: "Alante’s transportation experience began alongside her father, sourcing and booking loads through freight brokers, and is backed by a background in technology and leadership. The vision is simple: treat every customer the way you’d want your own business treated.",
   },
   carrierTitle: "Haul With Mary’s Logistics Group",
   carrierTeaser: [
-    "Strong carrier relationships are an essential part of successful freight coordination.",
-    "We believe in professional partnerships, transparent communication, and treating the businesses responsible for transporting freight with respect.",
+    "Carriers are the people who actually move freight, and we never forget it.",
+    "Expect clear load information, written agreements, honest communication, and respect for your time and your equipment.",
   ],
   carrierTeaserAsk: "Interested in working with us as we grow?",
   finalCta: {
     title: "Let’s Get Your Shipment Moving.",
-    body: "Transportation begins with understanding your needs. Tell us about your freight, and let’s explore how we can support your business.",
+    body: "Tell us about your freight and what matters most to you. We’ll review it personally and talk through the options together.",
   },
   prelaunch: {
-    title: "Mary’s Logistics Group is preparing to launch.",
-    body: "We’re building a freight brokerage focused on personalized transportation coordination and strong business relationships.",
-    invite: "We welcome general business inquiries while we complete our registration and operational preparations.",
+    /** Sitewide notice: the one full disclosure, shown on every public page until operations are enabled. */
+    notice: "We’re preparing to launch. Freight services begin once our broker registration is complete, and you’re welcome to reach out in the meantime.",
+    /** Short contextual disclosure for pages that describe services or take inquiries. */
+    short: "We’re not arranging shipments or providing quotes yet. Messages are business conversations only and don’t create a transportation order.",
+    eyebrow: "Let’s start a conversation",
+    title: "Tell Us About Your Business.",
+    body: "We’d love to learn how your freight moves and what matters most to you. Send us a note and we’ll reply personally. We aim to respond within one business day.",
   },
+  nextSteps: [
+    { title: "We read it personally", body: "Every message goes to a real person, not an automated queue." },
+    { title: "We reply promptly", body: "We aim to reply within one business day, with a direct answer or a few follow up questions." },
+    { title: "We talk it through", body: "A conversation about your needs. No obligation, no pressure." },
+  ],
 } as const;
 
 export const services = [
@@ -136,15 +155,15 @@ export const services = [
 ] as const;
 
 export const processSteps = [
-  { title: "Tell Us About Your Freight", body: "Share your shipment details, pickup and delivery locations, timeline, and any special requirements." },
-  { title: "We Coordinate a Qualified Carrier", body: "We review your requirements and work to arrange transportation with an appropriately qualified carrier." },
-  { title: "Stay Informed Through Delivery", body: "Clear communication and shipment updates help you stay informed throughout the transportation process." },
+  { title: "Tell Us About Your Freight", body: "Share where it’s going, when it needs to be there, and anything special about it. We’ll ask the right follow up questions." },
+  { title: "We Coordinate a Qualified Carrier", body: "We match your freight with a carrier whose authority, insurance, and equipment fit the job, and confirm the details in writing." },
+  { title: "Stay Informed Through Delivery", body: "You’ll hear from us at the moments that matter, and right away if anything changes." },
 ] as const;
 
 export const pillars = [
-  { icon: "message", title: "Clear Communication", body: "Straightforward answers, responsive coordination, and a commitment to keeping customers informed." },
-  { icon: "user", title: "Personalized Service", body: "Transportation solutions shaped around your business, your freight, and your priorities." },
-  { icon: "shield", title: "Responsible Carrier Selection", body: "A deliberate approach to reviewing carrier qualifications, operating authority, and appropriate insurance before transportation is arranged." },
+  { icon: "message", title: "Clear Communication", body: "Straight answers, prompt replies, and updates before you have to ask." },
+  { icon: "user", title: "Personalized Service", body: "A plan shaped around your freight, your schedule, and your customers, not a one size fits all process." },
+  { icon: "shield", title: "Responsible Carrier Selection", body: "Every carrier is checked for operating authority, insurance, and fit for your freight before a load is offered." },
 ] as const;
 
 /**

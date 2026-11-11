@@ -74,8 +74,8 @@ export async function submitContact(input: unknown, envelope: unknown, sourcePag
     reference: data.reference,
     message:
       d.inquiryType === "launch_notification"
-        ? "Thank you. We will email you when Mary’s Logistics Group is ready to begin arranging shipments."
-        : "Thank you. Your message was received and a member of our team will reply personally.",
+        ? "Thank you, you’re on the list. We’ll reach out personally as soon as we’re ready to begin arranging shipments."
+        : "Thank you for reaching out. A real person will read your message and reply personally. We aim to respond within one business day.",
   };
 }
 
@@ -157,7 +157,7 @@ export async function submitCarrier(input: unknown, envelope: unknown): Promise<
     }
   });
 
-  return { ok: true, reference: inquiry.reference, message: "Thank you for your interest. We will review your information and contact you about next steps." };
+  return { ok: true, reference: inquiry.reference, message: "Thanks for introducing your company. We’ll review your information and follow up personally about next steps." };
 }
 
 // ---------------------------------------------------------------------------

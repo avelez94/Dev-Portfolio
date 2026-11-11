@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { Clock, HelpCircle, Mail, MapPin, Phone, Truck, Warehouse } from "lucide-react";
+import { HelpCircle, Mail, MapPin, Phone, Truck, Warehouse } from "lucide-react";
 import { getSettings } from "@/lib/data/settings";
 import { images } from "@/config/images";
-import { faqs } from "@/config/site";
+import { copy, faqs } from "@/config/site";
 import { PageHero, SectionHeading } from "@/components/site/page-hero";
 import { ContactForm } from "@/components/forms/contact-form";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -29,9 +29,9 @@ export default async function ContactPage() {
       <section aria-label="Inquiry types" className="pt-14">
         <ul className="container-site grid gap-5 md:grid-cols-3">
           {[
-            { icon: HelpCircle, title: "General Inquiries", body: "For questions about Mary’s Logistics Group or future services." },
-            { icon: Warehouse, title: "Shipper Inquiries", body: "For businesses interested in discussing transportation needs." },
-            { icon: Truck, title: "Carrier Partnerships", body: "For authorized carriers interested in future opportunities." },
+            { icon: HelpCircle, title: "General Questions", body: "Curious about who we are or what we’re building? Ask away." },
+            { icon: Warehouse, title: "Shippers", body: "Tell us how your freight moves and what you need from a partner." },
+            { icon: Truck, title: "Carriers", body: "Authorized carrier? Introduce your company and equipment." },
           ].map(({ icon: Icon, title, body }) => (
             <li key={title} className="flex gap-4 rounded-[var(--radius-card)] border border-line bg-white p-5 shadow-[var(--shadow-card)]">
               <Icon aria-hidden="true" strokeWidth={1.75} className="size-8 shrink-0 text-brand-red" />
@@ -44,10 +44,21 @@ export default async function ContactPage() {
         <div className="container-site grid gap-12 lg:grid-cols-[1.5fr_1fr]">
           <div className="rounded-[var(--radius-card)] border border-line bg-white p-6 shadow-[var(--shadow-card)] sm:p-8">
             <h2 className="text-2xl font-bold">Send us a message</h2>
-            <p className="mb-6 mt-2 text-sm text-slate-muted">Required fields are marked with an asterisk.</p>
+            <p className="mb-6 mt-2 text-sm text-slate-muted">Tell us a little about your business and what’s on your mind. Required fields are marked with an asterisk.</p>
             <ContactForm operational={settings.operational} />
           </div>
           <aside className="space-y-6">
+            <div className="rounded-[var(--radius-card)] border border-line bg-white p-7 shadow-[var(--shadow-card)]">
+              <h2 className="text-xl font-bold">What happens next</h2>
+              <ol className="mt-4 space-y-4">
+                {copy.nextSteps.map((st, i) => (
+                  <li key={st.title} className="flex gap-3">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-red font-serif text-sm font-bold text-white">{i + 1}</span>
+                    <span><span className="block font-semibold text-navy">{st.title}</span><span className="text-sm leading-relaxed text-charcoal">{st.body}</span></span>
+                  </li>
+                ))}
+              </ol>
+            </div>
             <div className="rounded-[var(--radius-card)] bg-navy p-7 text-white">
               <h2 className="text-xl font-bold text-white">Contact information</h2>
               <ul className="mt-5 space-y-4 text-[0.95rem]">
@@ -58,7 +69,6 @@ export default async function ContactPage() {
                   <li className="flex gap-3"><Phone aria-hidden="true" className="mt-0.5 size-5 text-brand-red" /><a className="underline-offset-4 hover:underline" href={`tel:${settings.publicPhone.replace(/[^\d+]/g, "")}`}>{settings.publicPhone}</a></li>
                 )}
                 <li className="flex gap-3"><MapPin aria-hidden="true" className="mt-0.5 size-5 text-brand-red" /><span>Based in {settings.serviceArea}</span></li>
-                <li className="flex gap-3"><Clock aria-hidden="true" className="mt-0.5 size-5 text-brand-red" /><span>We aim to reply to every message within one business day.</span></li>
               </ul>
               {!settings.publicEmail && !settings.publicPhone && (
                 <p className="mt-5 text-sm text-white/75">A direct business email and phone number will be listed here once they are confirmed. Until then, the form is the best way to reach us.</p>
@@ -66,7 +76,7 @@ export default async function ContactPage() {
             </div>
             <div className="rounded-[var(--radius-card)] border border-line bg-white p-7">
               <h2 className="text-xl font-bold">Service location</h2>
-              <p className="mt-3 text-[0.95rem] leading-relaxed">Mary’s Logistics Group is based in Maryland. As a freight broker we coordinate shipments with authorized carriers, so service is not limited to a single facility. Lane availability is confirmed for each shipment.</p>
+              <p className="mt-3 text-[0.95rem] leading-relaxed">We’re based in Maryland. As a freight broker we coordinate shipments with authorized carriers rather than running from a single facility, and we confirm lane availability for each shipment.</p>
             </div>
           </aside>
         </div>

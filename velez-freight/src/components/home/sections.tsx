@@ -31,6 +31,8 @@ export function Hero({ operational }: { operational: boolean }) {
       <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_70%_60%_at_78%_8%,rgb(242_140_72/0.85),rgb(225_37_47/0.3)_45%,transparent_78%)] mix-blend-soft-light" />
       <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_45%_at_72%_22%,rgb(246_166_96/0.38),transparent_70%)]" />
       <div aria-hidden="true" className="absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-navy/70 to-transparent" />
+      {/* Phones: the text column covers the whole photo, so deepen the overlay slightly for legibility. */}
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-navy/35 sm:hidden" />
 
       <div className="container-site pb-36 pt-16 sm:pb-40 sm:pt-20 lg:pb-44 lg:pt-24">
         <div className="max-w-2xl">
@@ -44,9 +46,10 @@ export function Hero({ operational }: { operational: boolean }) {
               <svg aria-hidden="true" viewBox="0 0 300 12" className="absolute -bottom-2 left-0 w-full" preserveAspectRatio="none"><path d="M2 9 C 90 2, 200 2, 298 6" stroke="#E1252F" strokeWidth="4" fill="none" strokeLinecap="round" /></svg>
             </span>
           </h1>
-          <p className="mt-8 max-w-xl animate-rise text-lg leading-relaxed text-white/90 [animation-delay:120ms]">
-            {copy.hero.body}
-          </p>
+          <div className="mt-7 max-w-xl animate-rise space-y-3 text-base leading-relaxed text-white/90 [animation-delay:120ms] sm:mt-8 sm:text-lg">
+            <p>{copy.hero.body[0]}</p>
+            <p className="font-medium text-white">{copy.hero.body[1]}</p>
+          </div>
           <div className="mt-9 flex animate-rise flex-col gap-3 [animation-delay:220ms] sm:flex-row sm:gap-4">
             {operational ? (
               <Link href="/request-quote" className={buttonVariants({ size: "lg" })}>
@@ -54,7 +57,7 @@ export function Hero({ operational }: { operational: boolean }) {
               </Link>
             ) : (
               <Link href="/contact" className={buttonVariants({ size: "lg" })}>
-                Contact Us <ArrowRight aria-hidden="true" />
+                Let’s Talk Freight <ArrowRight aria-hidden="true" />
               </Link>
             )}
             <Link href="/services" className={buttonVariants({ variant: "outlineLight", size: "lg" })}>
@@ -85,7 +88,7 @@ export function ServicesSection({ settings }: { settings: PublicSettings }) {
           </div>
           <p className="mx-auto mt-4 max-w-2xl leading-relaxed text-charcoal">{copy.servicesIntro.body}</p>
           {!settings.operational && (
-            <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-muted">These services will become available once our broker registration is complete.</p>
+            <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-muted">Available once our broker registration is complete.</p>
           )}
         </div>
         <ul className="mt-12 grid gap-6 md:grid-cols-3">
@@ -204,9 +207,18 @@ export function StoryTeaser() {
           {copy.storyTeaser.body.map((p) => (
             <p key={p} className="mt-4 leading-relaxed text-charcoal">{p}</p>
           ))}
+          {/* Brief founder introduction; the full biography lives on Our Story. */}
+          <figure className="mt-6 flex items-start gap-4 rounded-[var(--radius-card)] border border-line bg-white/80 p-4 shadow-[var(--shadow-card)] sm:gap-5 sm:p-5">
+            <Image src="/images/founder-alante-velez.jpg" alt="Alante Velez, Founder & CEO of Mary’s Logistics Group" width={96} height={120} sizes="96px" quality={85} className="h-[5.5rem] w-[4.4rem] shrink-0 rounded-lg object-cover object-top sm:h-[7.5rem] sm:w-24" />
+            <figcaption>
+              <span className="block font-serif text-lg font-bold leading-tight text-navy">Alante Velez</span>
+              <span className="mt-0.5 block text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-brand-red-dark">Founder &amp; CEO</span>
+              <span className="mt-2 block text-sm leading-relaxed text-charcoal">{copy.storyTeaser.founder}</span>
+            </figcaption>
+          </figure>
           <p className="mt-5 font-serif text-xl italic text-brand-red-dark">{copy.tagline}</p>
-          <Link href="/our-story" className={cn(buttonVariants({ variant: "outline" }), "mt-7")}>
-            Discover Our Story <ArrowRight aria-hidden="true" />
+          <Link href="/our-story" className={cn(buttonVariants({ variant: "outline" }), "mt-6")}>
+            Meet Our Founder <ArrowRight aria-hidden="true" />
           </Link>
         </div>
       </div>
@@ -280,14 +292,14 @@ export function FinalCta({ operational }: { operational: boolean }) {
         <div data-reveal>
           <p className="eyebrow eyebrow-light flex items-center justify-center gap-4">
             <span aria-hidden="true" className="h-px w-10 bg-white/60" />
-            {operational ? "Ready to move your freight?" : "Preparing to launch"}
+            {operational ? "Ready to move your freight?" : copy.prelaunch.eyebrow}
             <span aria-hidden="true" className="h-px w-10 bg-white/60" />
           </p>
           <h2 id="cta-title" className="mt-4 text-4xl font-bold text-white sm:text-5xl">
             {operational ? copy.finalCta.title : copy.prelaunch.title}
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-white/90">
-            {operational ? copy.finalCta.body : `${copy.prelaunch.body} ${copy.prelaunch.invite}`}
+            {operational ? copy.finalCta.body : copy.prelaunch.body}
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:gap-4">
             {operational ? (
@@ -298,9 +310,12 @@ export function FinalCta({ operational }: { operational: boolean }) {
                 <Link href="/contact" className={buttonVariants({ variant: "outlineLight", size: "lg" })}>Contact Us</Link>
               </>
             ) : (
-              <Link href="/contact" className={buttonVariants({ size: "lg" })}>
-                Contact Us <ArrowRight aria-hidden="true" />
-              </Link>
+              <>
+                <Link href="/contact" className={buttonVariants({ size: "lg" })}>
+                  Let’s Connect <ArrowRight aria-hidden="true" />
+                </Link>
+                <Link href="/shippers" className={buttonVariants({ variant: "outlineLight", size: "lg" })}>How We Work With Shippers</Link>
+              </>
             )}
           </div>
         </div>

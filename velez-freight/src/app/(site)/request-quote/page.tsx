@@ -29,11 +29,11 @@ export default async function RequestQuotePage({ searchParams }: { searchParams:
     <>
       <PageHero
         eyebrow={settings.operational ? "Freight Inquiry" : "Business Inquiry"}
-        title={settings.operational ? "Tell Us About Your Freight" : copy.prelaunch.title}
+        title={settings.operational ? "Tell Us About Your Freight" : "Tell Us About Your Business"}
         intro={
           settings.operational
-            ? "Every shipment begins with the details. Provide information about your transportation needs so our team can review your request and determine possible next steps."
-            : `${copy.prelaunch.body} ${copy.prelaunch.invite}`
+            ? "Every shipment begins with the details. Share what you can, and a real person will review it and reach out to talk through options."
+            : "We’d love to learn how your freight moves and what matters most to you. We’ll reply personally."
         }
         image={images.desertHighwayDusk.src}
         imageAlt={images.desertHighwayDusk.alt}
@@ -46,8 +46,8 @@ export default async function RequestQuotePage({ searchParams }: { searchParams:
               <QuoteWizard prefill={prefill} />
             ) : (
               <>
-                <h2 className="text-2xl font-bold">Send a business inquiry</h2>
-                <p className="mb-6 mt-2 text-sm text-slate-muted">Required fields are marked with an asterisk.</p>
+                <h2 className="text-2xl font-bold">Start the conversation</h2>
+                <p className="mb-6 mt-2 text-sm text-slate-muted">A few details are all we need. Required fields are marked with an asterisk.</p>
                 <ContactForm defaultType="shipper" sourcePage="/request-quote" operational={false} />
               </>
             )}
@@ -64,9 +64,20 @@ export default async function RequestQuotePage({ searchParams }: { searchParams:
                 </ol>
               </div>
             ) : (
-              <PrelaunchNotice title="Transportation not yet available">
-                We are not arranging shipments, booking freight, or providing prices at this time. Messages sent here are business inquiries only and do not create a transportation order.
-              </PrelaunchNotice>
+              <>
+                <div className="rounded-[var(--radius-card)] bg-navy p-7 text-white">
+                  <h2 className="text-xl font-bold text-white">What happens next</h2>
+                  <ol className="mt-4 space-y-4">
+                    {copy.nextSteps.map((st, i) => (
+                      <li key={st.title} className="flex gap-3">
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-red font-serif text-sm font-bold">{i + 1}</span>
+                        <span><span className="block font-semibold">{st.title}</span><span className="text-sm text-white/80">{st.body}</span></span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <PrelaunchNotice title="Opening soon">{copy.prelaunch.short}</PrelaunchNotice>
+              </>
             )}
             <div className="rounded-[var(--radius-card)] border border-line bg-white p-6 text-sm leading-relaxed">
               <p className="flex items-center gap-2 font-semibold text-navy"><ShieldCheck aria-hidden="true" className="size-4 text-brand-red" /> Privacy</p>

@@ -47,7 +47,7 @@ async function fillWizard(page: import("@playwright/test").Page) {
 test("operational mode: quick quote leads into the multi step inquiry, stored for manual review", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: /Request a Freight Quote/ }).first()).toBeVisible();
-  await expect(page.getByText("Mary’s Logistics Group is preparing to launch.")).toHaveCount(0);
+  await expect(page.getByText("We’re preparing to launch.", { exact: false })).toHaveCount(0);
   await fillWizard(page);
   await page.getByRole("button", { name: /Submit Freight Inquiry/ }).click();
   await expect(page.getByRole("heading", { name: "Request received" })).toBeVisible();

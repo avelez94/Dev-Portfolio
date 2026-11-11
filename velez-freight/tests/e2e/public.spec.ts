@@ -8,7 +8,7 @@ test("homepage renders the approved hero and an honest prelaunch status", async 
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Your freight.");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Every mile.");
-  await expect(page.getByText("Mary’s Logistics Group is preparing to launch.").first()).toBeVisible();
+  await expect(page.getByText("We’re preparing to launch.", { exact: false }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Request a Freight Quote" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
 });
@@ -29,7 +29,9 @@ test("every public route renders with its own title", async ({ page }) => {
 
 test("prelaunch request page offers a business inquiry, not a freight booking", async ({ page }) => {
   await page.goto("/request-quote");
-  await expect(page.getByText("Transportation not yet available")).toBeVisible();
+  // The disclosure is still present, in the shorter contextual form.
+  await expect(page.getByText("We’re not arranging shipments or providing quotes yet.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What happens next" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit Freight Inquiry" })).toHaveCount(0);
   await expect(page.getByLabel("Inquiry type")).toHaveValue("shipper");
 });
@@ -37,7 +39,7 @@ test("prelaunch request page offers a business inquiry, not a freight booking", 
 test("launch notification: validation, success with reference, and persistence", async ({ page }) => {
   await page.goto("/");
   const form = page.getByRole("form", { name: "Launch notification sign up" });
-  await form.getByRole("button", { name: /Notify Me at Launch/ }).click();
+  await form.getByRole("button", { name: /Keep Me Posted/ }).click();
   await expect(form.getByText("Your name is required.")).toBeVisible();
   await expect(form.getByLabel("Name")).toHaveAttribute("aria-invalid", "true");
 
@@ -47,7 +49,7 @@ test("launch notification: validation, success with reference, and persistence",
   await form.getByLabel("Typical freight").selectOption("dry_van");
   await form.getByRole("checkbox").check();
   await humanPause(page);
-  await form.getByRole("button", { name: /Notify Me at Launch/ }).click();
+  await form.getByRole("button", { name: /Keep Me Posted/ }).click();
   await expect(form.getByRole("status")).toContainText(/Reference: MLG-C-[A-F0-9]{8}/);
   const rows = await sql<{ inquiry_type: string; company: string; status: string }>("select inquiry_type, company, status from public.contact_inquiries where email = 'jordan@example.test'");
   expect(rows).toEqual([{ inquiry_type: "launch_notification", company: "Harbor Supply Co", status: "new" }]);
@@ -111,7 +113,7 @@ test("rate limiting stops repeated launch sign ups from one connection", async (
     await form.getByLabel("Business email").fill(`repeat${i}@example.test`);
     await form.getByRole("checkbox").check();
     await humanPause(page);
-    await form.getByRole("button", { name: /Notify Me at Launch/ }).click();
+    await form.getByRole("button", { name: /Keep Me Posted/ }).click();
     if (i <= 3) await expect(form.getByRole("status")).toContainText("Reference");
     else await expect(form.getByRole("alert")).toContainText("several submissions");
   }
@@ -199,4 +201,27 @@ test("our story: story, founder profile with headshot, and approach", async ({ p
   await page.setViewportSize({ width: 375, height: 800 });
   await page.reload();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+});
+
+test("warmer homepage: new hero copy, friendly CTAs, one prelaunch notice, founder introduction", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("At Mary’s Logistics Group, relationships come first, and every shipment matters.")).toBeVisible();
+  const talk = page.getByRole("link", { name: "Let’s Talk Freight" }).first();
+  await expect(talk).toHaveAttribute("href", "/contact");
+  // The full prelaunch notice appears once (the sitewide bar), not repeated down the page.
+  expect(await page.getByText("Freight services begin once our broker registration is complete", { exact: false }).count()).toBe(1);
+  await expect(page.getByRole("img", { name: "Alante Velez, Founder & CEO of Mary’s Logistics Group" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Meet Our Founder" })).toHaveAttribute("href", "/our-story");
+  await expect(page.getByRole("heading", { level: 2, name: "Tell Us About Your Business." })).toBeVisible();
+  // Nothing on the prelaunch homepage offers a quote or booking.
+  await expect(page.getByRole("link", { name: /quote/i })).toHaveCount(0);
+});
+
+test("shippers page speaks to real shipper concerns, including unexpected issues", async ({ page }) => {
+  await page.goto("/shippers");
+  for (const h of ["You won’t be left waiting", "Straight answers, in plain language", "Your requirements, taken seriously", "Plans built around your schedule", "Coordination handled for you", "Carriers you can rely on", "When plans change, you’ll hear it from us first"]) {
+    await expect(page.getByRole("heading", { level: 3, name: h })).toBeVisible();
+  }
+  await expect(page.getByText("This is how we will work once our broker registration is complete.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Let’s Talk Freight" })).toHaveAttribute("href", "/contact");
 });
