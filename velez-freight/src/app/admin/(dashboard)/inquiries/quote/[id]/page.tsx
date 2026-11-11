@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { requireStaff } from "@/lib/auth";
+import { getSettings } from "@/lib/data/settings";
 import { fmtDate, fmtDateTime, label, quoteStatuses } from "@/config/admin";
 import { shipmentTypes } from "@/config/site";
 import { Panel, StatusBadge } from "@/components/admin/admin-ui";
@@ -34,6 +36,12 @@ export default async function QuoteInquiryPage({ params }: { params: Promise<{ i
           <NotesPanel s={s} entityType="quote_inquiry" entityId={r.id} />
         </div>
         <div className="space-y-6">
+          {(await getSettings()).operational && (
+            <Panel title="Next step">
+              <p className="mb-3 text-sm">After confirming the details with the customer, prepare a quote for approval.</p>
+              <Link href={`/admin/quotes/new?inquiry=${r.id}`} className="inline-block rounded-md bg-brand-red px-4 py-2 text-sm font-semibold text-white">Create quote from this inquiry</Link>
+            </Panel>
+          )}
           <InquiryStatusForm kind="quote" id={r.id} status={r.status} followUp={r.follow_up_date} />
           <TasksPanel s={s} entityType="quote_inquiry" entityId={r.id} />
         </div>

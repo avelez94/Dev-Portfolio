@@ -65,7 +65,7 @@ export function FilterLinks({ base, param, current, options }: { base: string; p
         const url = new URLSearchParams();
         if (o.value) url.set(param, o.value);
         return (
-          <Link key={o.value || "all"} href={`${base}${o.value ? `?${url}` : ""}`} aria-current={active ? "true" : undefined} className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors", active ? "border-navy bg-navy text-white" : "border-line bg-white text-navy hover:border-navy/40")}>
+          <Link key={o.value || "__all"} href={`${base}${o.value ? `?${url}` : ""}`} aria-current={active ? "true" : undefined} className={cn("rounded-full border px-3 py-1 text-xs font-semibold transition-colors", active ? "border-navy bg-navy text-white" : "border-line bg-white text-navy hover:border-navy/40")}>
             {o.label}
           </Link>
         );
