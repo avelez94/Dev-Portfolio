@@ -35,6 +35,20 @@ and PDF exports. Quotes, shipments, invoicing and payables are built and stay lo
 operations are enabled. See `docs/COMMAND_CENTER.md` for how it works and
 `docs/ADMIN_GAP_ANALYSIS.md` for what was added.
 
+Also in the dashboard:
+
+* **Launch preview** (`/admin/preview`): the website as it will look once operating, for
+  owners and admins only, with simulated forms.
+* **Business Settings**: company profile, regulatory credentials (entered versus verified, with
+  evidence and history), contact details and hours, public display choices, email
+  configuration, integrations, team permissions and settings activity.
+* **Outreach**: email templates, drafts with approval, sending gates, unsubscribe handling,
+  delivery updates and email history on each shipper and carrier.
+* **Opportunities**, **Integrations** and **Agents** (all agents off by default).
+
+See `docs/PLATFORM_AUDIT.md` for the phase report and `docs/PRODUCTION_READINESS.md` for
+what must happen before launch.
+
 To explore it locally with a developed (synthetic) brokerage history:
 
 ```bash
@@ -97,6 +111,12 @@ listed in `.env.example`; `SUPABASE_SERVICE_ROLE_KEY` holds the Supabase secret 
 
 Set `RESEND_API_KEY`, `NOTIFY_EMAIL_FROM` (a sender on a domain verified in Resend) and
 `NOTIFY_EMAIL_TO`. Without them, submissions are still stored and notifications are skipped.
+
+Outreach email additionally needs a verified sending domain, a sender identity on it, a mailing
+address, `UNSUBSCRIBE_SECRET` (or `FORM_TOKEN_SECRET`), the owner's approval in Outreach >
+Sending Setup, and approval of each message. For delivery updates, create a Resend webhook to
+`https://<domain>/api/webhooks/resend` for delivered, delayed, bounced and complained events
+and set `RESEND_WEBHOOK_SECRET`.
 
 ## Scripts
 

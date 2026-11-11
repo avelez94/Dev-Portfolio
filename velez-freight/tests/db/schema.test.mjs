@@ -210,6 +210,36 @@ test("outreach: template edits keep versions; suppressions are admin managed", a
   await assert.rejects(db.query(`insert into public.email_suppressions (email, reason) values ('Upper@Example.test', 'manual')`), /check/);
 });
 
+test("priorities: outreach approvals and credential renewals become tasks and close themselves", async () => {
+  const { rows: [m] } = await db.query(`insert into public.outreach_messages (to_email, to_name, subject, body, status) values ('p@example.test', 'Pat', 'Hi', 'Body', 'pending_approval') returning id`);
+  await db.query(`update public.regulatory_credentials set value = 'Policy 1', status = 'verified', verified_on = current_date, verification_source = 'Insurer letter', expires_on = current_date + 10 where kind = 'contingent_cargo'`);
+  await db.query(`select public.refresh_system_tasks(true)`);
+  const open = async (key) => (await db.query(`select status, resolution from public.follow_up_tasks where dedupe_key like $1`, [key])).rows;
+  assert.deepEqual((await open(`outreach_approval:${m.id}`)).map((r) => r.status), ["open"]);
+  assert.equal((await open("credential_expiry:%")).length, 1);
+  await db.query(`update public.outreach_messages set status = 'cancelled' where id = $1`, [m.id]);
+  await db.query(`update public.regulatory_credentials set expires_on = current_date + 400 where kind = 'contingent_cargo'`);
+  await db.query(`select public.refresh_system_tasks(true)`);
+  assert.deepEqual(await open(`outreach_approval:${m.id}`), [{ status: "done", resolution: "auto_resolved" }]);
+  assert.ok((await open("credential_expiry:%")).every((r) => r.status === "done"));
+  await db.query(`update public.regulatory_credentials set value = null, status = 'not_entered', verified_on = null, verification_source = null, expires_on = null where kind = 'contingent_cargo'`);
+});
+
+test("agents: all seven start disabled, AI agents cannot be enabled, staff cannot see runs", async () => {
+  const { rows } = await db.query(`select key, status, engine from public.agent_definitions order by key`);
+  assert.equal(rows.length, 7);
+  assert.ok(rows.every((r) => r.status === "disabled"));
+  await assert.rejects(db.query(`update public.agent_definitions set status = 'enabled' where key = 'outreach_drafting'`), /AI agents cannot be enabled/);
+  await db.query(`insert into public.agent_runs (agent_key, status, summary) values ('executive_insights', 'succeeded', 'Brief')`);
+  await as("authenticated", STAFF, async () => {
+    assert.equal((await db.query(`select * from public.agent_runs`)).rows.length, 0);
+    assert.equal((await db.query(`update public.agent_definitions set status = 'enabled' where key = 'executive_insights'`)).rowCount, 0);
+  });
+  await as("authenticated", OWNER, async () => {
+    assert.equal((await db.query(`update public.agent_definitions set status = 'enabled' where key = 'executive_insights'`)).rowCount, 1);
+  });
+});
+
 test("staff cannot change their own role or activate profiles", async () => {
   await as("authenticated", STAFF, () => denied(db.query(`update public.profiles set role = 'owner' where id = $1`, [STAFF])));
 });

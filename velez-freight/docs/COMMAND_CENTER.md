@@ -27,7 +27,7 @@ attention, what can I do here, and where do I go next.
 | Relationships | Shippers (360 profiles), Carriers (qualification and evidence) |
 | Operations | Freight Inquiries, Quotes, Shipments |
 | Financials (owners and admins) | Invoices (with Operating expenses), Carrier Payables |
-| Analytics | Insights (six tabs), Reports (ten reports with CSV and PDF) |
+| Analytics | Insights (six tabs), Reports (eleven reports with CSV and PDF) |
 | System | Website Content, Settings, Audit Log |
 
 The sidebar collapses (preference kept per browser) and becomes a drawer on phones.

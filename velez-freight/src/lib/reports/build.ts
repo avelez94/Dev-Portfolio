@@ -19,6 +19,7 @@ export const REPORTS: ReportDef[] = [
   { key: "executive-summary", title: "Executive Summary", description: "Headline metrics for the period with comparisons and the plain English findings from the insight rules.", source: "analytics_sales, analytics_quotes, analytics_operations, analytics_financial", filters: [] },
   { key: "sales-pipeline", title: "Sales Pipeline", description: "Funnel from stage history, stage movements, lead sources and industries for prospects created in the period.", source: "analytics_sales (prospect_stage_events)", filters: [] },
   { key: "shipper-outreach", title: "Shipper Outreach", description: "Every recorded call, email and meeting in the period, response rate and follow up timeliness.", source: "crm_activities, follow_up_tasks", filters: ["shipper"] },
+  { key: "email-outreach", title: "Email Outreach", description: "Emails sent from the dashboard in the period: delivery results by template, unsubscribes, and every message. Replies, opens and clicks are not tracked.", source: "outreach_messages, email_suppressions", filters: ["shipper"] },
   { key: "freight-activity", title: "Freight Activity", description: "Shipments booked in the period with lane, freight type, carrier and status.", source: "shipments", operational: true, filters: ["shipper", "carrier", "freight"] },
   { key: "profitability", title: "Profitability", description: "Revenue, carrier cost and gross brokerage margin by customer and freight type, with operating expenses.", source: "analytics_financial", adminOnly: true, operational: true, filters: ["shipper", "carrier", "freight"] },
   { key: "receivables", title: "Receivables", description: "Open customer invoices with balances, due dates and aging as of the end of the period.", source: "invoices, invoice_payments", adminOnly: true, operational: true, filters: ["shipper"] },
@@ -168,6 +169,41 @@ export async function buildReport(def: ReportDef, s: StaffSession, period: Perio
       summary.push({ label: "Lanes", value: String(lanes.length) }, { label: "Repeat lanes", value: String(cur.ops?.repeat_lanes ?? 0) });
       sections.push({ title: "Lanes (completed loads)", note: "Margin is brokerage gross margin. It does not show whether a lane is profitable for the carrier.", columns: [{ key: "origin", label: "Origin" }, { key: "dest", label: "Destination" }, { key: "loads", label: "Loads", format: "count" }, { key: "rate", label: "Avg customer charge", format: "money" }, { key: "cost", label: "Avg carrier cost", format: "money" }, { key: "margin", label: "Avg gross margin", format: "money" }, { key: "pct", label: "Margin %", format: "percent" }, { key: "exc", label: "Exceptions", format: "count" }],
         rows: lanes.map((l) => ({ origin: `${l.origin_city}, ${l.origin_state}`, dest: `${l.dest_city}, ${l.dest_state}`, loads: n(l.loads), rate: n(l.avg_customer_rate), cost: n(l.avg_carrier_cost), margin: n(l.avg_margin), pct: n(l.margin_pct), exc: n(l.exceptions) })) });
+      break;
+    }
+    case "email-outreach": {
+      const from = dayStartUtc(period.from), to = dayStartUtc(addDays(period.to, 1));
+      let q = s.db.from("outreach_messages").select("sent_at, to_email, subject, shipper_id, carrier_id, template_id, delivery_status, reference").gte("sent_at", from).lt("sent_at", to).order("sent_at", { ascending: false }).limit(2000);
+      if (f.shipper) q = q.eq("shipper_id", f.shipper);
+      const [{ data: msgs }, { data: templates }, { count: unsubscribed }] = await Promise.all([
+        q,
+        s.db.from("email_templates").select("id, name"),
+        s.db.from("email_suppressions").select("email", { count: "exact", head: true }).in("reason", ["unsubscribed", "complained"]).gte("created_at", from).lt("created_at", to),
+      ]);
+      const list = msgs ?? [];
+      const ids = [...new Set(list.map((m) => m.shipper_id).filter(Boolean))] as string[];
+      const { data: names } = ids.length ? await s.db.from("shipper_prospects").select("id, company").in("id", ids) : { data: [] };
+      const nm = new Map((names ?? []).map((r) => [r.id as string, r.company as string]));
+      const tn = new Map((templates ?? []).map((t) => [t.id as string, t.name as string]));
+      const cnt = (st: string) => list.filter((m) => m.delivery_status === st).length;
+      summary.push(
+        { label: "Emails sent", value: String(list.length) },
+        { label: "Delivered", value: list.length ? formatValue("percent", cnt("delivered") / list.length) : "None sent" },
+        { label: "Bounced", value: String(cnt("bounced")) },
+        { label: "Unsubscribes and complaints", value: String(unsubscribed ?? 0) },
+      );
+      const byTemplate = new Map<string, { sent: number; delivered: number; bounced: number }>();
+      for (const m of list) {
+        const k = m.template_id ? tn.get(m.template_id) ?? "Template" : "Written from scratch";
+        const r = byTemplate.get(k) ?? { sent: 0, delivered: 0, bounced: 0 };
+        r.sent++; if (m.delivery_status === "delivered") r.delivered++; if (m.delivery_status === "bounced") r.bounced++;
+        byTemplate.set(k, r);
+      }
+      sections.push({ title: "By template", columns: [{ key: "t", label: "Template" }, { key: "sent", label: "Sent", format: "count" }, { key: "delivered", label: "Delivered", format: "count" }, { key: "bounced", label: "Bounced", format: "count" }],
+        rows: [...byTemplate.entries()].map(([t, r]) => ({ t, ...r })) });
+      sections.push({ title: "Emails sent", note: "Delivery updates arrive from the email provider; a blank result means no update yet.", columns: [{ key: "date", label: "Sent", format: "date" }, { key: "ref", label: "Reference" }, { key: "to", label: "Recipient" }, { key: "company", label: "Company" }, { key: "subject", label: "Subject" }, { key: "result", label: "Delivery" }],
+        rows: list.map((m) => ({ date: m.sent_at, ref: m.reference, to: m.to_email, company: m.shipper_id ? nm.get(m.shipper_id) ?? "" : m.carrier_id ? "Carrier" : "", subject: m.subject, result: m.delivery_status === "none" ? "" : m.delivery_status })) });
+      notes.push("Replies arrive in your regular inbox and are not counted here. Opens and clicks are not tracked.");
       break;
     }
   }

@@ -77,6 +77,7 @@ export const taskCategories = [
   { value: "shipment", label: "Shipment" },
   { value: "compliance", label: "Compliance" },
   { value: "admin", label: "Administration" },
+  { value: "outreach", label: "Outreach" },
   { value: "other", label: "Other" },
 ] as const;
 

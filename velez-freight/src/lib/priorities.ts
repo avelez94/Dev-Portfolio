@@ -26,6 +26,8 @@ const ENTITY = {
   shipment: { table: "shipments", col: "reference", href: (id: string) => `/admin/shipments/${id}` },
   invoice: { table: "invoices", col: "number", href: (id: string) => `/admin/invoices/${id}` },
   carrier_bill: { table: "carrier_bills", col: "carrier_invoice_reference", href: () => `/admin/payables` },
+  outreach_message: { table: "outreach_messages", col: "subject", href: (id: string) => `/admin/outreach/${id}` },
+  regulatory_credential: { table: "regulatory_credentials", col: "kind", href: () => `/admin/settings?tab=compliance#credentials` },
 } as const;
 
 export const TASK_COLUMNS = "id, title, details, due_date, priority_tier, category, status, recommended_action, entity_type, entity_id, assigned_to, source, snoozed_until, created_at, completed_at, resolution, recurrence";

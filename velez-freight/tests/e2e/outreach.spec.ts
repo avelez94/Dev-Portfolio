@@ -207,3 +207,23 @@ test("templates: edits create versions; staff cannot change templates or sending
   await staff.goto("/admin/outreach/templates/new");
   await expect(staff).toHaveURL(/denied=1/);
 });
+
+test("email outreach report lists sent emails with delivery results", async ({ page }) => {
+  const [m] = await sql<{ reference: string }>(`select reference from public.outreach_messages where status = 'sent' limit 1`);
+  await signIn(page);
+  const csv = await (await page.request.get("/admin/reports-export/email-outreach?period=30d&format=csv")).text();
+  expect(csv).toContain("Email Outreach");
+  expect(csv).toContain(m.reference);
+  expect(csv).toContain("bounced");
+  const pdf = await page.request.get("/admin/reports-export/email-outreach?period=30d&format=pdf");
+  expect(pdf.headers()["content-type"]).toContain("application/pdf");
+});
+
+test("an email waiting for approval shows up in today's priorities", async ({ page }) => {
+  const [sender] = await sql<{ id: string }>(`select id from public.sender_identities limit 1`);
+  await sql(`insert into public.outreach_messages (shipper_id, to_email, to_name, subject, body, sender_id, status) values ($1, 'robin@harbor.test', 'Robin Harbor', 'Checking in', 'Hi', $2, 'pending_approval')`, [shipperId, sender.id]);
+  await sql(`select public.refresh_system_tasks(true)`);
+  await signIn(page);
+  await page.goto("/admin/tasks");
+  await expect(page.getByText("Review email to Robin Harbor").first()).toBeVisible();
+});
