@@ -14,6 +14,7 @@
 | Evidence and history | Stage history, carrier verification evidence and shipment events are append only. |
 | Exports | Report exports require a staff session, enforce admin only reports on the server, are never cached, contain no bank data, neutralize spreadsheet formulas, and are written to the audit log. URLs carry only dates and record IDs. |
 | Scheduled reports | The schedule table has a check constraint that keeps every schedule disabled until delivery is approved. |
+| Document files | Private Supabase storage bucket `documents` with no storage policies: only the server can read or write. Uploads use a one time signed URL issued after the session and record are checked; files get random names under their record's folder; the server verifies the stored type, size and location before saving the record, and removes the file if saving fails. Downloads go through `/admin/documents/<id>`, which re checks access, logs the download and redirects to a link valid for one minute. W9 files open for owners and admins only. PDF and photos only, 15 MB maximum. |
 | Sensitive data | Forms warn against and do not request SSNs, bank details, tax forms or documents. Carrier onboarding documents belong in a separate secure workflow. |
 
 ## Supabase project settings to apply
@@ -41,5 +42,5 @@
 
 ## Tests
 
-* `npm run test:db`: 46 tests against the real migrations on Postgres (grants, RLS, gates, carrier qualification, task generation and deduplication, immutable history, and metric accuracy against an independent calculation).
+* `npm run test:db`: 47 tests against the real migrations on Postgres (grants, RLS, gates, carrier qualification, task generation and deduplication, immutable history, and metric accuracy against an independent calculation).
 * `npm run test:e2e`: Playwright flows against production builds, with a test only Supabase stand in that executes queries under the caller's Postgres role so RLS is exercised.

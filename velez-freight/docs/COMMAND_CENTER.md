@@ -55,6 +55,13 @@ anyone. Its run history is in `cron.job_run_details` and is trimmed after 14 day
 condition clears are closed automatically and shown as "auto resolved". Completing a task never
 contacts anyone.
 
+## Documents
+
+Carrier and shipment profiles have a Documents panel: choose the type, optionally a reference
+and expiry date, and attach a PDF or photo (up to 15 MB). Files are stored privately; the
+download link checks your access each time and is recorded in the audit log. W9 forms open
+for owners and admins only. A document can also be recorded without a file.
+
 ## Operating modes
 
 * **Prelaunch** (now): shipper prospecting, CRM, inquiries, follow ups, carrier interest,
