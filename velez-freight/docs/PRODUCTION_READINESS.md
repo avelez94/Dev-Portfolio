@@ -16,8 +16,9 @@ tables, and the task refresh runs.
 | `20261121000100_outreach.sql` | Email templates (seven starters), sender identities, messages, delivery events, do not email list, sending controls |
 | `20261122000100_priorities_and_agents.sql` | Priority rules for outreach, carrier verification and credential renewals; agent registry (all disabled), runs, approval requests |
 
-The new dashboard pages (Business Settings tabs, Outreach, Agents) reach the live site only
-with the next deployment, which needs owner approval.
+Deployed to production on 2026-11-11 with owner approval (commit 3863954). Checked after
+deploying: public pages load, signed out visitors are sent to sign in, the unsubscribe page
+rejects invalid links, and no runtime errors.
 
 ## 2. Hosting environment (owner approval required)
 
