@@ -1,21 +1,21 @@
 # Brand assets
 
-## Logo status: interim vector recreation
+## Logo source
 
-The approved logo was supplied as a raster image in chat, not as a file in the repository.
-`public/brand/logo-primary.svg`, `logo-reverse.svg`, `logo-mark.svg`, `src/app/icon.svg`
-and `src/components/site/logo-paths.ts` are a **vector recreation** of that artwork:
+The owner supplied the logo as a high resolution PNG (2172 by 724 pixels, transparent
+background). It is kept unchanged as the master file in
+`brand-source/velez-freight-logo-supplied.png`.
 
-* Road symbol: navy road with white dashed center line, navy shoulders, red arcs.
-* VELEZ: outlined from Merriweather Black (SIL Open Font License), widened to match.
-* FREIGHT GROUP: outlined from Montserrat Bold (SIL Open Font License), letterspaced.
-* Red tapered rules on both sides of FREIGHT GROUP.
+The website uses an exact vector trace of that file, so the logo stays sharp at every size
+and works in both color variants:
 
-It closely follows the supplied design but it is **not the original master file**. Before
-launch, please provide the designer's original vector (SVG, AI, EPS or PDF) or a high
-resolution transparent PNG so the exact letterforms and proportions can replace this
-recreation. Swapping it requires updating `logo-paths.ts` (or replacing the `Logo` component
-with the supplied SVG) and the files in `public/brand/`.
+* `scripts/brand/trace_logo.py` traces the navy, red and white areas of the PNG (potrace).
+* `scripts/brand/generate_logo_files.py` writes `src/components/site/logo-paths.ts`,
+  `public/brand/logo-primary.svg`, `logo-reverse.svg`, `logo-mark.svg` and `src/app/icon.svg`.
+
+The shapes come from the supplied artwork; the fills use the brand palette (navy `#142839`,
+red `#E1252F`), which differs only slightly from the navy in the PNG. If the designer's
+original vector file (SVG, AI, EPS or PDF) becomes available, it can replace the trace.
 
 ## Variants
 
@@ -24,7 +24,8 @@ with the supplied SVG) and the files in `public/brand/`.
 | Primary (navy and red on light) | Header, admin sign in | `Logo` component, `logo-primary.svg` |
 | Reverse (white and red on navy) | Footer, mobile menu, admin sidebar | `Logo variant="reverse"`, `logo-reverse.svg` |
 | Road mark | Decorative accents | `LogoMark`, `logo-mark.svg` |
-| App icon / favicon | Browser tab, home screen | `src/app/icon.svg` |
+| App icon / favicon (road symbol on navy) | Browser tab, home screen | `src/app/icon.svg` |
+| Social share image | Link previews | `public/og-image.jpg` |
 
 ## Colors
 

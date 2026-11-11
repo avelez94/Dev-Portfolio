@@ -47,8 +47,11 @@ The sidebar collapses (preference kept per browser) and becomes a drawer on phon
 | Carrier bill due | Risk | Due within 3 days with a balance |
 
 Rules are SQL (`refresh_system_tasks`) with a unique key per condition, so tasks are never
-duplicated and a task you dismissed is not recreated. Time based rules run at most every five
-minutes when the dashboard or task center opens; inquiry rules run instantly. Tasks whose
+duplicated and a task you dismissed is not recreated. Inquiry rules run instantly. Time based
+rules run every 15 minutes in a background job inside the database (Supabase Cron, migration
+`20261113000100_scheduled_jobs.sql`), and also when the dashboard or task center opens (at
+most every five minutes). The job only creates or closes internal tasks; it never contacts
+anyone. Its run history is in `cron.job_run_details` and is trimmed after 14 days. Tasks whose
 condition clears are closed automatically and shown as "auto resolved". Completing a task never
 contacts anyone.
 

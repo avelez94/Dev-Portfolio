@@ -9,17 +9,17 @@ const palette: Record<Variant, { road: string; dashes: string; text: string; red
 };
 
 /**
- * Interim vector recreation of the supplied logo (road symbol, VELEZ, FREIGHT GROUP).
- * Lettering is outlined, so the logo does not depend on web fonts.
+ * The owner supplied logo (road symbol, VELEZ, FREIGHT GROUP), traced to vector from the
+ * supplied artwork so it stays sharp at every size and does not depend on web fonts.
  */
 export function Logo({ variant = "primary", className, title = "Velez Freight Group" }: { variant?: Variant; className?: string; title?: string | null }) {
   const c = palette[variant];
   return (
     <svg viewBox={LOGO.viewBox} className={cn("h-auto", className)} role={title ? "img" : undefined} aria-label={title ?? undefined} aria-hidden={title ? undefined : true} focusable="false">
-      <path fill={c.red} d={LOGO.wings + LOGO.lines} />
-      <path fill={c.road} d={LOGO.roadOuter + LOGO.roadMain} />
-      <path fill={c.dashes} d={LOGO.dashes} />
-      <path fill={c.text} d={LOGO.velez + LOGO.freightGroup} />
+      <path fill={c.red} d={LOGO.wings + LOGO.rules} />
+      <path fill={c.road} d={LOGO.road} />
+      <path fill={c.dashes} d={LOGO.lines} />
+      <path fill={c.text} d={LOGO.lettering} />
     </svg>
   );
 }
@@ -27,10 +27,10 @@ export function Logo({ variant = "primary", className, title = "Velez Freight Gr
 /** Road symbol only, for compact placements and decorative accents. */
 export function LogoMark({ className, tone = "brand" }: { className?: string; tone?: "brand" | "light" }) {
   return (
-    <svg viewBox="480 30 1040 260" className={className} aria-hidden="true" focusable="false">
+    <svg viewBox={LOGO.markViewBox} className={className} aria-hidden="true" focusable="false">
       <path fill="#E1252F" d={LOGO.wings} />
-      <path fill={tone === "light" ? "#FFFFFF" : "#142839"} d={LOGO.roadOuter + LOGO.roadMain} />
-      <path fill={tone === "light" ? "#142839" : "#FFFFFF"} d={LOGO.dashes} />
+      <path fill={tone === "light" ? "#FFFFFF" : "#142839"} d={LOGO.road} />
+      <path fill={tone === "light" ? "#142839" : "#FFFFFF"} d={LOGO.lines} />
     </svg>
   );
 }

@@ -59,11 +59,11 @@ npm run dev
 The site runs at http://localhost:3100. Without Supabase variables the public pages render
 with prelaunch defaults, and forms report honestly that the inquiry system is not connected.
 
-## Connecting Supabase (not done yet; requires your approval)
+## Connecting Supabase
 
 1. Create a Supabase project (US East region recommended).
 2. Review the files in `supabase/migrations/` and apply them in order (SQL editor or Supabase
-   CLI). Rollback scripts are in `supabase/rollback/` (apply newest first; destructive, export
+   CLI). The last one schedules the background workflow job with Supabase Cron. Rollback scripts are in `supabase/rollback/` (apply newest first; destructive, export
    data first).
 3. Apply the Auth settings in `docs/SECURITY.md` (disable sign ups, redirect URL).
 4. Create the first owner: Authentication > Users > Invite user (your email). Then in the SQL
@@ -108,7 +108,9 @@ src/
   lib/               env, supabase clients, auth, data access, security, email, ai (stub)
 supabase/            migrations and rollback scripts
 tests/               unit, db, e2e
-docs/                SECURITY, AI_ARCHITECTURE, BRAND_ASSETS, IMAGE_SOURCES
+docs/                SECURITY, AI_ARCHITECTURE, BRAND_ASSETS, IMAGE_SOURCES, COMMAND_CENTER
+brand-source/        the owner supplied logo file (master)
+scripts/brand/       regenerates the vector logo files from the master
 ```
 
 ## Content and facts
