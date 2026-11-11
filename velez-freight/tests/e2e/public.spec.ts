@@ -8,7 +8,7 @@ test("homepage renders the approved hero and an honest prelaunch status", async 
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Your freight.");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Every mile.");
-  await expect(page.getByText("Velez Freight Group is preparing to launch.").first()).toBeVisible();
+  await expect(page.getByText("Mary’s Logistics Group is preparing to launch.").first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Request a Freight Quote" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
 });
@@ -48,7 +48,7 @@ test("launch notification: validation, success with reference, and persistence",
   await form.getByRole("checkbox").check();
   await humanPause(page);
   await form.getByRole("button", { name: /Notify Me at Launch/ }).click();
-  await expect(form.getByRole("status")).toContainText(/Reference: VFG-C-[A-F0-9]{8}/);
+  await expect(form.getByRole("status")).toContainText(/Reference: MLG-C-[A-F0-9]{8}/);
   const rows = await sql<{ inquiry_type: string; company: string; status: string }>("select inquiry_type, company, status from public.contact_inquiries where email = 'jordan@example.test'");
   expect(rows).toEqual([{ inquiry_type: "launch_notification", company: "Harbor Supply Co", status: "new" }]);
 });
@@ -62,7 +62,7 @@ test("contact form stores a general inquiry and writes an audit event", async ({
   await page.getByRole("checkbox").check();
   await humanPause(page);
   await page.getByRole("button", { name: /Send Your Message/ }).click();
-  await expect(page.getByText(/Message received. Reference VFG-C-/)).toBeVisible();
+  await expect(page.getByText(/Message received. Reference MLG-C-/)).toBeVisible();
   const [row] = await sql<{ id: string; inquiry_type: string }>("select id, inquiry_type from public.contact_inquiries where email = 'avery@example.test'");
   expect(row.inquiry_type).toBe("general");
   await expect.poll(async () => (await sql("select 1 from public.audit_events where entity_id = $1", [row.id])).length).toBe(1);
@@ -83,7 +83,7 @@ test("carrier inquiry creates a carrier lead linked to its inquiry", async ({ pa
   await form.getByRole("checkbox", { name: /privacy notice/ }).check();
   await humanPause(page);
   await form.getByRole("button", { name: /Submit a Carrier Inquiry/ }).click();
-  await expect(page.getByText(/Inquiry received. Reference VFG-C-/)).toBeVisible();
+  await expect(page.getByText(/Inquiry received. Reference MLG-C-/)).toBeVisible();
   const [lead] = await sql<{ id: string; mc_number: string; equipment: string[]; verification_status: string }>("select id, mc_number, equipment, verification_status from public.carrier_leads where email = 'sam@example.test'");
   expect(lead).toMatchObject({ mc_number: "123456", equipment: ["dry_van", "box_truck"], verification_status: "unverified" });
   const inq = await sql("select 1 from public.contact_inquiries where carrier_lead_id = $1 and inquiry_type = 'carrier'", [lead.id]);
@@ -151,4 +151,29 @@ test("SEO files and security headers are served", async ({ request }) => {
   const home = await request.get("/");
   expect(home.headers()["x-frame-options"]).toBe("DENY");
   expect(home.headers()["x-content-type-options"]).toBe("nosniff");
+});
+
+test("no old brand name appears on any public page, in metadata or in the manifest", async ({ page }) => {
+  for (const path of ["/", "/services", "/shippers", "/carriers", "/our-story", "/contact", "/request-quote", "/privacy", "/terms", "/manifest.webmanifest", "/robots.txt", "/sitemap.xml"]) {
+    const res = await page.request.get(path);
+    expect(res.status(), path).toBe(200);
+    expect(await res.text(), path).not.toMatch(/velez|vfg|freight group/i);
+  }
+  // Visible text never shows raw escape codes (for example a literal \u2019 instead of an apostrophe).
+  for (const path of ["/", "/services", "/shippers", "/carriers", "/our-story", "/contact", "/request-quote", "/privacy", "/terms"]) {
+    await page.goto(path);
+    expect(await page.locator("body").innerText(), path).not.toMatch(/\\u[0-9a-fA-F]{4}/);
+  }
+  await page.goto("/");
+  await expect(page).toHaveTitle("Mary’s Logistics Group | Freight Brokerage & Transportation Coordination");
+  await expect(page.getByRole("link", { name: "Mary’s Logistics Group home" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Why Choose Mary’s Logistics Group?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "A Legacy That Moves Us Forward" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Haul With Mary’s Logistics Group" })).toBeVisible();
+  // Structured data names the brand; a legal name appears only once confirmed in Settings.
+  await expect.poll(async () => {
+    await page.goto("/");
+    const ld = JSON.parse((await page.locator('script[type="application/ld+json"]').first().textContent()) ?? "{}");
+    return [ld.name, ld.legalName ?? null];
+  }, { timeout: 15000 }).toEqual(["Mary’s Logistics Group", null]);
 });

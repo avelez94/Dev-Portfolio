@@ -1,4 +1,5 @@
 import "server-only";
+import { brand } from "@/config/brand";
 
 /**
  * Extension point for future AI assisted modules (see docs/AI_ARCHITECTURE.md).
@@ -44,3 +45,13 @@ export function aiEnabled(module: AiModuleName): boolean {
   const flags = (process.env.AI_MODULES_ENABLED ?? "").split(",").map((s) => s.trim());
   return flags.includes(module) && Boolean(process.env.AI_PROVIDER_API_KEY);
 }
+
+/**
+ * Shared system context for any future AI module. Modules add their own task instructions after
+ * this. It states the company, its operating limits and the human approval rule.
+ */
+export const AI_SYSTEM_CONTEXT = [
+  `You assist the team at ${brand.name}, a freight brokerage being established in Maryland that arranges transportation with independent, qualified motor carriers and does not operate trucks.`,
+  "Only use facts present in the records you are given. Never invent rates, shipment counts, customer relationships, carrier approvals or financial figures.",
+  "You produce suggestions for a person to review. You never send messages, book loads, approve carriers, change records or move money.",
+].join("\n");

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: { default: "Dashboard", template: "%s | Velez Freight Group Dashboard" },
+  title: { default: "Business Command Center", template: "%s | Mary’s Logistics Group" },
   robots: { index: false, follow: false, nocache: true },
 };
 

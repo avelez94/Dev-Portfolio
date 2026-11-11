@@ -1,12 +1,14 @@
-# Velez Freight Group website
+# Mary’s Logistics Group website
 
-Public website and private operations dashboard for Velez Freight Group, a family owned freight
+Public website and private Business Command Center for Mary’s Logistics Group (formerly Velez
+Freight Group), a family owned freight
 brokerage being established in Maryland. Built with Next.js 16 (App Router), TypeScript,
 Tailwind CSS 4, shadcn/ui style components (Radix), Lucide icons, React Hook Form + Zod,
 Supabase (Postgres + Auth) and Resend. Designed for Vercel.
 
 This folder is a self contained app inside the `Dev-Portfolio` repository. Deploy it as its own
-Vercel project with **Root Directory = `velez-freight`**, or move it to its own repository
+Vercel project with **Root Directory = `velez-freight`** (the folder keeps its original name so the
+hosting configuration does not change), or move it to its own repository
 (`git subtree split --prefix velez-freight`).
 
 ## Operating status: prelaunch by default

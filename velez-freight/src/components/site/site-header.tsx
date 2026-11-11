@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Menu, X } from "lucide-react";
-import { nav } from "@/config/site";
+import { nav, site } from "@/config/site";
 import { Logo } from "./logo";
 import { cn } from "@/lib/utils";
 
@@ -62,8 +62,8 @@ export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: s
         Skip to content
       </a>
       <div className="container-site flex h-[4.5rem] items-center justify-between gap-6 lg:h-20">
-        <Link href="/" className="flex shrink-0 items-center" aria-label="Velez Freight Group home">
-          <Logo className="w-[8.75rem] lg:w-[10.5rem]" title={null} />
+        <Link href="/" className="flex shrink-0 items-center" aria-label={`${site.name} home`}>
+          <Logo className="w-[12rem] lg:w-[14.5rem]" title={null} />
         </Link>
 
         <div className="hidden items-center gap-8 lg:flex">
@@ -111,7 +111,7 @@ export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: s
         // Rendered outside <header>: its backdrop filter would otherwise trap this fixed panel.
         <div id="mobile-menu" ref={panelRef} role="dialog" aria-modal="true" aria-label="Site menu" className="fixed inset-0 z-[60] overflow-y-auto bg-navy text-white lg:hidden">
           <div className="container-site flex h-[4.5rem] items-center justify-between border-b border-white/10">
-            <Link href="/" aria-label="Velez Freight Group home" onClick={() => setOpen(false)}><Logo variant="reverse" className="w-[8.75rem]" title={null} /></Link>
+            <Link href="/" aria-label={`${site.name} home`} onClick={() => setOpen(false)}><Logo variant="reverse" className="w-[12rem]" title={null} /></Link>
             <button type="button" className="inline-flex size-11 items-center justify-center rounded-md hover:bg-white/10" aria-label="Close menu" onClick={() => { setOpen(false); toggleRef.current?.focus(); }}>
               <X className="size-6" />
             </button>

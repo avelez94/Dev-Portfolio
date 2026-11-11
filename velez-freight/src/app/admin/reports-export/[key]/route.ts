@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ key:
   const freight = sp.get("freight");
   const report = await buildReport(def, s, period, { shipper: isId(sp.get("shipper")), carrier: isId(sp.get("carrier")), freightType: freight && ["expedited", "dedicated", "general"].includes(freight) ? freight : undefined });
   await audit({ actorType: "admin", actorId: s.userId, action: "report.exported", entityType: "report", entityId: key, metadata: { format, from: period.from, to: period.to } });
-  const name = `velez-${key}-${period.from}-to-${period.to}.${format}`;
+  const name = `marys-logistics-${key}-${period.from}-to-${period.to}.${format}`;
   const headers = { "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
   if (format === "pdf") {
     const bytes = await reportToPdf(report);

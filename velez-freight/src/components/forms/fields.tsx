@@ -90,7 +90,7 @@ export function PrivacyCheckbox({ id, error, register }: { id: string; error?: s
         <span>
           I have read the{" "}
           <a href="/privacy" target="_blank" className="font-semibold text-brand-red-dark underline underline-offset-2">privacy notice</a>{" "}
-          and agree that Velez Freight Group may use this information to respond to my inquiry.
+          and agree that Mary’s Logistics Group may use this information to respond to my inquiry.
         </span>
       </label>
       {error && <p id={`${id}-error`} className="mt-1 text-xs font-medium text-brand-red-dark">{error}</p>}

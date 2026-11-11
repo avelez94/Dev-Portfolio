@@ -54,7 +54,7 @@ export default async function ShippersPage() {
       <section className="py-16 sm:py-20">
         <div className="container-site grid gap-12 lg:grid-cols-2 lg:items-center">
           <div data-reveal className="space-y-5 text-[1.05rem] leading-relaxed text-charcoal">
-            <p className="font-serif text-2xl leading-snug text-navy">At Velez Freight Group, we believe your transportation partner should understand those priorities.</p>
+            <p className="font-serif text-2xl leading-snug text-navy">At Mary’s Logistics Group, we believe your transportation partner should understand those priorities.</p>
             <p>Our approach focuses on responsive communication, thoughtful coordination, and building business relationships that extend beyond a single shipment.</p>
             {!settings.operational && (
               <PrelaunchNotice>

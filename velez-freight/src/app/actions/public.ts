@@ -74,7 +74,7 @@ export async function submitContact(input: unknown, envelope: unknown, sourcePag
     reference: data.reference,
     message:
       d.inquiryType === "launch_notification"
-        ? "Thank you. We will email you when Velez Freight Group is ready to begin arranging shipments."
+        ? "Thank you. We will email you when Mary’s Logistics Group is ready to begin arranging shipments."
         : "Thank you. Your message was received and a member of our team will reply personally.",
   };
 }
@@ -170,7 +170,7 @@ export async function submitQuote(input: unknown, envelope: unknown): Promise<Ac
     return {
       ok: false,
       code: "not_operational",
-      error: "Velez Freight Group is not arranging transportation yet, so freight quote requests are not being accepted. Please send a general inquiry instead.",
+      error: "Mary’s Logistics Group is not arranging transportation yet, so freight quote requests are not being accepted. Please send a general inquiry instead.",
     };
   }
   const env = spamEnvelope.safeParse(envelope);
@@ -232,6 +232,6 @@ export async function submitQuote(input: unknown, envelope: unknown): Promise<Ac
   return {
     ok: true,
     reference: data.reference,
-    message: "Thank you for contacting Velez Freight Group. Your request has been received and will be reviewed. Submitting an inquiry does not confirm transportation availability, pricing, or booking.",
+    message: "Thank you for contacting Mary’s Logistics Group. Your request has been received and will be reviewed. Submitting an inquiry does not confirm transportation availability, pricing, or booking.",
   };
 }

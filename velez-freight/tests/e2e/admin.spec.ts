@@ -164,11 +164,18 @@ test("insights and reports: sales funnel, CSV and real PDF exports, audited", as
   const text = await csv.text();
   expect(text).toContain("Sales Pipeline");
   expect(text).toContain("Funnel (prospects created in the period)");
+  expect(text).toContain("Company,Mary’s Logistics Group");
+  expect(csv.headers()["content-disposition"]).toContain("marys-logistics-sales-pipeline");
   const pdf = await page.request.get("/admin/reports-export/executive-summary?period=30d&format=pdf");
   expect(pdf.headers()["content-type"]).toBe("application/pdf");
   const bytes = await pdf.body();
   expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
   expect(bytes.length).toBeGreaterThan(2000);
+  // Title metadata carries the new brand (pdf-lib writes metadata as a hex or literal string).
+  const raw = bytes.toString("latin1");
+  const hex = Buffer.from("Mary's Logistics Group", "utf16le").swap16().toString("hex").toUpperCase();
+  expect(raw.includes("Mary's Logistics Group") || raw.toUpperCase().includes(hex)).toBe(true);
+  expect(raw).not.toMatch(/Velez/i);
   const audit = await sql("select 1 from public.audit_events where action = 'report.exported'");
   expect(audit.length).toBeGreaterThanOrEqual(2);
 });
@@ -192,7 +199,7 @@ test("settings and website content: operations need confirmation; content saves"
   await expect(page.getByText(/BROKER_AUTHORITY_ACTIVE.*false/)).toBeVisible();
   await page.getByLabel("Operations enabled (accept freight quote inquiries)").check();
   await page.getByRole("button", { name: "Save settings" }).click();
-  await expect(page.getByText(/type ENABLE OPERATIONS/)).toBeVisible();
+  await expect(page.getByText(/To enable operations, type ENABLE OPERATIONS/)).toBeVisible();
   await expect(page.getByLabel("Operations enabled (accept freight quote inquiries)")).toBeChecked();
   await page.getByLabel("To turn operations ON, type ENABLE OPERATIONS").fill("ENABLE OPERATIONS");
   await page.getByRole("button", { name: "Save settings" }).click();
@@ -202,6 +209,58 @@ test("settings and website content: operations need confirmation; content saves"
   await page.getByLabel("Public business email").fill("hello@example.test");
   await page.getByRole("button", { name: "Save website content" }).click();
   await expect(page.getByText(/Saved. Public pages refresh/)).toBeVisible();
+});
+
+test("business identity: legal name hidden until confirmed, launch checklist, operations need active authority", async ({ page }) => {
+  await sql("update public.business_settings set operations_enabled = false, legal_name_confirmed = false, broker_authority_status = 'not_filed', launch_checklist = '{}' where id = 1");
+  await signIn(page);
+  await page.goto("/admin/settings");
+  await expect(page.getByLabel("Legal entity name", { exact: true })).toHaveValue("Mary’s Logistics Group LLC");
+  await page.locator("#id-tm").selectOption("in_progress");
+  await page.getByRole("button", { name: "Save business identity" }).click();
+  await expect(page.getByText("Business identity saved.")).toBeVisible();
+  // Unconfirmed: public legal pages use the brand name only.
+  await page.goto("/terms");
+  await expect(page.locator("main")).toContainText("operated by Mary’s Logistics Group.");
+  await expect(page.locator("main")).not.toContainText("Mary’s Logistics Group LLC");
+  // Confirmed: the legal entity name appears (after the page regenerates).
+  await page.goto("/admin/settings");
+  await page.getByLabel(/registered and confirmed/).check();
+  await page.getByRole("button", { name: "Save business identity" }).click();
+  await expect(page.getByText("Business identity saved.")).toBeVisible();
+  await expect.poll(async () => { await page.goto("/terms"); return page.locator("main").innerText(); }, { timeout: 15000 }).toContain("operated by Mary’s Logistics Group LLC");
+  // Launch checklist saves with notes.
+  await page.goto("/admin/settings");
+  await page.locator("#lc-federal_trademark").selectOption("in_progress");
+  await page.locator("#lcn-federal_trademark").fill("Search ordered");
+  await page.getByRole("button", { name: "Save checklist" }).click();
+  await expect(page.getByText("Checklist saved.")).toBeVisible();
+  const [row] = await sql<{ c: { federal_trademark: { status: string; note: string } } }>("select launch_checklist c from public.business_settings where id = 1");
+  expect(row.c.federal_trademark).toMatchObject({ status: "in_progress", note: "Search ordered" });
+  // Operations stay off unless broker authority status is recorded as active.
+  await sql("update public.business_settings set mc_number = '123456', authority_verified_on = current_date where id = 1");
+  await page.reload();
+  await page.getByLabel("Operations enabled (accept freight quote inquiries)").check();
+  await page.getByLabel("To turn operations ON, type ENABLE OPERATIONS").fill("ENABLE OPERATIONS");
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByText(/Set Broker authority status to Active/)).toBeVisible();
+  expect((await sql<{ operations_enabled: boolean }>("select operations_enabled from public.business_settings where id = 1"))[0].operations_enabled).toBe(false);
+  // Un-confirm through the dashboard so public pages regenerate without the legal name.
+  await page.goto("/admin/settings");
+  await page.getByLabel(/registered and confirmed/).uncheck();
+  await page.getByRole("button", { name: "Save business identity" }).click();
+  await expect(page.getByText("Business identity saved.")).toBeVisible();
+  await expect.poll(async () => { await page.goto("/terms"); return page.locator("main").innerText(); }, { timeout: 15000 }).not.toContain("Mary’s Logistics Group LLC");
+  await sql("update public.business_settings set mc_number = null, authority_verified_on = null where id = 1");
+});
+
+test("no old brand name is visible anywhere in the dashboard", async ({ page }) => {
+  await signIn(page);
+  for (const path of ["/admin", "/admin/tasks", "/admin/notifications", "/admin/shippers", "/admin/carriers", "/admin/inquiries", "/admin/quotes", "/admin/shipments", "/admin/invoices", "/admin/payables", "/admin/insights", "/admin/reports", "/admin/content", "/admin/audit"]) {
+    await page.goto(path);
+    expect(await page.locator("body").innerText(), path).not.toMatch(/velez|freight group|\\u[0-9a-fA-F]{4}/i);
+    expect(await page.title(), path).toContain("Mary’s Logistics Group");
+  }
 });
 
 test("notifications, audit log and sign out", async ({ page }) => {

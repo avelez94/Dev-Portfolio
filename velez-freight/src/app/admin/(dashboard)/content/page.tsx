@@ -43,7 +43,7 @@ export default async function ContentPage() {
                 <AdminField label="Service area shown publicly" htmlFor="wc-area" className="sm:col-span-2"><input id="wc-area" name="service_area" required maxLength={120} defaultValue={b.service_area} className={adminInput} /></AdminField>
                 <AdminField label="Custom prelaunch status message (optional)" htmlFor="wc-msg" className="sm:col-span-2"><textarea id="wc-msg" name="status_message" maxLength={500} defaultValue={v(b.status_message)} className={adminTextarea} placeholder="Leave empty to use the approved prelaunch message." /></AdminField>
               </div>
-              <Toggle name="legal_name_confirmed" label="LLC registration confirmed (show Velez Freight Group LLC)" checked={b.legal_name_confirmed} />
+              <p className="rounded-md bg-ivory p-3 text-xs">The legal entity name and its confirmation are managed in <Link href="/admin/settings#identity" className="font-semibold text-brand-red-dark underline">Settings, Business identity</Link>. Until it is confirmed the website uses the brand name only.</p>
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy">Services shown on the website</p>
                 <div className="grid gap-2 sm:grid-cols-3">

@@ -18,7 +18,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const header = <PageHeader title="Quotes" crumbs={[{ label: "Quotes" }]} description="Prices are prepared by a person, approved by an owner or admin, and sent by you outside this system. Nothing here quotes a customer automatically."
     actions={settings.operational ? <Link href="/admin/quotes/new" className={buttonVariants({ size: "sm" })}><Plus aria-hidden="true" /> New quote</Link> : null} />;
-  if (!settings.operational) return <>{header}<GatedModule title="Quotes are not available yet" reason="Velez Freight Group is in prelaunch mode, so no freight can be quoted. This module opens automatically once broker authority is verified and operations are enabled." /></>;
+  if (!settings.operational) return <>{header}<GatedModule title="Quotes are not available yet" reason="Mary’s Logistics Group is in prelaunch mode, so no freight can be quoted. This module opens automatically once broker authority is verified and operations are enabled." /></>;
   const status = STATUSES.some((x) => x.value === sp.status) ? sp.status : undefined;
   const page = Math.max(1, Number(sp.page) || 1);
   let q = s.db.from("quotes").select("id, reference, status, shipper_id, origin_city, origin_state, dest_city, dest_state, customer_rate, estimated_carrier_cost, valid_until, created_at", { count: "exact" }).order("created_at", { ascending: false });

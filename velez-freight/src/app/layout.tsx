@@ -20,16 +20,18 @@ const sans = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
-  title: { default: "Velez Freight Group | Family-Owned Freight Brokerage in Maryland", template: "%s | Velez Freight Group" },
+  title: { default: `${site.name} | Freight Brokerage & Transportation Coordination`, template: `%s | ${site.name}` },
   description: site.description,
   applicationName: site.name,
   openGraph: {
     type: "website",
     siteName: site.name,
     locale: "en_US",
-    images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Velez Freight Group logo and tagline beside a truck on a highway at dusk" }],
+    title: `${site.name} | Freight Brokerage & Transportation Coordination`,
+    description: site.description,
+    images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: `${site.name} logo and tagline beside a truck on a highway at dusk` }],
   },
-  twitter: { card: "summary_large_image" },
+  twitter: { card: "summary_large_image", title: `${site.name} | Freight Brokerage & Transportation Coordination`, description: site.description, images: ["/og-image.jpg"] },
   formatDetection: { telephone: false, email: false, address: false },
 };
 

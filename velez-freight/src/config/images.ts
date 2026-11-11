@@ -1,7 +1,7 @@
 /**
  * Photography registry. Every image is licensed under the Unsplash License
  * (https://unsplash.com/license). Sources and photographers: docs/IMAGE_SOURCES.md.
- * None shows Velez Freight Group branding, and photos with visible third party logos were rejected.
+ * None shows company branding, and photos with visible third party logos were rejected.
  */
 export const images = {
   heroTruck: { src: "/images/hero-truck-dusk.jpg", alt: "A semi truck with its headlights on travels a two lane highway at dusk under a warm sky" },

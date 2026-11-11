@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Freight Services",
-  description: "Expedited freight, dedicated transportation, and general freight coordination from Velez Freight Group, a family owned freight brokerage in Maryland.",
+  description: "Expedited freight, dedicated transportation, and general freight coordination from Mary’s Logistics Group, a family owned freight brokerage being established in Maryland.",
   alternates: { canonical: "/services" },
 };
 
@@ -37,12 +37,12 @@ export default async function ServicesPage() {
             </PrelaunchNotice>
           )}
           <p className="max-w-3xl font-serif text-2xl leading-snug text-navy">
-            Velez Freight Group focuses on understanding those details and helping businesses navigate their transportation needs with confidence.
+            Mary’s Logistics Group focuses on understanding those details and helping businesses navigate their transportation needs with confidence.
           </p>
           <div className="rounded-[var(--radius-card)] border border-line bg-white p-6 sm:p-8">
             <h2 className="text-2xl font-bold">What a freight broker does</h2>
             <p className="mt-3 max-w-3xl leading-relaxed text-charcoal">
-              A freight broker arranges transportation between a shipper and an authorized motor carrier. Velez Freight Group does not own trucks or employ drivers. Our role is to understand your shipment, select an appropriately authorized and insured carrier, and coordinate communication from pickup through delivery.
+              A freight broker arranges transportation between a shipper and an authorized motor carrier. Mary’s Logistics Group does not own trucks or employ drivers. Our role is to understand your shipment, select an appropriately authorized and insured carrier, and coordinate communication from pickup through delivery.
             </p>
           </div>
         </div>

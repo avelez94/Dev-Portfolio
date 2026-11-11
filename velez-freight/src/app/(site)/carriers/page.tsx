@@ -8,7 +8,7 @@ import { CarrierForm } from "@/components/forms/carrier-form";
 
 export const metadata: Metadata = {
   title: "Carrier Partnerships",
-  description: "Velez Freight Group aims to build relationships with authorized motor carriers who value communication, safety, professionalism, and consistent service.",
+  description: "Mary’s Logistics Group aims to build relationships with authorized motor carriers who value communication, safety, professionalism, and consistent service.",
   alternates: { canonical: "/carriers" },
 };
 
@@ -53,7 +53,7 @@ export default async function CarriersPage() {
         <div className="container-site grid gap-12 lg:grid-cols-2">
           <div className="space-y-6">
             <p className="font-serif text-2xl leading-snug text-navy">
-              Velez Freight Group aims to build relationships with authorized motor carriers who value communication, safety, professionalism, and consistent service.
+              Mary’s Logistics Group aims to build relationships with authorized motor carriers who value communication, safety, professionalism, and consistent service.
             </p>
             {!settings.operational && (
               <PrelaunchNotice>

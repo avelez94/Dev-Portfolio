@@ -12,8 +12,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: operational ? "Request a Freight Quote" : "Business Inquiry",
     description: operational
-      ? "Tell Velez Freight Group about your shipment. Every inquiry is reviewed by a person before any pricing is discussed."
-      : "Send Velez Freight Group a business inquiry. We are preparing to launch and are not yet arranging transportation.",
+      ? "Tell Mary’s Logistics Group about your shipment. Every inquiry is reviewed by a person before any pricing is discussed."
+      : "Send Mary’s Logistics Group a business inquiry. We are preparing to launch and are not yet arranging transportation.",
     alternates: { canonical: "/request-quote" },
   };
 }

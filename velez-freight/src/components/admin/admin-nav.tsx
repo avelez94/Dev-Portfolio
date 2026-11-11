@@ -46,7 +46,7 @@ const groups: { label: string; items: Item[] }[] = [
 ];
 
 // Sidebar collapse preference is a per browser convenience kept in localStorage.
-const COLLAPSE_KEY = "vfg-nav-collapsed";
+const COLLAPSE_KEY = "mlg-nav-collapsed";
 function readCollapsed() {
   try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
 }
@@ -134,7 +134,7 @@ export function AdminNav({ name, role, operational, counts }: { name: string; ro
       {/* Mobile and tablet top bar */}
       <div className="sticky top-0 z-40 flex items-center justify-between bg-navy px-4 py-3 text-white lg:hidden">
         <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="admin-drawer" className="rounded p-2 hover:bg-white/10"><Menu /></button>
-        <Link href="/admin" aria-label="Dashboard home"><Logo variant="reverse" className="w-28" title={null} /></Link>
+        <Link href="/admin" aria-label="Dashboard home"><Logo variant="reverse" className="w-40" title={null} /></Link>
         <button type="button" onClick={openSearch} aria-label="Search records" className="rounded p-2 hover:bg-white/10"><Search /></button>
       </div>
       {mobileOpen && (
@@ -143,7 +143,7 @@ export function AdminNav({ name, role, operational, counts }: { name: string; ro
           <div aria-hidden="true" className="absolute inset-0 bg-navy/60" onClick={() => setMobileOpen(false)} />
           <div id="admin-drawer" className="relative flex h-full w-[min(20rem,85vw)] flex-col overflow-y-auto bg-navy px-3 py-4 text-white">
             <div className="mb-4 flex items-center justify-between px-2">
-              <Logo variant="reverse" className="w-28" title={null} />
+              <Logo variant="reverse" className="w-40" title={null} />
               <button type="button" autoFocus onClick={() => setMobileOpen(false)} aria-label="Close navigation" className="rounded p-2 hover:bg-white/10"><X /></button>
             </div>
             <ModeBadge operational={operational} />
@@ -156,7 +156,7 @@ export function AdminNav({ name, role, operational, counts }: { name: string; ro
       {/* Desktop sidebar */}
       <aside className={cn("sticky top-0 hidden h-dvh shrink-0 flex-col overflow-y-auto bg-navy py-5 text-white transition-[width] duration-200 lg:flex", collapsed ? "w-[4.5rem] px-2" : "w-64 px-3")}>
         <div className={cn("mb-4 flex items-center", collapsed ? "justify-center" : "justify-between px-2")}>
-          <Link href="/admin" aria-label="Dashboard home">{collapsed ? <LogoMark tone="light" className="w-10" /> : <Logo variant="reverse" className="w-32" title={null} />}</Link>
+          <Link href="/admin" aria-label="Dashboard home">{collapsed ? <LogoMark tone="light" className="w-10" /> : <Logo variant="reverse" className="w-44" title={null} />}</Link>
         </div>
         {!collapsed && <ModeBadge operational={operational} />}
         <button type="button" onClick={openSearch} className={cn("mb-5 flex items-center gap-2 rounded-md border border-white/20 bg-white/5 px-3 py-2 text-left text-sm text-white/75 hover:bg-white/10", collapsed && "justify-center px-2")}>

@@ -9,7 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Contact Velez Freight Group, a family owned freight brokerage in Maryland, with business, shipper, or carrier partnership inquiries.",
+  description: "Contact Mary’s Logistics Group, a family owned freight brokerage in Maryland, with business, shipper, or carrier partnership inquiries.",
   alternates: { canonical: "/contact" },
 };
 
@@ -29,7 +29,7 @@ export default async function ContactPage() {
       <section aria-label="Inquiry types" className="pt-14">
         <ul className="container-site grid gap-5 md:grid-cols-3">
           {[
-            { icon: HelpCircle, title: "General Inquiries", body: "For questions about Velez Freight Group or future services." },
+            { icon: HelpCircle, title: "General Inquiries", body: "For questions about Mary’s Logistics Group or future services." },
             { icon: Warehouse, title: "Shipper Inquiries", body: "For businesses interested in discussing transportation needs." },
             { icon: Truck, title: "Carrier Partnerships", body: "For authorized carriers interested in future opportunities." },
           ].map(({ icon: Icon, title, body }) => (
@@ -66,7 +66,7 @@ export default async function ContactPage() {
             </div>
             <div className="rounded-[var(--radius-card)] border border-line bg-white p-7">
               <h2 className="text-xl font-bold">Service location</h2>
-              <p className="mt-3 text-[0.95rem] leading-relaxed">Velez Freight Group is based in Maryland. As a freight broker we coordinate shipments with authorized carriers, so service is not limited to a single facility. Lane availability is confirmed for each shipment.</p>
+              <p className="mt-3 text-[0.95rem] leading-relaxed">Mary’s Logistics Group is based in Maryland. As a freight broker we coordinate shipments with authorized carriers, so service is not limited to a single facility. Lane availability is confirmed for each shipment.</p>
             </div>
           </aside>
         </div>

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { LoaderCircle, Search, X } from "lucide-react";
 import { globalSearch, type SearchHit } from "@/app/admin/search-action";
 
-const EVENT = "vfg-open-search";
+const EVENT = "mlg-open-search";
 export const openSearch = () => window.dispatchEvent(new Event(EVENT));
 
 /** Command palette: Ctrl+K or "/" opens it; arrow keys move; Enter opens the record. */

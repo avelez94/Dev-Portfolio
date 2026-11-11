@@ -47,11 +47,11 @@ async function fillWizard(page: import("@playwright/test").Page) {
 test("operational mode: quick quote leads into the multi step inquiry, stored for manual review", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: /Request a Freight Quote/ }).first()).toBeVisible();
-  await expect(page.getByText("Velez Freight Group is preparing to launch.")).toHaveCount(0);
+  await expect(page.getByText("Mary’s Logistics Group is preparing to launch.")).toHaveCount(0);
   await fillWizard(page);
   await page.getByRole("button", { name: /Submit Freight Inquiry/ }).click();
   await expect(page.getByRole("heading", { name: "Request received" })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("Thank you for contacting Velez Freight Group. Your request has been received and will be reviewed. Submitting an inquiry does not confirm transportation availability, pricing, or booking.");
+  await expect(page.getByRole("status")).toContainText("Thank you for contacting Mary’s Logistics Group. Your request has been received and will be reviewed. Submitting an inquiry does not confirm transportation availability, pricing, or booking.");
   const [row] = await sql<{ status: string; weight_lbs: number; piece_count: number }>("select status, weight_lbs, piece_count from public.quote_inquiries where email = 'riley@example.test'");
   expect(row).toEqual({ status: "pending_review", weight_lbs: 8000, piece_count: 12 });
 });

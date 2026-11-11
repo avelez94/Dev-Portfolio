@@ -22,6 +22,6 @@ required, attribution given here as good practice). Unsplash+ (paid) images were
 * Rejected: a photo of trailers at a dock (visible Penske and Hyundai Translead marks), a
   sunset traffic photo (visible carrier lettering), a photo with a DB Schenker trailer, and a
   truck photo with a legible foreign license plate.
-* No image shows Velez Freight Group branding on a vehicle. The company is a broker and does
+* No image shows company branding on a vehicle. The company is a broker and does
   not own trucks or trailers, so branded vehicle imagery must not be added later.
 * Verify each license page again before launch; Unsplash licensing can change for new uploads.

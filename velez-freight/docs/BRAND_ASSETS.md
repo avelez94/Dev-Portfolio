@@ -1,35 +1,49 @@
-# Brand assets
+# Brand assets: Mary’s Logistics Group
 
 ## Logo source
 
-The owner supplied the logo as a high resolution PNG (2172 by 724 pixels, transparent
-background). It is kept unchanged as the master file in
-`brand-source/velez-freight-logo-supplied.png`.
+The owner supplied the Mary’s Logistics Group logo as a high resolution PNG with a transparent
+background (1536 by 1024 pixels). It is kept unchanged as the master file in
+`brand-source/marys-logistics-group-logo-supplied.png`.
 
-The website uses an exact vector trace of that file, so the logo stays sharp at every size
-and works in both color variants:
+The website uses an exact vector trace of that file (the shapes come from the artwork; small
+specks in the PNG are dropped). Fills use the brand palette.
 
-* `scripts/brand/trace_logo.py` traces the navy, red and white areas of the PNG (potrace).
-* `scripts/brand/generate_logo_files.py` writes `src/components/site/logo-paths.ts`,
-  `public/brand/logo-primary.svg`, `logo-reverse.svg`, `logo-mark.svg` and `src/app/icon.svg`.
+* `scripts/brand/trace_logo.py` traces the symbol, MARY’S, LOGISTICS GROUP and the red rules.
+* `scripts/brand/generate_logo_files.py` writes `src/components/site/logo-paths.ts` and every
+  file below.
 
-The shapes come from the supplied artwork; the fills use the brand palette (navy `#142839`,
-red `#E1252F`), which differs only slightly from the navy in the PNG. If the designer's
-original vector file (SVG, AI, EPS or PDF) becomes available, it can replace the trace.
+The original designer vector file (SVG, AI, EPS or PDF) would still be preferable for print.
 
 ## Variants
 
 | Variant | Where | File |
 | --- | --- | --- |
-| Primary (navy and red on light) | Header, admin sign in | `Logo` component, `logo-primary.svg` |
-| Reverse (white and red on navy) | Footer, mobile menu, admin sidebar | `Logo variant="reverse"`, `logo-reverse.svg` |
-| Road mark | Decorative accents | `LogoMark`, `logo-mark.svg` |
-| App icon / favicon (road symbol on navy) | Browser tab, home screen | `src/app/icon.svg` |
-| Social share image | Link previews | `public/og-image.jpg` |
+| Full stacked logo, navy (light backgrounds) | Footer (white version), sign in card | `public/brand/mlg-logo-stacked.svg`, `mlg-logo-stacked.png` |
+| Full stacked logo, white (navy backgrounds) | Footer, social preview | `public/brand/mlg-logo-stacked-reverse.svg` |
+| Compact horizontal header logo, navy | Site header | `public/brand/mlg-logo-horizontal.svg`, `Logo` component |
+| Compact horizontal logo, white | Mobile menu, dashboard sidebar | `public/brand/mlg-logo-horizontal-reverse.svg` |
+| Icon only symbol (ML with road) | Collapsed sidebar, decorative accents, PDF report header | `public/brand/mlg-mark.svg`, `LogoMark` |
+| Favicon and app icon | Browser tab, home screen, web manifest | `src/app/icon.svg`, `src/app/apple-icon.png`, `public/brand/mlg-icon-512.png` |
+| Social media profile | Profile pictures | `public/brand/mlg-social-profile.png` (1080 square), `.svg` |
+| Link preview image | Open Graph and X cards | `public/og-image.jpg` |
+
+## Archive
+
+The previous Velez Freight Group logo files (supplied PNG, SVG variants, favicon, path data and
+link preview image) are preserved in `brand-source/archive/velez-freight-group/`. They are not
+served by the website and must not be used for current branding.
 
 ## Colors
 
 Signature red `#E1252F`, midnight navy `#142839`, warm ivory `#F7F5F0`, white `#FFFFFF`,
-champagne `#C5A46D` (reserved, used only for a subtle admin status tint), charcoal `#22272B`.
-For small red text on ivory or white the slightly deeper `#B81B24` is used so text meets
-WCAG AA contrast; buttons and graphics use the signature red.
+charcoal `#22272B`, champagne `#C5A46D` (used sparingly). For small red text on light
+backgrounds the deeper `#B81B24` meets WCAG AA contrast.
+
+## Name use
+
+* Public brand: **Mary’s Logistics Group** (with the curly apostrophe), set in `src/config/brand.ts`.
+* Legal entity name: recorded in Dashboard > Settings > Business identity and shown publicly
+  only after it is confirmed as registered.
+* Do not describe the name as trademarked or registered until clearance is complete (see the
+  launch checklist in Settings).

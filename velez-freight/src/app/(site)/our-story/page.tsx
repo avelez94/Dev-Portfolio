@@ -10,7 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Our Story",
-  description: "Velez Freight Group was inspired by Elanisoa Devon Velez and a family tradition of entrepreneurship, dedication, and building opportunities for future generations.",
+  description: "Mary’s Logistics Group was inspired by a family tradition of entrepreneurship and named in honor of Mary, whose legacy continues to inspire generations of our family.",
   alternates: { canonical: "/our-story" },
 };
 
@@ -27,8 +27,8 @@ export default async function OurStoryPage() {
     <>
       <PageHero
         eyebrow="Our Story"
-        title="Built on Family. Driven to Move Forward."
-        intro="Behind Velez Freight Group is a meaningful family legacy."
+        title="A Legacy That Moves Us Forward"
+        intro="Rooted in family. Driven by purpose."
         image={images.openRoadSunrise.src}
         imageAlt={images.openRoadSunrise.alt}
         position="50% 60%"
@@ -39,20 +39,19 @@ export default async function OurStoryPage() {
         <div className="container-site relative grid gap-12 lg:grid-cols-[1.3fr_1fr] lg:gap-16">
           <article className="prose-site max-w-2xl text-[1.05rem] text-charcoal">
             <p className="font-serif text-2xl leading-snug text-navy">
-              The company was inspired by Elanisoa Devon Velez and a family tradition of entrepreneurship, dedication, and building opportunities for future generations.
-            </p>
-            <p>He has always honored his mother, Mary, through his businesses. Velez Freight Group carries that legacy forward.</p>
-            <p>
-              That inspiration helped shape our vision: to establish a freight brokerage grounded in integrity, accountability, and genuine business relationships.
+              Mary’s Logistics Group was inspired by a family tradition of entrepreneurship and a belief that meaningful businesses are built on integrity, hard work, and lasting relationships.
             </p>
             <p>
-              We believe successful transportation partnerships require more than rates and schedules. They require attention to detail, clear communication, and respect for the people and businesses involved.
+              Named in honor of Mary, whose legacy continues to inspire generations of our family, the company carries those values into the transportation and logistics industry. Honoring her through the businesses we build is a tradition in our family, and this company continues it.
             </p>
             <p>
-              Velez Freight Group carries forward the values that inspired its beginning while looking toward the future of freight and logistics.
+              Our focus is simple: building strong business relationships through thoughtful freight coordination, clear communication, and an unwavering commitment to professionalism.
+            </p>
+            <p>
+              We believe successful transportation partnerships require more than rates and schedules. They require attention to detail, accountability, and respect for the people and businesses involved.
             </p>
             <p className="font-serif text-xl leading-snug text-navy">Our name reflects where we come from. Our commitment reflects where we’re going.</p>
-            <p className="font-serif text-xl italic text-brand-red-dark">Built on family. Driven to move forward.</p>
+            <p className="font-serif text-xl italic text-brand-red-dark">Rooted in family. Driven by purpose.</p>
           </article>
 
           <aside className="space-y-6">
@@ -83,11 +82,11 @@ export default async function OurStoryPage() {
           <p className="eyebrow">Where we are today</p>
           <h2 id="status-title" className="mt-3 text-3xl font-bold sm:text-4xl">Our operating status</h2>
           {settings.operational ? (
-            <p className="mt-4 leading-relaxed">Velez Freight Group is operating as a licensed freight broker{settings.mcNumber ? ` (MC ${settings.mcNumber})` : ""}. Contact us to discuss your shipment.</p>
+            <p className="mt-4 leading-relaxed">Mary’s Logistics Group is operating as a licensed freight broker{settings.mcNumber ? ` (MC ${settings.mcNumber})` : ""}. Contact us to discuss your shipment.</p>
           ) : (
             <>
               <p className="mt-4 leading-relaxed text-charcoal">
-                We are being transparent about where the company stands. Velez Freight Group is in its prelaunch stage, and we will not arrange transportation until every requirement below is complete and verified.
+                We are being transparent about where the company stands. Mary’s Logistics Group is in its prelaunch stage, and we will not arrange transportation until every requirement below is complete and verified.
               </p>
               <ul className="mt-8 space-y-3">
                 {[

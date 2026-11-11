@@ -1,6 +1,8 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { Report } from "@/lib/reports/types";
 import { cell } from "@/lib/reports/types";
+import { brand } from "@/config/brand";
+import { LOGO } from "@/components/site/logo-paths";
 
 const NAVY = rgb(20 / 255, 40 / 255, 57 / 255);
 const RED = rgb(225 / 255, 37 / 255, 47 / 255);
@@ -28,9 +30,9 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
 /** A real text PDF (selectable and searchable), laid out as tables, landscape US Letter. */
 export async function reportToPdf(r: Report): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle(pdfSafe(`${r.title} - Velez Freight Group`));
-  doc.setAuthor("Velez Freight Group");
-  doc.setCreator("Velez Freight Group dashboard");
+  doc.setTitle(pdfSafe(`${r.title}, ${brand.name}`));
+  doc.setAuthor(pdfSafe(brand.name));
+  doc.setCreator(pdfSafe(`${brand.name} Business Command Center`));
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const W = 792, H = 612, M = 40;
@@ -40,7 +42,13 @@ export async function reportToPdf(r: Report): Promise<Uint8Array> {
   const header = (first: boolean) => {
     page.drawRectangle({ x: 0, y: H - 6, width: W, height: 6, color: RED });
     if (first) {
-      page.drawText("VELEZ FREIGHT GROUP", { x: M, y: y - 10, size: 9, font: bold, color: GREY });
+      // Brand symbol (vector, from the logo trace) beside the company name.
+      const sc = 0.03, top = y + 2; // symbol is about 33 points wide
+      const at = { x: M - 231 * sc, y: top + 112 * sc, scale: sc };
+      page.drawSvgPath(LOGO.markNavy, { ...at, color: NAVY });
+      page.drawSvgPath(LOGO.markRed, { ...at, color: RED });
+      page.drawSvgPath(LOGO.markWhite, { ...at, color: rgb(1, 1, 1) });
+      page.drawText(pdfSafe(brand.name.toUpperCase()), { x: M + 40, y: y - 10, size: 9, font: bold, color: GREY });
       page.drawText(pdfSafe(r.title), { x: M, y: y - 34, size: 20, font: bold, color: NAVY });
       y -= 52;
       for (const line of wrap(r.description, font, 10, W - 2 * M)) { page.drawText(line, { x: M, y, size: 10, font, color: GREY }); y -= 13; }
@@ -104,7 +112,7 @@ export async function reportToPdf(r: Report): Promise<Uint8Array> {
 
   const pages = doc.getPages();
   pages.forEach((p, i) => {
-    p.drawText(pdfSafe(`Confidential. Velez Freight Group internal report. Page ${i + 1} of ${pages.length}`), { x: M, y: 20, size: 7, font, color: GREY });
+    p.drawText(pdfSafe(`Confidential. ${brand.name} internal report. Page ${i + 1} of ${pages.length}`), { x: M, y: 20, size: 7, font, color: GREY });
   });
   return doc.save({ useObjectStreams: false });
 }

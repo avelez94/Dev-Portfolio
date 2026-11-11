@@ -1,22 +1,20 @@
+import { brand } from "@/config/brand";
+
 /**
  * Centralized public content and verified company facts.
+ *
+ * The public brand name comes from src/config/brand.ts.
  *
  * RULE: only put facts here that the owner has confirmed. Anything unknown stays null and the
  * UI hides it. Admin editable values (email, phone, MC number, etc.) live in the
  * business_settings table and override these defaults at runtime; see src/lib/data/settings.ts.
  */
 export const site = {
-  name: "Velez Freight Group",
-  /** Show the legal name only after LLC registration is confirmed (business_settings.legal_name_confirmed). */
-  legalName: "Velez Freight Group LLC",
+  name: brand.name,
   region: "Maryland, USA",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100",
   description:
-    "Velez Freight Group is a family owned freight brokerage being established in Maryland, bringing a personalized approach to freight coordination, clear communication, and responsible carrier selection.",
-  founder: {
-    inspiration: "Elanisoa Devon Velez",
-    honoring: "Mary",
-  },
+    "Mary’s Logistics Group is a Maryland based freight brokerage preparing to offer personalized expedited, dedicated, and general freight coordination for businesses.",
 } as const;
 
 export const nav = [
@@ -52,9 +50,9 @@ export const shipmentTypes = [
  * preference, so compound words from the source copy are written without hyphens.
  */
 export const copy = {
-  tagline: "Built on family. Driven to move forward.",
+  tagline: "Rooted in family. Driven by purpose.",
   hero: {
-    body: "Freight transportation should feel straightforward. Velez Freight Group brings a personalized approach to freight coordination, connecting businesses with transportation solutions built around their needs.",
+    body: "Personalized freight coordination, clear communication, and transportation solutions tailored to your business.",
   },
   quick: {
     title: "Tell Us About Your Shipment",
@@ -62,28 +60,32 @@ export const copy = {
   },
   servicesIntro: {
     title: "Transportation Solutions for Your Business",
-    body: "From urgent deliveries to ongoing transportation needs, Velez Freight Group is being built to provide flexible freight coordination for businesses across different industries.",
+    body: "From urgent deliveries to ongoing transportation needs, Mary’s Logistics Group is being built to provide flexible freight coordination for businesses across different industries.",
   },
   why: {
+    heading: "Why Choose Mary’s Logistics Group?",
     title: "Freight Coordination With a Personal Commitment",
     body: "We believe successful freight transportation begins with understanding the customer, not simply moving a shipment from one point to another.",
   },
-  storyTeaser: [
-    "Velez Freight Group was inspired by a family tradition of entrepreneurship and a belief that meaningful businesses are built through hard work, integrity, and lasting relationships.",
-    "Our name honors the legacy behind us while representing the future we\u2019re building.",
-  ],
+  storyTeaser: {
+    title: "A Legacy That Moves Us Forward",
+    body: [
+      "Named in honor of Mary, our company reflects a family tradition of entrepreneurship, integrity, and building lasting relationships.",
+    ],
+  },
+  carrierTitle: "Haul With Mary’s Logistics Group",
   carrierTeaser: [
     "Strong carrier relationships are an essential part of successful freight coordination.",
     "We believe in professional partnerships, transparent communication, and treating the businesses responsible for transporting freight with respect.",
   ],
   carrierTeaserAsk: "Interested in working with us as we grow?",
   finalCta: {
-    title: "Let\u2019s Get Your Shipment Moving.",
-    body: "Transportation begins with understanding your needs. Tell us about your freight, and let\u2019s explore how we can support your business.",
+    title: "Let’s Get Your Shipment Moving.",
+    body: "Transportation begins with understanding your needs. Tell us about your freight, and let’s explore how we can support your business.",
   },
   prelaunch: {
-    title: "Velez Freight Group is preparing to launch.",
-    body: "We\u2019re building a freight brokerage focused on personalized transportation coordination and strong business relationships.",
+    title: "Mary’s Logistics Group is preparing to launch.",
+    body: "We’re building a freight brokerage focused on personalized transportation coordination and strong business relationships.",
     invite: "We welcome general business inquiries while we complete our registration and operational preparations.",
   },
 } as const;
@@ -93,21 +95,21 @@ export const services = [
     slug: "expedited",
     icon: "expedited",
     title: "Expedited Freight",
-    summary: "When timing matters, every minute counts. Our expedited freight service is designed for businesses that need time sensitive transportation arrangements with clear communication and careful coordination.",
+    summary: "Transportation coordination for time sensitive shipments that demand careful planning and responsive communication.",
     tagline: "When time is a priority.",
     detail: [
       "Unexpected delays, urgent inventory needs, and time sensitive shipments require careful planning.",
       "Our expedited freight service is designed to help businesses arrange transportation when conventional shipping schedules may not meet their requirements.",
     ],
     listTitle: "Potential applications",
-    list: ["Urgent replacement parts", "Time sensitive business shipments", "Manufacturing components", "Priority inventory transfers", "Dedicated cargo van transportation"],
+    list: ["Urgent replacement parts", "Time sensitive business shipments", "Manufacturing components", "Priority inventory transfers", "Dedicated capacity for urgent moves"],
     note: "Availability depends on shipment requirements and qualified carrier capacity.",
   },
   {
     slug: "dedicated",
     icon: "dedicated",
     title: "Dedicated Transportation",
-    summary: "Some shipments require a more focused approach. Dedicated transportation provides capacity arranged around your freight requirements, delivery schedules, and operational priorities.",
+    summary: "Focused transportation arrangements tailored to your freight requirements, scheduling needs, and operational priorities.",
     tagline: "Transportation built around your priorities.",
     detail: [
       "For shipments requiring dedicated capacity, our approach focuses on selecting transportation suited to the freight, schedule, and delivery requirements.",
@@ -121,7 +123,7 @@ export const services = [
     slug: "general",
     icon: "general",
     title: "General Freight Coordination",
-    summary: "Every shipment is different. We work to identify appropriate transportation options based on freight type, equipment requirements, destination, and timing.",
+    summary: "Flexible freight solutions designed around shipment characteristics, equipment requirements, and destinations.",
     tagline: "Flexible solutions for changing freight needs.",
     detail: [
       "From palletized inventory to commercial goods, we aim to connect businesses with appropriate transportation resources based on their individual requirements.",
@@ -135,7 +137,7 @@ export const services = [
 
 export const processSteps = [
   { title: "Tell Us About Your Freight", body: "Share your shipment details, pickup and delivery locations, timeline, and any special requirements." },
-  { title: "We Coordinate the Right Carrier", body: "We review your requirements and work to arrange transportation with an appropriately qualified carrier." },
+  { title: "We Coordinate a Qualified Carrier", body: "We review your requirements and work to arrange transportation with an appropriately qualified carrier." },
   { title: "Stay Informed Through Delivery", body: "Clear communication and shipment updates help you stay informed throughout the transportation process." },
 ] as const;
 

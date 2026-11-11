@@ -13,7 +13,9 @@ import { KpiCard } from "@/components/admin/kpi-card";
 import { PeriodFilter } from "@/components/admin/period-filter";
 import { buttonVariants } from "@/components/ui/button";
 
-export const metadata = { title: "Dashboard" };
+import { LAUNCH_ITEMS } from "@/config/launch";
+
+export const metadata = { title: "Business Command Center" };
 
 const SNAPSHOT: MetricKey[] = ["follow_ups_due", "potential_customers", "active_shipments", "receivables_open", "overdue_invoices", "payables_due"];
 
@@ -45,10 +47,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-muted">{dateText}</p>
+          <p className="text-sm font-medium text-slate-muted"><span className="font-semibold text-navy">Business Command Center</span> <span aria-hidden="true">·</span> {dateText}</p>
           <h1 className="mt-1 text-[2rem] font-bold leading-tight">{greeting}{s.name ? `, ${s.name.split(" ")[0]}` : ""}.</h1>
           <p className="mt-1 text-sm text-charcoal">
-            {priorities.length === 0 ? "Nothing needs your attention right now." : `${priorities.length} item${priorities.length === 1 ? "" : "s"} need${priorities.length === 1 ? "s" : ""} attention${overdue ? `, ${overdue} overdue` : ""}${critical ? `, ${critical} critical or risk` : ""}.`}
+            {priorities.length === 0
+              ? "Here’s what needs your attention today: nothing right now."
+              : `Here’s what needs your attention today: ${priorities.length} item${priorities.length === 1 ? "" : "s"}${overdue ? `, ${overdue} overdue` : ""}${critical ? `, ${critical} critical or risk` : ""}.`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -60,7 +64,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {!settings.operational && (
         <p className="mb-6 rounded-lg border border-line bg-white p-4 text-sm">
           <strong className="text-navy">Prelaunch mode.</strong> Quotes, shipments, invoicing and payables stay off until broker authority is verified and operations are enabled.
-          Focus areas now: shipper prospecting, follow ups, carrier relationships and business setup. <Link href="/admin/settings#operating-status" className="font-semibold text-brand-red-dark underline">Activation checklist</Link>
+          Focus areas now: shipper prospecting, follow ups, carrier relationships and business setup.{" "}
+          <Link href="/admin/settings#launch" className="font-semibold text-brand-red-dark underline">Launch checklist</Link> ({LAUNCH_ITEMS.filter((i) => settings.launchChecklist[i.key]?.status === "done").length} of {LAUNCH_ITEMS.length} done){" "}
+          <span aria-hidden="true">·</span> <Link href="/admin/settings#operating-status" className="font-semibold text-brand-red-dark underline">Activation checklist</Link>
         </p>
       )}
 

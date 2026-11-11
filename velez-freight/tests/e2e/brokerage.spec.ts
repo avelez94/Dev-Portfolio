@@ -68,7 +68,7 @@ test("quote workflow requires approval and confirmation, then books a shipment w
   await page.getByLabel("Customer rate (USD)").fill("1850.00");
   await page.getByLabel("Estimated carrier cost (USD)").fill("1575.00");
   await page.getByRole("button", { name: "Save draft quote" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /Quote VFG-QT-/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Quote MLG-QT-/ })).toBeVisible();
   await expect(page.getByText("$275.00 gross margin (14.9%)")).toBeVisible();
   await page.getByRole("button", { name: "Submit for approval" }).click();
   await expect(page.getByText("pending approval", { exact: true })).toBeVisible();
@@ -87,7 +87,7 @@ test("quote workflow requires approval and confirmation, then books a shipment w
   for (const u of unqualified) expect(options).not.toContain(u.company_name);
   await page.getByLabel("Carrier (qualified only)").selectOption({ index: 1 });
   await page.getByRole("button", { name: "Book shipment" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /Shipment VFG-SH-/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Shipment MLG-SH-/ })).toBeVisible();
 });
 
 test("database refuses assigning an unqualified carrier even if the form is bypassed", async () => {

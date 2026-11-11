@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Velez Freight Group design tokens. Brand colors are fixed by the approved palette. */
+/* Mary’s Logistics Group design tokens. Brand colors are fixed by the approved palette. */
 @theme {
   --color-brand-red: #E1252F;
   --color-brand-red-dark: #B81B24;   /* hover and small text on light backgrounds (AA) */

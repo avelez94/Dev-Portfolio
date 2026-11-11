@@ -1,24 +1,114 @@
-# Writes logo-paths.ts, public/brand/*.svg and the app icon from logo-paths.json.
+# Builds the Mary's Logistics Group logo system from logo-paths.json (see trace_logo.py):
+#   src/components/site/logo-paths.ts       vector layers and layouts for the Logo component
+#   public/brand/mlg-logo-stacked.svg        full stacked logo, navy on light
+#   public/brand/mlg-logo-stacked-reverse.svg  white version (transparent), for navy backgrounds
+#   public/brand/mlg-logo-horizontal.svg     compact header logo (and -reverse)
+#   public/brand/mlg-mark.svg                symbol only
+#   public/brand/mlg-social-profile.svg      square social profile image (navy background)
+#   src/app/icon.svg                         favicon / app icon
 import json, pathlib
-HERE=pathlib.Path(__file__).resolve().parent
-p=json.load(open(HERE/"logo-paths.json"))
-R=str(HERE.parent.parent)+"/"
-VB="195 48 1781 633"; MVB="540 50 1065 255"
-ts=['// Vector trace of the owner supplied logo artwork (Velez Freight Group, supplied as a',
-    '// high resolution PNG). Coordinates are in the source image pixel space. Generated; do not edit by hand.',
-    'export const LOGO = {', f'  viewBox: "{VB}",', f'  markViewBox: "{MVB}",']
-for k in ("wings","road","lines","lettering","rules"): ts.append(f'  {k}: "{p[k]}",')
-ts.append('} as const;')
-open(R+"src/components/site/logo-paths.ts","w").write("\n".join(ts)+"\n")
-NAVY,RED,WHITE="#142839","#E1252F","#FFFFFF"
-def full(road,lines,text,label=True):
-  a=' role="img" aria-label="Velez Freight Group"' if label else ''
-  return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{VB}"{a}>'
-    f'<path fill="{RED}" d="{p["wings"]}{p["rules"]}"/><path fill="{road}" d="{p["road"]}"/>'
-    f'<path fill="{lines}" d="{p["lines"]}"/><path fill="{text}" d="{p["lettering"]}"/></svg>\n')
-open(R+"public/brand/logo-primary.svg","w").write(full(NAVY,WHITE,NAVY))
-open(R+"public/brand/logo-reverse.svg","w").write(full(WHITE,NAVY,WHITE))
-open(R+"public/brand/logo-mark.svg","w").write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{MVB}" role="img" aria-label="Velez Freight Group"><path fill="{RED}" d="{p["wings"]}"/><path fill="{NAVY}" d="{p["road"]}"/><path fill="{WHITE}" d="{p["lines"]}"/></svg>\n')
-# App icon: road symbol only, scaled uniformly (no distortion), on navy.
-s=0.76; cx,cy=(789+1376)/2,(56+284)/2
-open(R+"src/app/icon.svg","w").write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="{NAVY}"/><g transform="translate(256 256) scale({s}) translate({-cx} {-cy})"><path fill="{WHITE}" d="{p["road"]}"/><path fill="{NAVY}" d="{p["lines"]}"/></g></svg>\n')
+
+HERE = pathlib.Path(__file__).resolve().parent
+APP = HERE.parent.parent
+p = json.load(open(HERE / "logo-paths.json"))
+B = p["boxes"]
+NAVY, RED, WHITE, IVORY = "#142839", "#E1252F", "#FFFFFF", "#F7F5F0"
+
+def r(v): return f"{v:.4f}".rstrip("0").rstrip(".")
+
+# Layouts are groups of (layer, transform). Coordinates are in source image pixels.
+mx0, my0, mx1, my1 = B["mark"]
+wx0, wy0, wx1, wy1 = B["wordmark"]
+sx0, sy0, sx1, sy1 = B["subline"]
+ax0, ay0, ax1, ay1 = B["all"]
+
+# Stacked: the logo exactly as supplied.
+pad = 16
+stacked_vb = f"{ax0 - pad} {ay0 - pad} {ax1 - ax0 + 2 * pad} {ay1 - ay0 + 2 * pad}"
+stacked = [("markRed", ""), ("rules", ""), ("markNavy", ""), ("wordmark", ""), ("subline", ""), ("markWhite", "")]
+
+# Horizontal: symbol on the left; MARY'S over LOGISTICS GROUP on the right, the second line
+# widened to the wordmark's width so it stays legible at header size.
+H = 400
+sm = H / (my1 - my0)
+mark_w = (mx1 - mx0) * sm
+gap = 70
+k = (wx1 - wx0) / (sx1 - sx0)
+block_h_nat = (wy1 - wy0) + 25 + (sy1 - sy0) * k
+st = 330 / block_h_nat
+tx = mark_w + gap
+ty = (H - 330) / 2
+mark_t = f"scale({r(sm)}) translate({-mx0} {-my0})"
+word_t = f"translate({r(tx)} {r(ty)}) scale({r(st)}) translate({-wx0} {-wy0})"
+sub_t = f"translate({r(tx)} {r(ty + ((wy1 - wy0) + 25) * st)}) scale({r(st * k)}) translate({-sx0} {-sy0})"
+horiz_w = tx + (wx1 - wx0) * st
+horizontal_vb = f"0 0 {r(horiz_w)} {H}"
+horizontal = [("markRed", mark_t), ("markNavy", mark_t), ("markWhite", mark_t), ("wordmark", word_t), ("subline", sub_t)]
+
+mpad = 12
+mark_vb = f"{mx0 - mpad} {my0 - mpad} {mx1 - mx0 + 2 * mpad} {my1 - my0 + 2 * mpad}"
+mark = [("markRed", ""), ("markNavy", ""), ("markWhite", "")]
+
+ROLE = {"markRed": "red", "rules": "red", "markNavy": "navy", "wordmark": "navy", "subline": "navy", "markWhite": "light"}
+def paint(variant):
+    return {"red": RED, "navy": NAVY if variant == "primary" else WHITE, "light": WHITE if variant == "primary" else NAVY}
+
+def svg(vb, layout, variant, bg=None, label=True, size=None):
+    c = paint(variant)
+    attrs = f' role="img" aria-label="Mary’s Logistics Group"' if label else ""
+    dims = f' width="{size[0]}" height="{size[1]}"' if size else ""
+    body = ""
+    if bg:
+        x, y, w, h = vb.split()
+        body += f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{bg}"/>'
+    for layer, t in layout:
+        tr = f' transform="{t}"' if t else ""
+        body += f'<path fill="{c[ROLE[layer]]}"{tr} d="{p[layer]}"/>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}"{dims}{attrs}>{body}</svg>\n'
+
+brand = APP / "public/brand"
+for old in ("logo-primary.svg", "logo-reverse.svg", "logo-mark.svg"):
+    (brand / old).unlink(missing_ok=True)
+(brand / "mlg-logo-stacked.svg").write_text(svg(stacked_vb, stacked, "primary"))
+(brand / "mlg-logo-stacked-reverse.svg").write_text(svg(stacked_vb, stacked, "reverse"))
+(brand / "mlg-logo-horizontal.svg").write_text(svg(horizontal_vb, horizontal, "primary"))
+(brand / "mlg-logo-horizontal-reverse.svg").write_text(svg(horizontal_vb, horizontal, "reverse"))
+(brand / "mlg-mark.svg").write_text(svg(mark_vb, mark, "primary"))
+
+# Social profile: square, navy, stacked reverse logo centred with generous margins.
+sw = ax1 - ax0 + 2 * pad
+side = sw * 1.25
+cx, cy = (ax0 + ax1) / 2, (ay0 + ay1) / 2
+social_vb = f"{r(cx - side / 2)} {r(cy - side / 2)} {r(side)} {r(side)}"
+(brand / "mlg-social-profile.svg").write_text(svg(social_vb, stacked, "reverse", bg=NAVY, size=(1080, 1080)))
+
+# Favicon: the symbol in brand colors on a navy rounded square.
+s = 440 / (mx1 - mx0)
+icon_t = f"translate(256 256) scale({r(s)}) translate({-(mx0 + mx1) / 2} {-(my0 + my1) / 2})"
+c = paint("reverse")
+icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#142839"/>'
+for layer in ("markRed", "markNavy", "markWhite"):
+    icon += f'<path fill="{c[ROLE[layer]]}" transform="{icon_t}" d="{p[layer]}"/>'
+(APP / "src/app/icon.svg").write_text(icon + "</svg>\n")
+
+ts = [
+    "// Vector trace of the owner supplied Mary's Logistics Group logo",
+    "// (brand-source/marys-logistics-group-logo-supplied.png). Generated by scripts/brand; do not edit by hand.",
+    "export const LOGO = {",
+]
+for k2 in ("markRed", "markNavy", "markWhite", "wordmark", "subline", "rules"):
+    ts.append(f'  {k2}: "{p[k2]}",')
+ts.append("} as const;")
+ts.append("")
+ts.append("export type LogoLayer = keyof typeof LOGO;")
+ts.append("export type LogoRole = \"red\" | \"navy\" | \"light\";")
+ts.append("export const LOGO_ROLE: Record<LogoLayer, LogoRole> = " + json.dumps(ROLE) + ";")
+ts.append("")
+ts.append("/** Layouts: viewBox plus the layers drawn, each with an optional transform. */")
+ts.append("export const LOGO_LAYOUTS = {")
+for name, vb, lay in (("stacked", stacked_vb, stacked), ("horizontal", horizontal_vb, horizontal), ("mark", mark_vb, mark)):
+    items = ", ".join(f'["{l}", "{t}"]' for l, t in lay)
+    ts.append(f'  {name}: {{ viewBox: "{vb}", layers: [{items}] as [LogoLayer, string][] }},')
+ts.append("} as const;")
+(APP / "src/components/site/logo-paths.ts").write_text("\n".join(ts) + "\n")
+print("horizontal", horizontal_vb, "stacked", stacked_vb, "mark", mark_vb)

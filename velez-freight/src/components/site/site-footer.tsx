@@ -1,18 +1,18 @@
 import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { copy, footerNav, site } from "@/config/site";
-import type { PublicSettings } from "@/lib/data/settings";
+import { companyName, type PublicSettings } from "@/lib/data/settings";
 import { Logo } from "./logo";
 
 export function SiteFooter({ settings }: { settings: PublicSettings }) {
   const year = new Date().getFullYear();
-  const companyName = settings.legalNameConfirmed ? site.legalName : site.name;
+  const legalName = companyName(settings);
   return (
     <footer className="bg-navy text-white">
       <div className="container-site grid gap-10 py-12 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-0">
         <div className="md:border-r md:border-white/20 md:pr-10">
-          <Link href="/" aria-label="Velez Freight Group home" className="inline-block">
-            <Logo variant="reverse" className="w-40" title={null} />
+          <Link href="/" aria-label={`${site.name} home`} className="inline-block">
+            <Logo variant="reverse" layout="stacked" className="w-44" title={null} />
           </Link>
           <p className="mt-4 font-serif text-[0.95rem] italic text-white/90">{copy.tagline}</p>
           <p className="mt-1 text-sm text-white/75">{settings.serviceArea}</p>
@@ -59,7 +59,7 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
       <div className="border-t border-white/10">
         <div className="container-site flex flex-col gap-3 py-5 text-xs text-white/70 md:flex-row md:items-center md:justify-between">
           <p>
-            © {year} {companyName}. All rights reserved.
+            © {year} {legalName}. All rights reserved.
             {settings.mcNumber && settings.operational && <span className="ml-2">MC {settings.mcNumber}</span>}
             {settings.usdotNumber && settings.operational && <span className="ml-2">USDOT {settings.usdotNumber}</span>}
           </p>

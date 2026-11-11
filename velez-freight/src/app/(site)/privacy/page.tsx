@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/site/legal-page";
-import { getSettings } from "@/lib/data/settings";
-import { site } from "@/config/site";
+import { companyName, getSettings } from "@/lib/data/settings";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "How Velez Freight Group collects, uses, and protects information submitted through this website.",
+  description: "How Mary’s Logistics Group collects, uses, and protects information submitted through this website.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -15,7 +14,7 @@ const UPDATED = "November 11, 2026";
 
 export default async function PrivacyPage() {
   const settings = await getSettings();
-  const name = settings.legalNameConfirmed ? site.legalName : site.name;
+  const name = companyName(settings);
   return (
     <LegalPage title="Privacy Policy" updated={UPDATED}>
       <p>This policy explains how {name} (&ldquo;we&rdquo;, &ldquo;us&rdquo;) handles information collected through this website. We collect only what we need to respond to you, and we do not sell personal information.</p>

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { CircleAlert, CircleCheck } from "lucide-react";
 import { isAdminRole, requireStaff } from "@/lib/auth";
 import { env, isEmailConfigured } from "@/lib/env";
-import { inviteUser, saveSettings, setAccess } from "@/app/admin/actions";
+import { inviteUser, saveIdentity, saveLaunchChecklist, saveSettings, setAccess } from "@/app/admin/actions";
+import { brand } from "@/config/brand";
+import { AUTHORITY_STATUSES, CHECKLIST_STATUSES, LAUNCH_ITEMS, TRADEMARK_STATUSES } from "@/config/launch";
 import { ActionForm } from "@/components/admin/action-form";
 import { AdminField, Panel, adminInput, adminTextarea } from "@/components/admin/admin-ui";
 import { PageHeader } from "@/components/admin/page-header";
@@ -38,7 +40,7 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" crumbs={[{ label: "Settings" }]} description="Operating mode and activation checklist, notifications, and team access. Public website facts live in Website Content."
+      <PageHeader title="Settings" crumbs={[{ label: "Settings" }]} description="Business identity, launch checklist, operating mode, notifications, and team access. Public contact details live in Website Content."
         actions={<Link href="/admin/content" className="rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold text-navy hover:bg-ivory">Website Content</Link>} />
 
       <Panel title="Operating status" className="mb-6">
@@ -46,6 +48,7 @@ export default async function SettingsPage() {
         <p className="text-sm">Brokerage modules (freight quote intake, quotes, shipments, invoicing and carrier payables) work only when <strong>both</strong> switches are on. An MC number alone never enables them.</p>
         <ul className="mt-4 space-y-2">
           <Check ok={env.brokerAuthorityActive}>Deployment switch <code className="rounded bg-ivory px-1">BROKER_AUTHORITY_ACTIVE</code> is {env.brokerAuthorityActive ? "true" : "false"} (changed only in Vercel environment settings, with your approval)</Check>
+          <Check ok={b.broker_authority_status === "active"}>Broker authority status recorded as active in <a href="#identity" className="underline">Business identity</a></Check>
           <Check ok={Boolean(b.authority_verified_on)}>Broker authority verified active in FMCSA records{b.authority_verified_on ? ` on ${b.authority_verified_on}` : ""}</Check>
           <Check ok={Boolean(b.mc_number)}>MC number recorded{b.mc_number ? `: ${b.mc_number}` : ""}</Check>
           <Check ok={(verifiedCarriers ?? 0) > 0}>At least one carrier verified with recorded evidence ({verifiedCarriers ?? 0} so far)</Check>
@@ -53,6 +56,57 @@ export default async function SettingsPage() {
           <Check ok={b.operations_enabled}>Dashboard switch &ldquo;Operations enabled&rdquo; is {b.operations_enabled ? "on" : "off"}</Check>
         </ul>
         <p className="mt-4 rounded-md bg-ivory p-3 text-xs leading-relaxed">Before enabling operations, confirm in FMCSA records that broker authority is active, the BMC 84 or BMC 85 financial security is effective, and the BOC 3 process agent filing is on file.</p>
+      </Panel>
+
+      <Panel title="Business identity" className="mb-6">
+        <div id="identity" className="scroll-mt-24" />
+        <dl className="mb-5 grid gap-3 text-sm sm:grid-cols-3">
+          <div><dt className="text-xs text-slate-muted">Public brand name</dt><dd className="font-semibold text-navy">{brand.name}</dd></div>
+          <div><dt className="text-xs text-slate-muted">Previous brand name</dt><dd>{brand.previousName} <span className="text-xs text-slate-muted">(older records only)</span></dd></div>
+          <div><dt className="text-xs text-slate-muted">Operational launch status</dt><dd className="font-semibold">{env.brokerAuthorityActive && b.operations_enabled ? "Active brokerage" : "Prelaunch"}</dd></div>
+        </dl>
+        <ActionForm action={saveIdentity} submitLabel="Save business identity">
+          <fieldset disabled={!canEdit} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <AdminField label="Legal entity name" htmlFor="id-legal"><input id="id-legal" name="legal_entity_name" maxLength={160} defaultValue={v(b.legal_entity_name)} placeholder={brand.intendedLegalName} className={adminInput} /></AdminField>
+              <AdminField label="Website domain (once chosen)" htmlFor="id-domain"><input id="id-domain" name="website_domain" maxLength={253} defaultValue={v(b.website_domain)} placeholder="Not chosen yet" className={adminInput} /></AdminField>
+              <AdminField label="Trademark clearance" htmlFor="id-tm"><select id="id-tm" name="trademark_clearance_status" defaultValue={b.trademark_clearance_status} className={adminInput}>{TRADEMARK_STATUSES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></AdminField>
+              <AdminField label="Broker authority status" htmlFor="id-auth"><select id="id-auth" name="broker_authority_status" defaultValue={b.broker_authority_status} className={adminInput}>{AUTHORITY_STATUSES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></AdminField>
+              <AdminField label="Business address (private, not shown on the website)" htmlFor="id-addr" className="sm:col-span-2"><textarea id="id-addr" name="business_address" maxLength={300} defaultValue={v(b.business_address)} className={adminTextarea} /></AdminField>
+            </div>
+            <Toggle name="legal_name_confirmed" label="The legal entity name above is registered and confirmed (shows it in the footer, privacy policy and terms)" checked={b.legal_name_confirmed} />
+          </fieldset>
+        </ActionForm>
+        <p className="mt-3 text-xs leading-relaxed text-slate-muted">Recording a status here does not file, register or verify anything. Business email and phone are set in <Link href="/admin/content" className="font-semibold text-brand-red-dark underline">Website Content</Link>; MC and USDOT numbers below.</p>
+      </Panel>
+
+      <Panel title="Launch checklist" className="mb-6">
+        <div id="launch" className="scroll-mt-24" />
+        <p className="mb-4 text-sm">Name, legal and compliance steps for {brand.name}. {LAUNCH_ITEMS.filter((i) => (b.launch_checklist?.[i.key]?.status ?? "todo") === "done").length} of {LAUNCH_ITEMS.length} done.</p>
+        <ActionForm action={saveLaunchChecklist} submitLabel="Save checklist">
+          <fieldset disabled={!canEdit}>
+            <ul className="divide-y divide-line">
+              {LAUNCH_ITEMS.map((item) => {
+                const entry = b.launch_checklist?.[item.key] as { status?: string; note?: string | null; updated_at?: string } | undefined;
+                return (
+                  <li key={item.key} className="grid gap-3 py-3 lg:grid-cols-[1fr_11rem_16rem] lg:items-start">
+                    <div>
+                      <p className="text-sm font-semibold text-navy">{item.label}</p>
+                      <p className="text-xs text-slate-muted">{item.help}</p>
+                      {entry?.updated_at && <p className="mt-1 text-xs text-slate-muted">Updated {fmtDateTime(entry.updated_at)}</p>}
+                    </div>
+                    <label className="sr-only" htmlFor={`lc-${item.key}`}>{item.label} status</label>
+                    <select id={`lc-${item.key}`} name={`${item.key}__status`} defaultValue={entry?.status ?? "todo"} className={adminInput}>
+                      {CHECKLIST_STATUSES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <label className="sr-only" htmlFor={`lcn-${item.key}`}>{item.label} note</label>
+                    <input id={`lcn-${item.key}`} name={`${item.key}__note`} maxLength={300} defaultValue={entry?.note ?? ""} placeholder="Note (optional)" className={adminInput} />
+                  </li>
+                );
+              })}
+            </ul>
+          </fieldset>
+        </ActionForm>
       </Panel>
 
       <Panel title="Activation, verification and notifications" className="mb-6">

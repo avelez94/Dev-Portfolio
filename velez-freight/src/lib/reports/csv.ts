@@ -1,5 +1,6 @@
 import type { Report } from "@/lib/reports/types";
 import { cell } from "@/lib/reports/types";
+import { brand } from "@/config/brand";
 
 /** Neutralizes spreadsheet formula injection and quotes per RFC 4180. */
 export function csvField(v: string): string {
@@ -10,7 +11,7 @@ export function csvField(v: string): string {
 
 /** One CSV file per report: a header block, then each section with its own header row. */
 export function reportToCsv(r: Report): string {
-  const lines: string[][] = [[r.title], ["Period", r.period], ["Generated", r.generatedAt], ["Source", r.source]];
+  const lines: string[][] = [[r.title], ["Company", brand.name], ["Period", r.period], ["Generated", r.generatedAt], ["Source", r.source]];
   if (r.summary.length) { lines.push([]); r.summary.forEach((x) => lines.push([x.label, x.value])); }
   for (const s of r.sections) {
     lines.push([], [s.title]);

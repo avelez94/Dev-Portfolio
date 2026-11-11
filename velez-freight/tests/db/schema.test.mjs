@@ -162,7 +162,7 @@ test("quote inquiries are accepted once operations are enabled and verified", as
     await db.query(`update public.business_settings set operations_enabled = true, authority_verified_on = current_date where id = 1`);
     await db.query("set local role service_role");
     const { rows } = await db.query(quote + " returning reference, status");
-    assert.match(rows[0].reference, /^VFG-Q-[A-F0-9]{8}$/);
+    assert.match(rows[0].reference, /^MLG-Q-[A-F0-9]{8}$/);
     assert.equal(rows[0].status, "pending_review");
   } finally {
     await db.query("rollback");

@@ -32,7 +32,8 @@
   columns, constraints, policies, triggers, indexes, grants and RLS flags matched a local
   database built from these files exactly.
 * Background job `vfg_refresh_system_tasks` runs every 15 minutes; `vfg_cron_history_cleanup`
-  trims job history daily.
+  trims job history daily. (The `vfg_` prefix on internal function and job names predates the
+  rebrand; they are internal identifiers and are intentionally unchanged.)
 * Security Advisor: `carrier_qualification` was changed to run with the caller's rights
   (migration `20261113000200`). Remaining notices are intentional: `is_staff()` and
   `is_admin()` only report on the signed in user and must be callable for RLS;

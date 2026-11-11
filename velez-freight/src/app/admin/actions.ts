@@ -11,6 +11,7 @@ import { audit } from "@/lib/data/audit";
 import { contactStatuses, entityTypes, prospectStatuses, quoteStatuses, verificationStatuses } from "@/config/admin";
 import { equipmentOptions } from "@/lib/validation";
 import { site } from "@/config/site";
+import { AUTHORITY_STATUSES, CHECKLIST_STATUSES, LAUNCH_ITEMS, TRADEMARK_STATUSES } from "@/config/launch";
 
 export type ActionState = { ok?: boolean; error?: string; message?: string } | undefined;
 
@@ -315,6 +316,8 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
     if (next.operations_enabled && !before?.operations_enabled) {
       if (raw.confirm_operations !== "ENABLE OPERATIONS") return { error: "To enable operations, type ENABLE OPERATIONS in the confirmation box." };
       if (!next.authority_verified_on || !next.mc_number) return { error: "Record the MC number and the date broker authority was verified active before enabling operations." };
+      const { data: id } = await s.db.from("business_settings").select("broker_authority_status").eq("id", 1).single();
+      if (id?.broker_authority_status !== "active") return { error: "Set Broker authority status to Active in Business identity (after confirming it in FMCSA records) before enabling operations." };
     }
     const { error } = await s.db.from("business_settings").update(next).eq("id", 1);
     if (error) throw error;
@@ -333,12 +336,70 @@ export async function saveWebsiteContent(_: ActionState, fd: FormData): Promise<
     const raw = form(fd);
     const bool = (k: string) => raw[k] === "on";
     const v = z.object({ public_email: email, public_phone: text(32), status_message: text(500), service_area: z.string().trim().min(2).max(120) }).parse(raw);
-    const next = { ...v, legal_name_confirmed: bool("legal_name_confirmed"), service_expedited: bool("service_expedited"), service_dedicated: bool("service_dedicated"), service_general: bool("service_general"), updated_by: s.userId };
+    const next = { ...v, service_expedited: bool("service_expedited"), service_dedicated: bool("service_dedicated"), service_general: bool("service_general"), updated_by: s.userId };
     const { error } = await s.db.from("business_settings").update(next).eq("id", 1);
     if (error) throw error;
     await audit({ actorType: "admin", actorId: s.userId, action: "website_content.updated", entityType: "business_settings", entityId: "1" });
     revalidatePath("/", "layout");
     return { ok: true, message: "Saved. Public pages refresh within a minute." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * Business identity: legal entity name and verification, trademark and authority status, domain.
+ * The public brand name is fixed in src/config/brand.ts. Nothing here files or verifies anything;
+ * it records what the owner has confirmed.
+ */
+export async function saveIdentity(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await requireAdmin();
+  try {
+    const raw = form(fd);
+    const v = z.object({
+      legal_entity_name: text(160),
+      business_address: text(300),
+      website_domain: z.string().trim().toLowerCase().transform((x) => x.replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null)
+        .pipe(z.union([z.null(), z.string().regex(/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, "Enter a domain such as example.com")])),
+      trademark_clearance_status: z.enum(values(TRADEMARK_STATUSES)),
+      broker_authority_status: z.enum(values(AUTHORITY_STATUSES)),
+    }).parse(raw);
+    const legal_name_confirmed = raw.legal_name_confirmed === "on";
+    if (legal_name_confirmed && !v.legal_entity_name) return { error: "Enter the registered legal entity name before marking it confirmed." };
+    const { data: before } = await s.db.from("business_settings").select("legal_entity_name, legal_name_confirmed, broker_authority_status, trademark_clearance_status").eq("id", 1).single();
+    const { error } = await s.db.from("business_settings").update({ ...v, legal_name_confirmed, updated_by: s.userId }).eq("id", 1);
+    if (error) throw error;
+    await audit({ actorType: "admin", actorId: s.userId, action: "business_identity.updated", entityType: "business_settings", entityId: "1", metadata: {
+      legal_name_changed: before?.legal_entity_name !== v.legal_entity_name, legal_name_confirmed,
+      broker_authority_status: v.broker_authority_status, trademark_clearance_status: v.trademark_clearance_status,
+      authority_changed: before?.broker_authority_status !== v.broker_authority_status,
+    } });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Business identity saved." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Launch checklist statuses and notes, recorded by the owner. */
+export async function saveLaunchChecklist(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await requireAdmin();
+  try {
+    const raw = form(fd);
+    const { data: before } = await s.db.from("business_settings").select("launch_checklist").eq("id", 1).single();
+    const prev = (before?.launch_checklist ?? {}) as Record<string, { status: string; note?: string | null; updated_at?: string }>;
+    const next: Record<string, { status: string; note: string | null; updated_at: string }> = {};
+    for (const item of LAUNCH_ITEMS) {
+      const status = z.enum(values(CHECKLIST_STATUSES)).parse(raw[`${item.key}__status`] ?? "todo");
+      const note = text(300).parse(raw[`${item.key}__note`]);
+      const same = prev[item.key]?.status === status && (prev[item.key]?.note ?? null) === note;
+      next[item.key] = { status, note, updated_at: same && prev[item.key]?.updated_at ? prev[item.key].updated_at! : new Date().toISOString() };
+    }
+    const { error } = await s.db.from("business_settings").update({ launch_checklist: next, updated_by: s.userId }).eq("id", 1);
+    if (error) throw error;
+    await audit({ actorType: "admin", actorId: s.userId, action: "launch_checklist.updated", entityType: "business_settings", entityId: "1", metadata: { done: Object.values(next).filter((x) => x.status === "done").length } });
+    revalidatePath("/admin", "layout");
+    return { ok: true, message: "Checklist saved." };
   } catch (e) {
     return fail(e);
   }

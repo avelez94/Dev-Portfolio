@@ -164,8 +164,8 @@ export function WhySection() {
     <section aria-labelledby="why-title" className="py-20 sm:py-24">
       <div className="container-site grid gap-12 lg:grid-cols-[20rem_1fr] lg:items-center">
         <div data-reveal>
-          <p className="eyebrow flex items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" /> Why Choose</p>
-          <h2 id="why-title" className="mt-3 text-4xl font-bold leading-[1.05] sm:text-[2.7rem]">Velez Freight Group</h2>
+          <p className="eyebrow flex items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" /> Our Approach</p>
+          <h2 id="why-title" className="mt-3 text-4xl font-bold leading-[1.05] sm:text-[2.7rem]">{copy.why.heading}</h2>
           <p className="mt-4 font-serif text-lg font-semibold leading-snug text-navy-700">{copy.why.title}</p>
           <p className="mt-3 text-[0.95rem] leading-relaxed text-charcoal">{copy.why.body}</p>
         </div>
@@ -200,8 +200,8 @@ export function StoryTeaser() {
         <LogoMark className="pointer-events-none absolute -right-16 bottom-0 w-[30rem] opacity-[0.06]" />
         <div data-reveal className="relative max-w-xl">
           <p className="eyebrow">Our Story</p>
-          <h2 id="story-title" className="mt-3 text-3xl font-bold sm:text-[2.4rem]">A Family Legacy in Freight</h2>
-          {copy.storyTeaser.map((p) => (
+          <h2 id="story-title" className="mt-3 text-3xl font-bold sm:text-[2.4rem]">{copy.storyTeaser.title}</h2>
+          {copy.storyTeaser.body.map((p) => (
             <p key={p} className="mt-4 leading-relaxed text-charcoal">{p}</p>
           ))}
           <p className="mt-5 font-serif text-xl italic text-brand-red-dark">{copy.tagline}</p>
@@ -236,7 +236,7 @@ export function CarrierAndFaq({ operational }: { operational: boolean }) {
         <div className="relative px-4 py-14 sm:px-10 lg:py-20 lg:pl-[45%] lg:pr-20">
           <div data-reveal>
             <p className="eyebrow eyebrow-light">Carrier Partnerships</p>
-            <h2 className="mt-3 text-3xl font-bold leading-tight text-white sm:text-[2.1rem]">Haul With Velez Freight Group</h2>
+            <h2 className="mt-3 text-3xl font-bold leading-tight text-white sm:text-[2.1rem]">{copy.carrierTitle}</h2>
             {copy.carrierTeaser.map((p) => (
               <p key={p} className="mt-4 text-[0.95rem] leading-relaxed text-white/88">{p}</p>
             ))}

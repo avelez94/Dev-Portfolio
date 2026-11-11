@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/site/legal-page";
-import { getSettings } from "@/lib/data/settings";
+import { companyName, getSettings } from "@/lib/data/settings";
 import { site } from "@/config/site";
 
 export const metadata: Metadata = {
   title: "Terms of Use",
-  description: "Terms that apply to the use of the Velez Freight Group website.",
+  description: "Terms that apply to the use of the Mary’s Logistics Group website.",
   alternates: { canonical: "/terms" },
 };
 
@@ -14,7 +14,7 @@ const UPDATED = "November 11, 2026";
 
 export default async function TermsPage() {
   const settings = await getSettings();
-  const name = settings.legalNameConfirmed ? site.legalName : site.name;
+  const name = companyName(settings);
   return (
     <LegalPage title="Terms of Use" updated={UPDATED}>
       <p>These terms govern your use of this website operated by {name}. By using the website you agree to them. If you do not agree, please do not use the website.</p>
@@ -41,7 +41,7 @@ export default async function TermsPage() {
       </ul>
 
       <h2>Content and trademarks</h2>
-      <p>The Velez Freight Group name, logo, and website content belong to us and may not be used without permission. Photographs are used under license from their respective owners.</p>
+      <p>The {site.name} name and logo identify our business. Website content may not be reused without permission. Photographs are used under license from their respective owners.</p>
 
       <h2>Disclaimers</h2>
       <p>The website is provided &ldquo;as is.&rdquo; We work to keep information accurate, but we do not warrant that it is complete, current, or error free. To the fullest extent permitted by law, we are not liable for indirect or consequential damages arising from use of the website.</p>
