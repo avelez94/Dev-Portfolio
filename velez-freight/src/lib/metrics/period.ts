@@ -66,3 +66,11 @@ export function periodQuery(p: Period) {
   if (p.preset === "custom") { q.set("from", p.from); q.set("to", p.to); }
   return q.toString();
 }
+
+/** UTC instant of midnight at the start of a business day in America/New_York (handles DST). */
+export function dayStartUtc(d: string): string {
+  const guess = new Date(`${d}T05:00:00Z`);
+  const local = new Intl.DateTimeFormat("en-US", { timeZone: BUSINESS_TZ, hour: "numeric", hourCycle: "h23" }).format(guess);
+  const shift = Number(local) % 24; // 0 when EST (UTC minus 5), 1 when EDT (UTC minus 4)
+  return new Date(guess.getTime() - shift * 3_600_000).toISOString();
+}

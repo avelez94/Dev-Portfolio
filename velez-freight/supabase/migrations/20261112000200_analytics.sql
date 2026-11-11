@@ -104,12 +104,15 @@ begin
     where s.status in ('delivered', 'completed')
       and i.amount <= coalesce((select sum(amount) from public.invoice_payments p where p.invoice_id = i.id), 0)
     group by s.shipper_id),
-  first_contact as (
-    select shipper_id, min(occurred_at) as first_contact from public.crm_activities
-    where shipper_id is not null and direction = 'outbound' and outcome = 'completed' group by shipper_id),
+  -- Only contact that happened before the first paid delivery counts; later outreach cannot
+  -- explain how the customer was won, and would produce negative durations.
   pairs as (
     select extract(epoch from (p.first_paid_delivery - f.first_contact)) / 86400.0 as days
-    from paid_ship p join first_contact f using (shipper_id)
+    from paid_ship p
+    join lateral (
+      select min(a.occurred_at) as first_contact from public.crm_activities a
+      where a.shipper_id = p.shipper_id and a.direction = 'outbound' and a.outcome = 'completed' and a.occurred_at <= p.first_paid_delivery
+    ) f on f.first_contact is not null
     where p.first_paid_delivery >= public.vfg_day_start(p_from) and p.first_paid_delivery < public.vfg_day_start(p_to + 1))
   select jsonb_build_object('available', true, 'customers', count(*), 'avg_days', round(avg(days)::numeric, 1)) into r from pairs;
   return r;

@@ -158,3 +158,11 @@ test("empty period returns zeros and unavailable ratios, never invented values",
   assert.equal(r.completed_loads, 0);
   assert.equal(r.top3_share_pct, null);
 });
+
+test("contact to customer time is never negative and only counts contact before the first paid delivery", async () => {
+  const r = (await owner(`select public.analytics_contact_to_customer($1, $2) as r`, [addDays(TODAY, -365), TO])).rows[0].r;
+  assert.equal(r.available, true);
+  if (r.customers > 0) assert.ok(Number(r.avg_days) >= 0, `avg_days ${r.avg_days}`);
+  const staff = await h.as("authenticated", STAFF, (db) => db.query(`select public.analytics_contact_to_customer($1, $2) as r`, [FROM, TO]));
+  assert.equal(staff.rows[0].r.available, false, "payment based metric is unavailable to staff, not zero");
+});
