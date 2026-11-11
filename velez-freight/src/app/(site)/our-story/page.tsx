@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, CircleDashed } from "lucide-react";
+import { ArrowRight, Check, CircleDashed, ClipboardCheck, Headset, MessageSquareText, MonitorSmartphone, ShieldCheck, UserRound, Users } from "lucide-react";
 import { getSettings } from "@/lib/data/settings";
 import { images } from "@/config/images";
 import { PageHero } from "@/components/site/page-hero";
@@ -10,15 +10,29 @@ import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Our Story",
-  description: "Mary’s Logistics Group was inspired by a family tradition of entrepreneurship and named in honor of Mary, whose legacy continues to inspire generations of our family.",
+  description: "Mary’s Logistics Group is named in honor of Mary and inspired by a family tradition of entrepreneurship. Meet founder Alante Velez and learn how we approach freight coordination.",
   alternates: { canonical: "/our-story" },
 };
 
-const values = [
-  { title: "Work ethic", body: "Showing up prepared, following through, and doing the unglamorous details well." },
-  { title: "Integrity and accountability", body: "Saying what we can do, doing what we said, and being honest when something is not a fit." },
-  { title: "Relationships", body: "Treating customers and carriers as long term partners, not single transactions." },
-  { title: "The next generation", body: "Building something that lasts and that the family can be proud to carry forward." },
+const founder = {
+  name: "Alante Velez",
+  title: "Founder & CEO",
+  photo: { src: "/images/founder-alante-velez.jpg", width: 1122, height: 1402 },
+};
+
+/** Transferable strengths only. No freight brokerage track record is implied. */
+const strengths = [
+  { icon: MonitorSmartphone, title: "Technology", body: "Comfort with the systems and tools that keep information organized, accurate and easy to find." },
+  { icon: Headset, title: "Customer support", body: "Experience helping people resolve issues with patience, clear explanations and reliable follow through." },
+  { icon: Users, title: "Team leadership", body: "Experience coordinating people and priorities toward a shared goal and holding a high standard." },
+];
+
+const approach = [
+  { icon: UserRound, title: "Personalized service", body: "Each shipment is planned around your freight, schedule and priorities, not a one size fits all process." },
+  { icon: MessageSquareText, title: "Clear communication", body: "Straightforward answers and timely updates, so you always know where things stand." },
+  { icon: ShieldCheck, title: "Responsible carrier selection", body: "Carriers are reviewed for operating authority, insurance and fit for the freight before any shipment is arranged." },
+  { icon: ClipboardCheck, title: "Organization", body: "Documents, details and deadlines are tracked carefully, so nothing important slips through." },
+  { icon: MonitorSmartphone, title: "Technology enabled operations", body: "Modern systems keep shipment information, records and follow ups organized and accurate." },
 ];
 
 export default async function OurStoryPage() {
@@ -34,42 +48,91 @@ export default async function OurStoryPage() {
         position="50% 60%"
       />
 
-      <section className="relative overflow-hidden py-16 sm:py-24">
+      {/* 1. Our Story */}
+      <section aria-labelledby="story-title" className="relative overflow-hidden py-16 sm:py-24">
         <LogoMark className="pointer-events-none absolute -right-24 top-10 w-[36rem] opacity-[0.05]" />
-        <div className="container-site relative grid gap-12 lg:grid-cols-[1.3fr_1fr] lg:gap-16">
-          <article className="prose-site max-w-2xl text-[1.05rem] text-charcoal">
-            <p className="font-serif text-2xl leading-snug text-navy">
-              Mary’s Logistics Group was inspired by a family tradition of entrepreneurship and a belief that meaningful businesses are built on integrity, hard work, and lasting relationships.
-            </p>
-            <p>
-              Named in honor of Mary, whose legacy continues to inspire generations of our family, the company carries those values into the transportation and logistics industry. Honoring her through the businesses we build is a tradition in our family, and this company continues it.
-            </p>
-            <p>
-              Our focus is simple: building strong business relationships through thoughtful freight coordination, clear communication, and an unwavering commitment to professionalism.
-            </p>
-            <p>
-              We believe successful transportation partnerships require more than rates and schedules. They require attention to detail, accountability, and respect for the people and businesses involved.
-            </p>
-            <p className="font-serif text-xl leading-snug text-navy">Our name reflects where we come from. Our commitment reflects where we’re going.</p>
-            <p className="font-serif text-xl italic text-brand-red-dark">Rooted in family. Driven by purpose.</p>
-          </article>
-
-          <aside className="space-y-6">
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[var(--radius-card)]">
-              <Image src={images.roadSunriseHills.src} alt={images.roadSunriseHills.alt} fill sizes="(min-width:1024px) 35vw, 100vw" className="object-cover" />
+        <div className="container-site relative grid gap-12 lg:grid-cols-[1.3fr_1fr] lg:items-center lg:gap-16">
+          <div className="max-w-2xl">
+            <p className="eyebrow flex items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" /> Our Story</p>
+            <h2 id="story-title" className="mt-3 text-3xl font-bold sm:text-[2.4rem]">Named in honor of Mary</h2>
+            <div className="prose-site mt-6 text-[1.05rem] text-charcoal">
+              <p className="font-serif text-2xl leading-snug text-navy">
+                Mary’s Logistics Group is named in honor of Mary, our founder’s grandmother, whose legacy continues to inspire generations of our family.
+              </p>
+              <p>
+                Honoring her through the businesses we build is part of a family tradition of entrepreneurship, and this company continues it. We carry the values behind that tradition into every conversation with shippers and carriers: integrity, hard work and lasting relationships.
+              </p>
+              <p className="font-serif text-xl italic text-brand-red-dark">Rooted in family. Driven by purpose.</p>
             </div>
-          </aside>
+          </div>
+          <div className="relative mx-auto aspect-[4/3] w-full max-w-xl overflow-hidden rounded-[var(--radius-card)] lg:aspect-[4/5]">
+            <Image src={images.roadSunriseHills.src} alt={images.roadSunriseHills.alt} fill sizes="(min-width:1024px) 35vw, 100vw" className="object-cover" />
+          </div>
         </div>
       </section>
 
-      <section className="bg-navy py-16 sm:py-20">
+      {/* 2. Meet Our Founder */}
+      <section aria-labelledby="founder-title" className="border-y border-line bg-ivory-200/60 py-16 sm:py-24">
+        <div className="container-site grid items-center gap-12 lg:grid-cols-[minmax(0,25rem)_1fr] lg:gap-20 xl:grid-cols-[minmax(0,28rem)_1fr]">
+          <figure className="relative mx-auto w-[calc(100%_-_1.5rem)] max-w-[22rem] sm:w-full sm:max-w-sm lg:max-w-none">
+            {/* Offset red frame and navy block: restrained editorial accents behind the portrait. */}
+            <div aria-hidden="true" className="absolute -bottom-3 -right-3 left-5 top-5 rounded-[var(--radius-card)] border-2 border-brand-red sm:-bottom-5 sm:-right-5 sm:left-6 sm:top-6" />
+            <div aria-hidden="true" className="absolute -left-3 bottom-10 h-24 w-1.5 rounded-full bg-navy sm:-left-5 sm:h-28 sm:w-2" />
+            <div className="relative overflow-hidden rounded-[var(--radius-card)] bg-white shadow-[0_24px_60px_-30px_rgb(20_40_57/0.55)]">
+              <Image
+                src={founder.photo.src}
+                alt={`${founder.name}, ${founder.title} of Mary’s Logistics Group`}
+                width={founder.photo.width}
+                height={founder.photo.height}
+                sizes="(min-width:1280px) 28rem, (min-width:1024px) 25rem, (min-width:640px) 24rem, 22rem"
+                quality={85}
+                className="h-auto w-full"
+              />
+            </div>
+            <figcaption className="relative -mt-10 ml-6 mr-10 rounded-lg border border-line bg-white px-5 py-4 shadow-[0_16px_40px_-24px_rgb(20_40_57/0.5)] sm:ml-8">
+              <span className="block font-serif text-lg font-bold text-navy sm:text-xl">{founder.title}</span>
+              <span className="mt-0.5 block text-xs font-semibold uppercase tracking-[0.18em] text-brand-red-dark">Mary’s Logistics Group</span>
+            </figcaption>
+          </figure>
+
+          <div className="max-w-2xl">
+            <p className="eyebrow flex items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" /> Meet Our Founder</p>
+            <h2 id="founder-title" className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">{founder.name}</h2>
+            <div className="mt-6 space-y-4 text-[1.05rem] leading-relaxed text-charcoal">
+              <p className="font-serif text-xl leading-snug text-navy">
+                Alante Velez founded Mary’s Logistics Group to carry a family tradition of entrepreneurship into the freight industry.
+              </p>
+              <p>
+                Alante’s professional background is in technology, customer support and team leadership: work centered on solving problems, communicating clearly and keeping people informed when it matters most.
+              </p>
+              <p>
+                Those same strengths shape how the company is being built, with responsive communication for shippers, careful organization behind every detail and modern tools that keep information accurate. As a new brokerage, Mary’s Logistics Group is completing every registration and compliance requirement before arranging freight, and intends to earn trust one relationship at a time.
+              </p>
+            </div>
+            <ul className="mt-9 grid gap-6 sm:grid-cols-3" aria-label="Strengths Alante brings to the company">
+              {strengths.map((x) => (
+                <li key={x.title} className="border-t-2 border-brand-red pt-4">
+                  <x.icon aria-hidden="true" className="size-5 text-brand-red" />
+                  <h3 className="mt-3 text-base font-bold text-navy">{x.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-charcoal">{x.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Our Approach */}
+      <section aria-labelledby="approach-title" className="bg-navy py-16 sm:py-20">
         <div className="container-site">
-          <p className="eyebrow eyebrow-light">What guides us</p>
-          <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">The values we carry forward</h2>
-          <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {values.map((v) => (
+          <p className="eyebrow eyebrow-light">Our Approach</p>
+          <h2 id="approach-title" className="mt-3 text-3xl font-bold text-white sm:text-4xl">How we work with you</h2>
+          <p className="mt-4 max-w-2xl leading-relaxed text-white/85">Freight coordination built on the fundamentals: knowing your needs, keeping you informed and choosing carriers responsibly.</p>
+          <ul className="mt-10 grid gap-x-6 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {approach.map((v) => (
               <li key={v.title} data-reveal className="border-t-2 border-brand-red pt-5">
-                <h3 className="text-xl font-bold text-white">{v.title}</h3>
+                <v.icon aria-hidden="true" className="size-6 text-brand-red" />
+                <h3 className="mt-4 text-xl font-bold text-white">{v.title}</h3>
                 <p className="mt-2 text-[0.95rem] leading-relaxed text-white/85">{v.body}</p>
               </li>
             ))}

@@ -25,3 +25,7 @@ required, attribution given here as good practice). Unsplash+ (paid) images were
 * No image shows company branding on a vehicle. The company is a broker and does
   not own trucks or trailers, so branded vehicle imagery must not be added later.
 * Verify each license page again before launch; Unsplash licensing can change for new uploads.
+
+## Owner supplied
+
+* `public/images/founder-alante-velez.jpg`: professional headshot of Alante Velez, supplied by the owner for the Our Story page. Not licensed for reuse outside this website.

@@ -157,7 +157,8 @@ test("no old brand name appears on any public page, in metadata or in the manife
   for (const path of ["/", "/services", "/shippers", "/carriers", "/our-story", "/contact", "/request-quote", "/privacy", "/terms", "/manifest.webmanifest", "/robots.txt", "/sitemap.xml"]) {
     const res = await page.request.get(path);
     expect(res.status(), path).toBe(200);
-    expect(await res.text(), path).not.toMatch(/velez|vfg|freight group/i);
+    // The old brand only. "Velez" alone is the founder's surname and is expected on Our Story.
+    expect(await res.text(), path).not.toMatch(/velez freight|velez-freight|vfg|freight group/i);
   }
   // Visible text never shows raw escape codes (for example a literal \u2019 instead of an apostrophe).
   for (const path of ["/", "/services", "/shippers", "/carriers", "/our-story", "/contact", "/request-quote", "/privacy", "/terms"]) {
@@ -176,4 +177,23 @@ test("no old brand name appears on any public page, in metadata or in the manife
     const ld = JSON.parse((await page.locator('script[type="application/ld+json"]').first().textContent()) ?? "{}");
     return [ld.name, ld.legalName ?? null];
   }, { timeout: 15000 }).toEqual(["Mary’s Logistics Group", null]);
+});
+
+test("our story: story, founder profile with headshot, and approach", async ({ page }) => {
+  await page.goto("/our-story");
+  await expect(page.getByRole("heading", { level: 2, name: "Named in honor of Mary" })).toBeVisible();
+  const founder = page.locator("section", { has: page.getByRole("heading", { level: 2, name: "Alante Velez" }) });
+  const photo = founder.getByRole("img", { name: "Alante Velez, Founder & CEO of Mary’s Logistics Group" });
+  await expect(photo).toBeVisible();
+  expect(await photo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(founder.getByText("Founder & CEO", { exact: true })).toBeVisible();
+  await expect(founder).toContainText("technology, customer support and team leadership");
+  await expect(page.getByRole("heading", { level: 2, name: "How we work with you" })).toBeVisible();
+  for (const h of ["Personalized service", "Clear communication", "Responsible carrier selection", "Organization", "Technology enabled operations"]) {
+    await expect(page.getByRole("heading", { level: 3, name: h })).toBeVisible();
+  }
+  // Phone width: the profile fits without sideways scrolling.
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.reload();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
 });

@@ -258,7 +258,7 @@ test("no old brand name is visible anywhere in the dashboard", async ({ page }) 
   await signIn(page);
   for (const path of ["/admin", "/admin/tasks", "/admin/notifications", "/admin/shippers", "/admin/carriers", "/admin/inquiries", "/admin/quotes", "/admin/shipments", "/admin/invoices", "/admin/payables", "/admin/insights", "/admin/reports", "/admin/content", "/admin/audit"]) {
     await page.goto(path);
-    expect(await page.locator("body").innerText(), path).not.toMatch(/velez|freight group|\\u[0-9a-fA-F]{4}/i);
+    expect(await page.locator("body").innerText(), path).not.toMatch(/velez freight|freight group|\\u[0-9a-fA-F]{4}/i);
     expect(await page.title(), path).toContain("Mary’s Logistics Group");
   }
 });
