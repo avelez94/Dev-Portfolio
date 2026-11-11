@@ -48,6 +48,13 @@
   `system_jobs` have no policies so only the server and the database itself can use them.
 * No data has been inserted. Operations remain disabled.
 
+## Live database additions (applied 2026-11-11)
+
+`settings_center`, `outreach` and `priorities_and_agents` were applied with owner approval. The
+security advisor shows no new findings; the remaining notices predate them and are intended
+(`is_staff`, `is_admin` and `refresh_system_tasks` must be callable by signed in staff). Turning
+on leaked password protection in Supabase Auth settings is recommended.
+
 ## Tests
 
 * `npm run test:db`: 47 tests against the real migrations on Postgres (grants, RLS, gates, carrier qualification, task generation and deduplication, immutable history, and metric accuracy against an independent calculation).

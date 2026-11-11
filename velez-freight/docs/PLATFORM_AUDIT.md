@@ -63,4 +63,4 @@ Phase 1 audit (this file), then:
 | 5 CRM | Opportunities pipeline; compose from shipper and carrier profiles; priorities for emails awaiting approval, unsent or failed, carrier verification left in review, and credential renewals | None |
 | 6 Analytics | Outreach overview figures; Email Outreach report (CSV and PDF); executive brief | Outreach is not yet a tab in Insights |
 | 7 Agents | Registry of seven agents with documented permissions, all off; AI agents locked by the database; run history; approval queue; Executive Insights (rules based, read only, on demand) | Six agents not built: four need an approved AI provider, two run today as priority rules |
-| 8 Tests and readiness | Unit 24, database 54, browser 74 (prelaunch and operating builds, including accessibility scans); `docs/PRODUCTION_READINESS.md` | Live database migrations and deployment await approval |
+| 8 Tests and readiness | Unit 24, database 54, browser 74 (prelaunch and operating builds, including accessibility scans); `docs/PRODUCTION_READINESS.md` | Live database migrations applied 2026-11-11; deployment awaits approval |

@@ -3,10 +3,12 @@
 Nothing below has been done to the live site or database without the owner's approval. Each
 item says who acts and where.
 
-## 1. Database (owner approval required)
+## 1. Database (applied 2026-11-11 with owner approval)
 
-Apply in order to the live Supabase project; each is additive with a rollback script in
-`supabase/rollback/`:
+Applied in order to the live Supabase project; each is additive with a rollback script in
+`supabase/rollback/`. Verified after applying: 11 credential rows, 7 templates with versions,
+7 agents all disabled, sending not approved, operations off, Row Level Security on all 13 new
+tables, and the task refresh runs.
 
 | Migration | Adds |
 | --- | --- |
@@ -14,8 +16,8 @@ Apply in order to the live Supabase project; each is additive with a rollback sc
 | `20261121000100_outreach.sql` | Email templates (seven starters), sender identities, messages, delivery events, do not email list, sending controls |
 | `20261122000100_priorities_and_agents.sql` | Priority rules for outreach, carrier verification and credential renewals; agent registry (all disabled), runs, approval requests |
 
-The deployed code tolerates these tables being absent (credentials and page text simply don't
-appear), but the new dashboard pages need them, so apply the migrations before deploying.
+The new dashboard pages (Business Settings tabs, Outreach, Agents) reach the live site only
+with the next deployment, which needs owner approval.
 
 ## 2. Hosting environment (owner approval required)
 
@@ -29,7 +31,8 @@ appear), but the new dashboard pages need them, so apply the migrations before d
 
 ## 3. Domain and email
 
-1. Choose and register the business domain; record it in Business Settings > Company Profile.
+1. Chosen domain: `maryslogisticsgroup.com` (not yet purchased). Register it, then record it in
+   Business Settings > Company Profile.
 2. Connect it in Vercel and update `NEXT_PUBLIC_SITE_URL` (see `docs/REBRAND_GAP_ANALYSIS.md`).
 3. Add the domain in Resend; add its SPF and DKIM records at the registrar; add a DMARC record.
 4. Outreach > Sending Setup: enter the domain, then "Check domain status" until it is verified.
