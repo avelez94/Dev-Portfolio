@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import type { Report } from "./build";
-import { cell } from "./build";
+import type { Report } from "@/lib/reports/types";
+import { cell } from "@/lib/reports/types";
 
 const NAVY = rgb(20 / 255, 40 / 255, 57 / 255);
 const RED = rgb(225 / 255, 37 / 255, 47 / 255);

@@ -1,17 +1,11 @@
 import Link from "next/link";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Info, Minus } from "lucide-react";
 import type { MetricDef } from "@/lib/metrics/definitions";
-import { fmtCount, fmtMoney, fmtPct } from "@/lib/money";
+import { fmtCount, fmtMoney } from "@/lib/money";
+import { formatValue } from "@/lib/metrics/format";
 import { cn } from "@/lib/utils";
 
-export function formatValue(unit: MetricDef["unit"], v: number | null | undefined) {
-  if (v === null || v === undefined) return "Not available";
-  if (unit === "money") return fmtMoney(v / 100, { whole: Math.abs(v) >= 100_000 });
-  if (unit === "percent") return fmtPct(v);
-  if (unit === "hours") return `${v.toFixed(1)} h`;
-  if (unit === "days") return `${v.toFixed(1)} days`;
-  return fmtCount(v);
-}
+export { formatValue };
 
 /** KPI card: value, honest comparison, definition on demand, and a link to the records. */
 export function KpiCard({ def, value, previous, snapshot = false, extraQuery = "" }: { def: MetricDef; value: number | null | undefined; previous?: number | null; snapshot?: boolean; extraQuery?: string }) {
@@ -34,7 +28,7 @@ export function KpiCard({ def, value, previous, snapshot = false, extraQuery = "
   } else if (!unavailable) delta = <span className="text-slate-muted">No comparison available</span>;
   const href = extraQuery ? `${def.drill}${def.drill.includes("?") ? "&" : "?"}${extraQuery}` : def.drill;
   return (
-    <div className="flex flex-col rounded-xl border border-line bg-white p-4 shadow-[var(--shadow-card)]">
+    <div role="group" aria-label={def.label} className="flex flex-col rounded-xl border border-line bg-white p-4 shadow-[var(--shadow-card)]">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-sans text-[0.8rem] font-semibold leading-snug text-slate-muted">{def.label}</h3>
         <details className="group relative">

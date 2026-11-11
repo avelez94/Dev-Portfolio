@@ -8,6 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import pg from "pg";
 import { signJwt } from "./fake-supabase-jwt.mjs";
+import { generateSyntheticBrokerage } from "../../fixtures/synthetic-brokerage.mjs";
 
 const root = new URL("../../../", import.meta.url).pathname;
 const ADMIN_URL = process.env.TEST_DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/postgres";
@@ -81,7 +82,7 @@ async function main() {
   // same project side by side caused runtime regenerated pages to reference missing chunks.
   const phases = [
     { name: "prelaunch", broker: "false", ops: false, port: 3101, specs: ["public.spec.ts", "admin.spec.ts", "a11y.spec.ts"] },
-    { name: "operational", broker: "true", ops: true, port: 3102, specs: ["operational.spec.ts"] },
+    { name: "operational", broker: "true", ops: true, port: 3102, specs: ["operational.spec.ts", "brokerage.spec.ts"], synthetic: true },
   ];
   const extraArgs = process.argv.slice(2);
   let status = 0;
@@ -95,6 +96,8 @@ async function main() {
     await db.query(phase.ops
       ? `update public.business_settings set operations_enabled = true, authority_verified_on = current_date, mc_number = '000000' where id = 1`
       : `update public.business_settings set operations_enabled = false where id = 1`);
+    // The developed brokerage phase loads clearly labeled SYNTHETIC history into the local test database only.
+    if (phase.synthetic) await db.query(generateSyntheticBrokerage().sql);
     console.log(`\n=== ${phase.name}: building ===`);
     if (!process.env.E2E_SKIP_BUILD) run("npx", ["next", "build"], phaseEnv);
     await assertPortFree(phase.port);

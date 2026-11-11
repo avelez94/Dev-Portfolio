@@ -9,6 +9,11 @@
 | Database | RLS on every table. Staff can read and update CRM data; only owners and admins can delete records, change settings or read the audit log. Profiles cannot be changed by their owners. |
 | Audit | `audit_events` is append only (a trigger blocks update and delete, even for the service role). Sign ins, failed sign ins, submissions and changes are recorded. |
 | Headers | HSTS, X Frame Options DENY, nosniff, strict referrer policy, restrictive permissions policy. Admin pages are `noindex` and `no-store`. |
+| Financial records | Invoices, payments, carrier bills, carrier payments, operating expenses and the audit log are readable by owners and admins only (RLS). Financial analytics functions refuse other roles rather than returning zeros. |
+| Brokerage gates | Quotes, shipments, invoices and carrier bills cannot be inserted while operations are disabled (database trigger), in addition to server checks. Carrier assignment is refused by the database unless the qualification rule passes. |
+| Evidence and history | Stage history, carrier verification evidence and shipment events are append only. |
+| Exports | Report exports require a staff session, enforce admin only reports on the server, are never cached, contain no bank data, neutralize spreadsheet formulas, and are written to the audit log. URLs carry only dates and record IDs. |
+| Scheduled reports | The schedule table has a check constraint that keeps every schedule disabled until delivery is approved. |
 | Sensitive data | Forms warn against and do not request SSNs, bank details, tax forms or documents. Carrier onboarding documents belong in a separate secure workflow. |
 
 ## Supabase project settings to apply
@@ -22,5 +27,5 @@
 
 ## Tests
 
-* `npm run test:db`: 17 tests against the real migration on Postgres (grants, RLS, gate, audit, rate limit, rollback).
+* `npm run test:db`: 45 tests against the real migrations on Postgres (grants, RLS, gates, carrier qualification, task generation and deduplication, immutable history, and metric accuracy against an independent calculation).
 * `npm run test:e2e`: Playwright flows against production builds, with a test only Supabase stand in that executes queries under the caller's Postgres role so RLS is exercised.

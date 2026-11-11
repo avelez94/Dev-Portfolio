@@ -13,7 +13,7 @@ export default function ChartImpl({ kind, data, xKey, series, format = "count", 
     <div style={{ height: horizontal ? Math.max(160, data.length * 34 + 40) : height }} aria-hidden="true">
       <ResponsiveContainer width="100%" height="100%">
         {kind === "line" ? (
-          <LineChart {...common}>
+          <LineChart {...common} accessibilityLayer={false}>
             <CartesianGrid stroke="#E3DED3" vertical={false} />
             <XAxis dataKey={xKey} tick={axis} tickLine={false} axisLine={{ stroke: "#E3DED3" }} />
             <YAxis tick={axis} tickFormatter={fmt} width={72} tickLine={false} axisLine={false} />
@@ -22,7 +22,7 @@ export default function ChartImpl({ kind, data, xKey, series, format = "count", 
             {series.map((s) => <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2.5} dot={{ r: 2.5 }} connectNulls={false} />)}
           </LineChart>
         ) : (
-          <BarChart {...common} layout={horizontal ? "vertical" : "horizontal"}>
+          <BarChart {...common} accessibilityLayer={false} layout={horizontal ? "vertical" : "horizontal"}>
             <CartesianGrid stroke="#E3DED3" vertical={horizontal} horizontal={!horizontal} />
             {horizontal ? (
               <>

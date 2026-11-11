@@ -24,6 +24,24 @@ admin enables "Operations enabled" in Dashboard > Settings (which requires typin
 confirmation, the MC number and the date authority was verified). Even then, inquiries are
 stored as `pending_review` and no price is generated.
 
+## Admin command center
+
+A private operations center at `/admin`: today's priorities from explicit workflow rules, KPI
+cards with comparisons and drill downs, shipper 360 profiles, carrier qualification with
+recorded evidence, a task center, Insights (six analytical tabs) and a report center with CSV
+and PDF exports. Quotes, shipments, invoicing and payables are built and stay locked until
+operations are enabled. See `docs/COMMAND_CENTER.md` for how it works and
+`docs/ADMIN_GAP_ANALYSIS.md` for what was added.
+
+To explore it locally with a developed (synthetic) brokerage history:
+
+```bash
+npm run preview:synthetic
+```
+
+Then sign in at http://localhost:3300/admin/login as `owner@example.test` with the password
+`correct horse battery staple`. This uses a throwaway local database and refuses anything else.
+
 ## Local development
 
 ```bash
@@ -44,9 +62,9 @@ with prelaunch defaults, and forms report honestly that the inquiry system is no
 ## Connecting Supabase (not done yet; requires your approval)
 
 1. Create a Supabase project (US East region recommended).
-2. Review `supabase/migrations/20261111000100_initial_schema.sql`, then apply it in the SQL
-   editor or with the Supabase CLI. Rollback: `supabase/rollback/20261111000100_initial_schema.down.sql`
-   (destructive; export data first).
+2. Review the files in `supabase/migrations/` and apply them in order (SQL editor or Supabase
+   CLI). Rollback scripts are in `supabase/rollback/` (apply newest first; destructive, export
+   data first).
 3. Apply the Auth settings in `docs/SECURITY.md` (disable sign ups, redirect URL).
 4. Create the first owner: Authentication > Users > Invite user (your email). Then in the SQL
    editor run:
@@ -73,7 +91,8 @@ Set `RESEND_API_KEY`, `NOTIFY_EMAIL_FROM` (a sender on a domain verified in Rese
 | `npm run typecheck` | TypeScript |
 | `npm run lint` | ESLint |
 | `npm run test:unit` | Validation and spam token unit tests |
-| `npm run test:db` | Database security tests on a local Postgres (needs `TEST_DATABASE_URL`) |
+| `npm run test:db` | Database security, workflow and metric accuracy tests on a local Postgres (needs `TEST_DATABASE_URL`) |
+| `npm run preview:synthetic` | Local only preview with a synthetic developed brokerage |
 | `npm run test:e2e` | Builds the app and runs Playwright flows and axe accessibility scans against a local Postgres through a test only Supabase stand in |
 
 ## Project structure

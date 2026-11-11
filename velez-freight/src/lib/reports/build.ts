@@ -5,13 +5,13 @@ import { addDays, dayStartUtc, type Period } from "@/lib/metrics/period";
 import { kpiValues, loadCarriers, loadCustomers, loadSnapshot, type Filters } from "@/lib/metrics/queries";
 import { buildInsights } from "@/lib/insights/rules";
 import { pct, toCents } from "@/lib/money";
-import { formatValue } from "@/components/admin/kpi-card";
+import { formatValue } from "@/lib/metrics/format";
 import { industryCategories, label, leadSources, prospectStatuses } from "@/config/admin";
 
-/** A report is data, not presentation: the page, CSV and PDF all render the same structure. */
-export type Column = { key: string; label: string; format?: "money" | "count" | "percent" | "text" | "date" };
-export type Section = { title: string; note?: string; columns: Column[]; rows: Record<string, string | number | null>[] };
-export type Report = { key: string; title: string; description: string; period: string; generatedAt: string; source: string; summary: { label: string; value: string }[]; sections: Section[]; notes: string[] };
+import type { Column, Report, Section } from "./types";
+import { cell } from "./types";
+export type { Column, Report, Section };
+export { cell };
 
 export type ReportDef = { key: string; title: string; description: string; source: string; adminOnly?: boolean; operational?: boolean; filters: ("shipper" | "carrier" | "freight")[] };
 
@@ -172,13 +172,4 @@ export async function buildReport(def: ReportDef, s: StaffSession, period: Perio
     }
   }
   return { ...base, summary, sections, notes };
-}
-
-/** Formats a cell for display and export. Money is shown with two decimals. */
-export function cell(v: string | number | null | undefined, f: Column["format"] = "text"): string {
-  if (v === null || v === undefined || v === "") return f === "text" || f === "date" ? "" : "Not available";
-  if (f === "money") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v));
-  if (f === "percent") return `${Number(v).toFixed(1)}%`;
-  if (f === "count") return new Intl.NumberFormat("en-US").format(Number(v));
-  return String(v);
 }

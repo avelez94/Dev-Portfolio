@@ -138,12 +138,13 @@ export function AdminNav({ name, role, operational, counts }: { name: string; ro
         <button type="button" onClick={openSearch} aria-label="Search records" className="rounded p-2 hover:bg-white/10"><Search /></button>
       </div>
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <button type="button" aria-label="Close navigation" className="absolute inset-0 bg-navy/60" onClick={() => setMobileOpen(false)} />
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation" onKeyDown={(e) => e.key === "Escape" && setMobileOpen(false)}>
+          {/* Backdrop: mouse and touch only; keyboard users use the Close button or Escape. */}
+          <div aria-hidden="true" className="absolute inset-0 bg-navy/60" onClick={() => setMobileOpen(false)} />
           <div id="admin-drawer" className="relative flex h-full w-[min(20rem,85vw)] flex-col overflow-y-auto bg-navy px-3 py-4 text-white">
             <div className="mb-4 flex items-center justify-between px-2">
               <Logo variant="reverse" className="w-28" title={null} />
-              <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation" className="rounded p-2 hover:bg-white/10"><X /></button>
+              <button type="button" autoFocus onClick={() => setMobileOpen(false)} aria-label="Close navigation" className="rounded p-2 hover:bg-white/10"><X /></button>
             </div>
             <ModeBadge operational={operational} />
             <div className="flex-1">{navList(false)}</div>

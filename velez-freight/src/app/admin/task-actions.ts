@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/data/audit";
@@ -16,7 +15,8 @@ async function update(taskId: string, patch: Record<string, unknown>, action: st
   const { error, data } = await s.db.from("follow_up_tasks").update(patch).eq("id", parsed.data).select("id").maybeSingle();
   if (error || !data) return { error: "That task could not be updated. It may have been changed by someone else." };
   await audit({ actorType: "admin", actorId: s.userId, action: `follow_up_task.${action}`, entityType: "follow_up_task", entityId: parsed.data, metadata: meta });
-  revalidatePath("/admin", "layout");
+  // No page refresh here: the row updates in place so Undo stays available. Lists and counts
+  // refresh on the next navigation.
   return { ok: true, message: "Saved." };
 }
 
