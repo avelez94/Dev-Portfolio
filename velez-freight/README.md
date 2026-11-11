@@ -89,7 +89,7 @@ https://velez-freight-group.vercel.app. Settings that matter: Root Directory `ve
 deployments skipped when nothing in this folder changed. Vercel Authentication currently
 protects every address except custom domains, so only signed in Vercel team members can view
 the site until it is made public or a custom domain is connected. Environment variables are
-listed in `.env.example`; `SUPABASE_SERVICE_ROLE_KEY` is added by the owner directly in Vercel.
+listed in `.env.example`; `SUPABASE_SERVICE_ROLE_KEY` holds the Supabase secret key (`sb_secret_...`) and is added by the owner directly in Vercel. The public key is the publishable key (`sb_publishable_...`); the legacy JWT keys are not used.
 
 ## Email notifications
 
