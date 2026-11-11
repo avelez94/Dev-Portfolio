@@ -1,5 +1,6 @@
 -- Rollback for 20261112000200_analytics.sql (functions only; no data is affected).
 begin;
+drop function if exists public.analytics_quotes(date, date, uuid, text);
 drop function if exists public.analytics_carrier(uuid);
 drop function if exists public.analytics_customer(uuid);
 drop function if exists public.analytics_carriers(date, date);

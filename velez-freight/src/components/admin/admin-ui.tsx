@@ -40,8 +40,11 @@ export function AdminField({ label, htmlFor, children, className }: { label: str
   );
 }
 
-const tone: Record<string, "neutral" | "red" | "navy" | "green" | "amber"> = {
-  new: "red", pending_review: "red", unverified: "amber", open: "amber", in_review: "amber", follow_up: "amber",
+const tone: Record<string, "neutral" | "red" | "navy" | "green" | "amber" | "danger" | "info"> = {
+  new: "info", pending_review: "info", unverified: "amber", open: "info", in_review: "amber", follow_up: "amber", overdue: "danger",
+  draft: "neutral", pending_approval: "amber", approved: "info", sent: "info", accepted: "green", issued: "info", received: "info", paid: "green", void: "neutral",
+  booked: "info", dispatched: "info", in_transit: "info", delivered: "green", completed: "green", lost: "neutral", researching: "neutral",
+  contact_identified: "neutral", contacted: "info", pass: "green", fail: "danger", needs_review: "amber",
   resolved: "green", verified: "green", done: "green", active_customer: "green", responded: "navy", qualified: "navy",
   potential_customer: "navy", spam: "neutral", closed: "neutral", declined: "neutral", rejected: "neutral", expired: "neutral", cancelled: "neutral",
 };

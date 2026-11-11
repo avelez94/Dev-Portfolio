@@ -1,9 +1,10 @@
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime } from "@/config/admin";
-import { EmptyState, PageTitle } from "@/components/admin/admin-ui";
+import { EmptyState } from "@/components/admin/admin-ui";
+import { PageHeader } from "@/components/admin/page-header";
 import { linkFor } from "@/components/admin/panels";
 
-export const metadata = { title: "Activity Log" };
+export const metadata = { title: "Audit Log" };
 
 export default async function ActivityPage() {
   const s = await requireAdmin();
@@ -12,7 +13,7 @@ export default async function ActivityPage() {
   const who = (id: string | null) => (id ? people?.find((p) => p.id === id)?.full_name || people?.find((p) => p.id === id)?.email || "Unknown user" : "");
   return (
     <>
-      <PageTitle title="Activity Log" description="Append only record of sign ins, submissions, and changes. Entries cannot be edited or deleted." />
+      <PageHeader title="Audit Log" crumbs={[{ label: "Audit Log" }]} description="Append only record of sign ins, submissions, exports and changes. Entries cannot be edited or deleted, even by owners." />
       {data?.length ? (
         <div className="overflow-x-auto rounded-xl border border-line bg-white shadow-[var(--shadow-card)]">
           <table className="w-full text-left text-sm">

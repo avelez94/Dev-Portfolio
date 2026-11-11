@@ -5,8 +5,10 @@ const tones = {
   neutral: "bg-ivory-200 text-navy",
   red: "bg-brand-red/10 text-brand-red-dark",
   navy: "bg-navy text-white",
-  green: "bg-navy/10 text-navy",
-  amber: "bg-champagne/25 text-[#5c4620]",
+  green: "bg-success-soft text-success",
+  amber: "bg-warning-soft text-warning",
+  danger: "bg-danger-soft text-danger",
+  info: "bg-info-soft text-info",
 } as const;
 
 export function Badge({ tone = "neutral", className, ...props }: React.ComponentProps<"span"> & { tone?: keyof typeof tones }) {

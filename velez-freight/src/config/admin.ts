@@ -5,10 +5,9 @@ export const prospectStatuses = [
   { value: "contacted", label: "Contacted" },
   { value: "responded", label: "Responded" },
   { value: "qualified", label: "Qualified" },
-  { value: "follow_up", label: "Follow Up" },
   { value: "potential_customer", label: "Potential Customer" },
   { value: "active_customer", label: "Active Customer" },
-  { value: "closed", label: "Closed" },
+  { value: "lost", label: "Lost / Not Interested" },
 ] as const;
 
 export const contactStatuses = [
@@ -45,7 +44,63 @@ export const inquiryTypeLabels: Record<string, string> = {
   quote: "Freight quote",
 };
 
-export const entityTypes = ["shipper_prospect", "carrier_lead", "contact_inquiry", "quote_inquiry"] as const;
+export const entityTypes = ["shipper_prospect", "carrier_lead", "contact_inquiry", "quote_inquiry", "quote", "shipment", "invoice", "carrier_bill"] as const;
+
+export const leadSources = [
+  { value: "research", label: "Manual research" },
+  { value: "website", label: "Website" },
+  { value: "referral", label: "Referral" },
+  { value: "inbound_inquiry", label: "Inbound inquiry" },
+  { value: "manual", label: "Other manual entry" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const industryCategories = [
+  { value: "manufacturing", label: "Manufacturing" },
+  { value: "distribution", label: "Distribution" },
+  { value: "automotive", label: "Automotive" },
+  { value: "industrial", label: "Industrial" },
+  { value: "retail", label: "Retail" },
+  { value: "food_beverage", label: "Food and beverage" },
+  { value: "construction", label: "Construction" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const taskCategories = [
+  { value: "follow_up", label: "Follow up" },
+  { value: "inquiry_review", label: "Inquiry review" },
+  { value: "quote", label: "Quote" },
+  { value: "carrier_verification", label: "Carrier verification" },
+  { value: "document", label: "Document" },
+  { value: "invoice", label: "Invoice" },
+  { value: "payable", label: "Carrier payable" },
+  { value: "shipment", label: "Shipment" },
+  { value: "compliance", label: "Compliance" },
+  { value: "admin", label: "Administration" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const activityTypes = [
+  { value: "call", label: "Call" },
+  { value: "email", label: "Email" },
+  { value: "meeting", label: "Meeting" },
+  { value: "text", label: "Text message" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const activityOutcomes = [
+  { value: "completed", label: "Completed (conversation happened or message delivered)" },
+  { value: "left_message", label: "Left a message" },
+  { value: "no_answer", label: "No answer" },
+  { value: "bounced", label: "Email bounced" },
+  { value: "scheduled", label: "Scheduled for later" },
+] as const;
+
+export const freightTypes = [
+  { value: "expedited", label: "Expedited" },
+  { value: "dedicated", label: "Dedicated" },
+  { value: "general", label: "General" },
+] as const;
 export type EntityType = (typeof entityTypes)[number];
 
 export const label = (list: readonly { value: string; label: string }[], v: string | null | undefined) => list.find((x) => x.value === v)?.label ?? v ?? "";

@@ -276,25 +276,10 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
   try {
     const raw = form(fd);
     const bool = (k: string) => raw[k] === "on";
-    const v = z
-      .object({
-        public_email: email,
-        public_phone: text(32),
-        mc_number: digits,
-        usdot_number: digits,
-        status_message: text(500),
-        service_area: z.string().trim().min(2).max(120),
-        authority_verified_on: optDate,
-        authority_verification_note: text(2000),
-      })
-      .parse(raw);
+    const v = z.object({ mc_number: digits, usdot_number: digits, authority_verified_on: optDate, authority_verification_note: text(2000) }).parse(raw);
     const next = {
       ...v,
-      legal_name_confirmed: bool("legal_name_confirmed"),
       operations_enabled: bool("operations_enabled"),
-      service_expedited: bool("service_expedited"),
-      service_dedicated: bool("service_dedicated"),
-      service_general: bool("service_general"),
       notify_on_contact: bool("notify_on_contact"),
       notify_on_quote: bool("notify_on_quote"),
       notify_on_carrier: bool("notify_on_carrier"),
@@ -309,7 +294,25 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
     if (error) throw error;
     await audit({ actorType: "admin", actorId: s.userId, action: "business_settings.updated", entityType: "business_settings", entityId: "1", metadata: { operations_enabled: next.operations_enabled, operations_changed: before?.operations_enabled !== next.operations_enabled } });
     revalidatePath("/", "layout");
-    return { ok: true, message: "Settings saved. Public pages refresh within a minute." };
+    return { ok: true, message: "Settings saved." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Public facts shown on the website. Unset values stay hidden on the site. */
+export async function saveWebsiteContent(_: ActionState, fd: FormData): Promise<ActionState> {
+  const s = await requireAdmin();
+  try {
+    const raw = form(fd);
+    const bool = (k: string) => raw[k] === "on";
+    const v = z.object({ public_email: email, public_phone: text(32), status_message: text(500), service_area: z.string().trim().min(2).max(120) }).parse(raw);
+    const next = { ...v, legal_name_confirmed: bool("legal_name_confirmed"), service_expedited: bool("service_expedited"), service_dedicated: bool("service_dedicated"), service_general: bool("service_general"), updated_by: s.userId };
+    const { error } = await s.db.from("business_settings").update(next).eq("id", 1);
+    if (error) throw error;
+    await audit({ actorType: "admin", actorId: s.userId, action: "website_content.updated", entityType: "business_settings", entityId: "1" });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Saved. Public pages refresh within a minute." };
   } catch (e) {
     return fail(e);
   }

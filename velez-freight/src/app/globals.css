@@ -13,6 +13,15 @@
   --color-charcoal: #22272B;
   --color-slate-muted: #5A6470;
   --color-line: #E3DED3;
+  /* Semantic status colours for the dashboard (not used on the public site) */
+  --color-success: #2E7D4F;
+  --color-success-soft: #E7F3EC;
+  --color-warning: #8A5A0B;
+  --color-warning-soft: #FBF0DC;
+  --color-danger: #B81B24;
+  --color-danger-soft: #FCE9EA;
+  --color-info: #24425A;
+  --color-info-soft: #E6EDF3;
 
   --font-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;

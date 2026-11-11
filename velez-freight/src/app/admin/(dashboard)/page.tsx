@@ -1,119 +1,139 @@
 import Link from "next/link";
-import { ArrowRight, Building2, Inbox, ListChecks, Truck } from "lucide-react";
-import { requireStaff, isAdminRole } from "@/lib/auth";
-import { contactStatuses, fmtDate, fmtDateTime, inquiryTypeLabels, label, prospectStatuses, quoteStatuses } from "@/config/admin";
-import { EmptyState, PageTitle, Panel, StatusBadge } from "@/components/admin/admin-ui";
-import { linkFor } from "@/components/admin/panels";
+import { ArrowRight, Building2, CircleCheck, Lightbulb, ListChecks, Plus, TriangleAlert } from "lucide-react";
+import { isAdminRole, requireStaff } from "@/lib/auth";
+import { getSettings } from "@/lib/data/settings";
+import { ACTIVE_KPIS, METRICS, PRELAUNCH_KPIS, type MetricKey } from "@/lib/metrics/definitions";
+import { businessToday, periodQuery, resolvePeriod } from "@/lib/metrics/period";
+import { kpiValues, loadSnapshot } from "@/lib/metrics/queries";
+import { buildInsights } from "@/lib/insights/rules";
+import { loadPriorities, loadTeam } from "@/lib/priorities";
+import { PriorityList } from "@/components/admin/priority-list";
+import { prospectStatuses } from "@/config/admin";
+import { KpiCard } from "@/components/admin/kpi-card";
+import { PeriodFilter } from "@/components/admin/period-filter";
+import { buttonVariants } from "@/components/ui/button";
 
-export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
+export const metadata = { title: "Dashboard" };
+
+const SNAPSHOT: MetricKey[] = ["follow_ups_due", "potential_customers", "active_shipments", "receivables_open", "overdue_invoices", "payables_due"];
+
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ period?: string; from?: string; to?: string; denied?: string }> }) {
   const s = await requireStaff();
-  const { denied } = await searchParams;
-  const today = new Date().toISOString().slice(0, 10);
-  const head = { count: "exact" as const, head: true };
-
-  const [newContacts, pendingQuotes, carrierUnverified, openTasks, overdue, prospects, recentContacts, recentQuotes, dueTasks, activity] = await Promise.all([
-    s.db.from("contact_inquiries").select("id", head).eq("status", "new"),
-    s.db.from("quote_inquiries").select("id", head).eq("status", "pending_review"),
-    s.db.from("carrier_leads").select("id", head).in("verification_status", ["unverified", "in_review"]),
-    s.db.from("follow_up_tasks").select("id", head).eq("status", "open"),
-    s.db.from("follow_up_tasks").select("id", head).eq("status", "open").lt("due_date", today),
+  const sp = await searchParams;
+  const period = resolvePeriod(sp);
+  const settings = await getSettings();
+  const [priorities, team, cur, prev, pipeline] = await Promise.all([
+    loadPriorities(s, 100),
+    loadTeam(s),
+    loadSnapshot(s, period.from, period.to),
+    loadSnapshot(s, period.prevFrom, period.prevTo),
     s.db.from("shipper_prospects").select("status"),
-    s.db.from("contact_inquiries").select("id, reference, inquiry_type, name, company, status, created_at").order("created_at", { ascending: false }).limit(6),
-    s.db.from("quote_inquiries").select("id, reference, company_name, status, created_at").order("created_at", { ascending: false }).limit(4),
-    s.db.from("follow_up_tasks").select("id, title, due_date, entity_type, entity_id").eq("status", "open").order("due_date", { ascending: true, nullsFirst: false }).limit(6),
-    isAdminRole(s.role) ? s.db.from("audit_events").select("id, action, actor_type, created_at, entity_type, entity_id").order("created_at", { ascending: false }).limit(8) : Promise.resolve({ data: null }),
   ]);
-
-  const byStatus = prospectStatuses.map((p) => ({ ...p, count: prospects.data?.filter((r) => r.status === p.value).length ?? 0 }));
-  const stats = [
-    { label: "New contact inquiries", value: newContacts.count ?? 0, href: "/admin/inquiries?status=new", icon: Inbox },
-    { label: "Quote inquiries to review", value: pendingQuotes.count ?? 0, href: "/admin/inquiries?type=quote", icon: Inbox },
-    { label: "Carrier leads to verify", value: carrierUnverified.count ?? 0, href: "/admin/carriers?status=unverified", icon: Truck },
-    { label: "Open follow ups", value: openTasks.count ?? 0, href: "/admin/tasks", icon: ListChecks, note: overdue.count ? `${overdue.count} overdue` : undefined },
-  ];
-  const recent = [
-    ...(recentContacts.data ?? []).map((r) => ({ id: r.id, ref: r.reference, kind: inquiryTypeLabels[r.inquiry_type], who: r.company || r.name, status: r.status, at: r.created_at, href: `/admin/inquiries/contact/${r.id}` })),
-    ...(recentQuotes.data ?? []).map((r) => ({ id: r.id, ref: r.reference, kind: "Freight quote", who: r.company_name, status: r.status, at: r.created_at, href: `/admin/inquiries/quote/${r.id}` })),
-  ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
+  const values = kpiValues(cur);
+  const prevValues = kpiValues(prev);
+  const insights = buildInsights(cur, prev, period.label, { operational: settings.operational }).slice(0, 6);
+  const admin = isAdminRole(s.role);
+  const kpis = [...(settings.operational ? ACTIVE_KPIS : []), ...PRELAUNCH_KPIS].filter((k) => !(METRICS[k] as { adminOnly?: boolean }).adminOnly || admin);
+  const today = businessToday();
+  const dateText = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: "America/New_York" }).format(new Date()));
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const critical = priorities.filter((p) => p.priority_tier <= 2).length;
+  const overdue = priorities.filter((p) => p.overdue).length;
 
   return (
     <>
-      <PageTitle title={`Welcome${s.name ? `, ${s.name.split(" ")[0]}` : ""}`} description="New inquiries, prospects, carrier leads, and follow ups at a glance." />
-      {denied && <p role="alert" className="mb-6 rounded-md border border-brand-red/40 bg-brand-red/5 p-3 text-sm">That page requires owner or admin access.</p>}
+      <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-muted">{dateText}</p>
+          <h1 className="mt-1 text-[2rem] font-bold leading-tight">{greeting}{s.name ? `, ${s.name.split(" ")[0]}` : ""}.</h1>
+          <p className="mt-1 text-sm text-charcoal">
+            {priorities.length === 0 ? "Nothing needs your attention right now." : `${priorities.length} item${priorities.length === 1 ? "" : "s"} need${priorities.length === 1 ? "s" : ""} attention${overdue ? `, ${overdue} overdue` : ""}${critical ? `, ${critical} critical or risk` : ""}.`}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/shippers/new" className={buttonVariants({ size: "sm" })}><Plus aria-hidden="true" /> Add shipper</Link>
+          <Link href="/admin/tasks?new=1" className={buttonVariants({ size: "sm", variant: "outline" })}><ListChecks aria-hidden="true" /> Add task</Link>
+        </div>
+      </header>
+      {sp.denied && <p role="alert" className="mb-6 rounded-md border border-danger/30 bg-danger-soft p-3 text-sm">That page requires owner or admin access.</p>}
+      {!settings.operational && (
+        <p className="mb-6 rounded-lg border border-line bg-white p-4 text-sm">
+          <strong className="text-navy">Prelaunch mode.</strong> Quotes, shipments, invoicing and payables stay off until broker authority is verified and operations are enabled.
+          Focus areas now: shipper prospecting, follow ups, carrier relationships and business setup. <Link href="/admin/settings#operating-status" className="font-semibold text-brand-red-dark underline">Activation checklist</Link>
+        </p>
+      )}
 
-      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map(({ label: l, value, href, icon: Icon, note }) => (
-          <li key={l}>
-            <Link href={href} className="group flex h-full flex-col rounded-xl border border-line bg-white p-5 shadow-[var(--shadow-card)] transition hover:border-brand-red/40">
-              <Icon aria-hidden="true" className="size-5 text-brand-red" />
-              <span className="mt-3 font-serif text-4xl font-bold text-navy">{value}</span>
-              <span className="mt-1 text-sm text-charcoal">{l}</span>
-              {note && <span className="mt-1 text-xs font-semibold text-brand-red-dark">{note}</span>}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <div className="grid gap-8 xl:grid-cols-[1.35fr_1fr]">
+        <section aria-labelledby="priorities-title">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 id="priorities-title" className="text-xl font-bold">Today&apos;s priorities</h2>
+            <Link href="/admin/tasks?view=today" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-red-dark hover:underline">All tasks <ArrowRight aria-hidden="true" className="size-4" /></Link>
+          </div>
+          <p className="mb-4 text-xs text-slate-muted">Ordered by critical exceptions, financial and compliance risk, time sensitive work, sales opportunities, then routine work. Generated by explicit workflow rules from your records.</p>
+          {priorities.length ? (
+            <PriorityList items={priorities} team={team} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-line bg-white p-8 text-center">
+              <CircleCheck aria-hidden="true" className="mx-auto size-8 text-success" />
+              <p className="mt-3 font-semibold text-navy">You are all caught up.</p>
+              <p className="mt-1 text-sm text-slate-muted">Good next steps: research a new shipper, schedule follow ups, or review carrier interest.</p>
+              <div className="mt-4 flex justify-center gap-2 text-sm">
+                <Link href="/admin/shippers/new" className="rounded-md bg-navy px-3 py-2 font-semibold text-white">Add a shipper prospect</Link>
+                <Link href="/admin/carriers" className="rounded-md border border-line px-3 py-2 font-semibold text-navy">Review carriers</Link>
+              </div>
+            </div>
+          )}
+        </section>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <Panel title="Recent website inquiries" actions={<Link href="/admin/inquiries" className="flex items-center gap-1 text-sm font-semibold text-brand-red-dark">View all <ArrowRight aria-hidden="true" className="size-4" /></Link>}>
-          {recent.length ? (
-            <ul className="divide-y divide-line">
-              {recent.map((r) => (
-                <li key={r.id}>
-                  <Link href={r.href} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3 text-sm hover:bg-ivory">
-                    <span className="font-mono text-xs text-slate-muted">{r.ref}</span>
-                    <span className="font-semibold text-navy">{r.who}</span>
-                    <span className="text-slate-muted">{r.kind}</span>
-                    <span className="ml-auto flex items-center gap-3"><StatusBadge value={r.status} label={label([...contactStatuses, ...quoteStatuses], r.status)} /><span className="text-xs text-slate-muted">{fmtDateTime(r.at)}</span></span>
-                  </Link>
+        <section aria-labelledby="insights-title">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 id="insights-title" className="text-xl font-bold">What the numbers say</h2>
+            <Link href={`/admin/insights?${periodQuery(period)}`} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-red-dark hover:underline">Insights <ArrowRight aria-hidden="true" className="size-4" /></Link>
+          </div>
+          {insights.length ? (
+            <ul className="space-y-3">
+              {insights.map((i) => (
+                <li key={i.id} className="rounded-lg border border-line bg-white p-4">
+                  <p className="flex gap-2 text-sm font-medium text-charcoal">
+                    {i.tone === "risk" ? <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" /> : <Lightbulb aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-info" />}
+                    <span>{i.text}</span>
+                  </p>
+                  <p className="mt-1.5 pl-6 text-xs text-slate-muted">{i.period}. {i.how} <Link href={i.href} className="font-semibold text-brand-red-dark hover:underline">See records</Link></p>
                 </li>
               ))}
             </ul>
           ) : (
-            <EmptyState>No website inquiries yet.</EmptyState>
+            <p className="rounded-lg border border-dashed border-line bg-white p-6 text-sm text-slate-muted">Insights appear here once there is enough recorded activity to say something meaningful. Nothing is estimated or invented.</p>
           )}
-        </Panel>
-
-        <Panel title="Upcoming follow ups" actions={<Link href="/admin/tasks" className="text-sm font-semibold text-brand-red-dark">All tasks</Link>}>
-          {dueTasks.data?.length ? (
-            <ul className="space-y-2">
-              {dueTasks.data.map((t) => (
-                <li key={t.id} className="flex items-center justify-between gap-3 text-sm">
-                  <a href={linkFor(t.entity_type, t.entity_id)} className="font-medium text-navy hover:underline">{t.title}</a>
-                  <span className={`text-xs ${t.due_date && t.due_date < today ? "font-semibold text-brand-red-dark" : "text-slate-muted"}`}>{t.due_date ? fmtDate(t.due_date) : "No date"}</span>
-                </li>
+          <div className="mt-6 rounded-xl border border-line bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-wider text-navy"><Building2 aria-hidden="true" className="size-4 text-brand-red" /> Pipeline today</h3>
+              <Link href="/admin/shippers" className="text-xs font-semibold text-brand-red-dark hover:underline">Shippers</Link>
+            </div>
+            <ul className="grid grid-cols-2 gap-1.5 text-sm">
+              {prospectStatuses.map((p) => (
+                <li key={p.value}><Link href={`/admin/shippers?status=${p.value}`} className="flex justify-between rounded-md bg-ivory px-3 py-1.5 hover:bg-ivory-200"><span>{p.label}</span><span className="font-bold text-navy">{pipeline.data?.filter((r) => r.status === p.value).length ?? 0}</span></Link></li>
               ))}
             </ul>
-          ) : (
-            <EmptyState>Nothing scheduled.</EmptyState>
-          )}
-        </Panel>
-
-        <Panel title="Shipper pipeline" actions={<Link href="/admin/shippers" className="flex items-center gap-1 text-sm font-semibold text-brand-red-dark"><Building2 aria-hidden="true" className="size-4" /> CRM</Link>}>
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {byStatus.map((p) => (
-              <li key={p.value}>
-                <Link href={`/admin/shippers?status=${p.value}`} className="flex items-center justify-between rounded-md bg-ivory px-3 py-2 text-sm hover:bg-ivory-200">
-                  <span>{p.label}</span><span className="font-bold text-navy">{p.count}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-
-        {activity.data && (
-          <Panel title="Recent activity" actions={<Link href="/admin/activity" className="text-sm font-semibold text-brand-red-dark">Activity log</Link>}>
-            <ul className="space-y-2 text-sm">
-              {activity.data.map((a) => (
-                <li key={a.id} className="flex justify-between gap-3">
-                  <span><span className="font-medium text-navy">{a.action}</span> <span className="text-slate-muted">({a.actor_type})</span></span>
-                  <span className="shrink-0 text-xs text-slate-muted">{fmtDateTime(a.created_at)}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
+          </div>
+        </section>
       </div>
+
+      <section aria-labelledby="kpi-title" className="mt-10">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 id="kpi-title" className="text-xl font-bold">Key metrics</h2>
+            <p className="text-xs text-slate-muted">{period.label}. Calculated from stored records only; select the information icon on any card for its definition.</p>
+          </div>
+          <PeriodFilter from={period.from} to={period.to} preset={period.preset} compareLabel={period.compareLabel} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {kpis.map((k) => (
+            <KpiCard key={k} def={METRICS[k]} value={values[k]} previous={prevValues[k]} snapshot={SNAPSHOT.includes(k)} />
+          ))}
+        </div>
+      </section>
     </>
   );
 }

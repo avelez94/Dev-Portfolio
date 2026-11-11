@@ -387,6 +387,28 @@ begin
   return r;
 end $$;
 
+-- Quotes and freight inquiries
+create or replace function public.analytics_quotes(p_from date, p_to date, p_shipper uuid default null, p_freight_type text default null) returns jsonb
+language plpgsql stable set search_path = '' as $$
+declare t0 timestamptz := public.vfg_day_start(p_from); t1 timestamptz := public.vfg_day_start(p_to + 1); r jsonb;
+begin
+  if not public.is_staff() then raise exception 'insufficient_privilege' using errcode = '42501'; end if;
+  with qs as (select * from public.quotes where (p_shipper is null or shipper_id = p_shipper) and (p_freight_type is null or freight_type = p_freight_type))
+  select jsonb_build_object(
+    'created', (select count(*) from qs where created_at >= t0 and created_at < t1 and status <> 'cancelled'),
+    'sent', (select count(*) from qs where sent_at >= t0 and sent_at < t1),
+    'accepted', (select count(*) from qs where status = 'accepted' and decided_at >= t0 and decided_at < t1),
+    'declined', (select count(*) from qs where status = 'declined' and decided_at >= t0 and decided_at < t1),
+    'expired', (select count(*) from qs where status = 'expired' and decided_at >= t0 and decided_at < t1),
+    'awaiting_approval', (select count(*) from qs where status = 'pending_approval'),
+    'awaiting_decision', (select count(*) from qs where status = 'sent'),
+    'freight_inquiries', (select count(*) from public.quote_inquiries where created_at >= t0 and created_at < t1)
+  ) into r;
+  return r;
+end $$;
+
+grant execute on function public.analytics_quotes(date, date, uuid, text) to authenticated, service_role;
+
 grant execute on function public.analytics_shipments(uuid, uuid, text, text, text, text), public.on_time_class(timestamptz, boolean, timestamptz),
   public.analytics_sales(date, date), public.analytics_contact_to_customer(date, date),
   public.analytics_operations(date, date, uuid, uuid, text, text, text), public.analytics_financial(date, date, uuid, uuid, text, text, text),
