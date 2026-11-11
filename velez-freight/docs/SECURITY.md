@@ -23,9 +23,23 @@
    `https://<domain>/admin/auth/callback` to Redirect URLs.
 3. Authentication > Email: use a custom SMTP sender before launch.
 4. Enable leaked password protection and set a minimum password length of 12.
-5. Run the database advisors (Security Advisor) after applying the migration.
+5. Run the database advisors (Security Advisor) after applying migrations.
+
+## Production project status (applied 2026-11-11)
+
+* All migrations applied to project `mjdrehxyaweamzfqolib`. A fingerprint of functions,
+  columns, constraints, policies, triggers, indexes, grants and RLS flags matched a local
+  database built from these files exactly.
+* Background job `vfg_refresh_system_tasks` runs every 15 minutes; `vfg_cron_history_cleanup`
+  trims job history daily.
+* Security Advisor: `carrier_qualification` was changed to run with the caller's rights
+  (migration `20261113000200`). Remaining notices are intentional: `is_staff()` and
+  `is_admin()` only report on the signed in user and must be callable for RLS;
+  `refresh_system_tasks` refuses anyone who is not active staff; `submission_rate_limits` and
+  `system_jobs` have no policies so only the server and the database itself can use them.
+* No data has been inserted. Operations remain disabled.
 
 ## Tests
 
-* `npm run test:db`: 45 tests against the real migrations on Postgres (grants, RLS, gates, carrier qualification, task generation and deduplication, immutable history, and metric accuracy against an independent calculation).
+* `npm run test:db`: 46 tests against the real migrations on Postgres (grants, RLS, gates, carrier qualification, task generation and deduplication, immutable history, and metric accuracy against an independent calculation).
 * `npm run test:e2e`: Playwright flows against production builds, with a test only Supabase stand in that executes queries under the caller's Postgres role so RLS is exercised.

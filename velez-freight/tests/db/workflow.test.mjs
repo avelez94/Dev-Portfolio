@@ -46,6 +46,22 @@ test("carrier qualification: unverified carriers cannot be assigned to a shipmen
   assert.equal(q.authority_current, false);
 });
 
+test("carrier qualification follows access rules: staff see the result, other signed in accounts see nothing", async () => {
+  await enableOps(true);
+  const good = await carrier(true);
+  const outsider = "44444444-4444-4444-4444-444444444444";
+  await h.db.query(`insert into auth.users (id, email) values ($1, 'outsider@example.test') on conflict do nothing`, [outsider]);
+  const check = (who) => h.as("authenticated", who, async (db) => (await db.query(`select public.carrier_qualification($1) as q`, [good])).rows[0].q);
+  assert.equal((await check(STAFF)).qualified, true);
+  const hidden = await check(outsider);
+  assert.equal(hidden.qualified, false);
+  assert.equal(hidden.authority_current, false);
+  // Staff can still assign the qualified carrier through the database trigger.
+  const s = await sh();
+  const id = await h.as("authenticated", STAFF, async (db) => (await db.query(shipmentSql, [s, good])).rows[0].id);
+  assert.ok(id);
+});
+
 test("carrier qualification: an authority check older than 30 days is not current", async () => {
   const id = (await h.db.query(`insert into public.carrier_leads (company_name, verification_status, insurance_expires_on, agreement_signed_on) values ('Stale Check Co', 'verified', $1, $2) returning id`, [addDays(TODAY, 90), TODAY])).rows[0].id;
   await h.db.query(`insert into public.carrier_verifications (carrier_id, check_type, result, source, checked_on) values ($1, 'authority', 'pass', 'FMCSA', $2), ($1, 'insurance', 'pass', 'COI', $2)`, [id, addDays(TODAY, -45)]);

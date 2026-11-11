@@ -61,10 +61,14 @@ with prelaunch defaults, and forms report honestly that the inquiry system is no
 
 ## Connecting Supabase
 
-1. Create a Supabase project (US East region recommended).
+Status: the production project (`velez-freight-group`, ref `mjdrehxyaweamzfqolib`) exists and
+every migration in `supabase/migrations/` has been applied and verified against the repository
+(see `docs/SECURITY.md`). The steps below are for reference or for a new environment.
+
+1. Create a Supabase project.
 2. Review the files in `supabase/migrations/` and apply them in order (SQL editor or Supabase
-   CLI). The last one schedules the background workflow job with Supabase Cron. Rollback scripts are in `supabase/rollback/` (apply newest first; destructive, export
-   data first).
+   CLI). One of them schedules the background workflow job with Supabase Cron. Rollback
+   scripts are in `supabase/rollback/` (apply newest first; destructive, export data first).
 3. Apply the Auth settings in `docs/SECURITY.md` (disable sign ups, redirect URL).
 4. Create the first owner: Authentication > Users > Invite user (your email). Then in the SQL
    editor run:
