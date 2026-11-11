@@ -129,6 +129,7 @@ function where(url, params) {
   const conds = [];
   for (const [k, v] of url.searchParams) {
     if (["select", "order", "limit", "offset", "columns", "on_conflict"].includes(k)) continue;
+    if (v.startsWith("not.")) { const rest = v.slice(4); conds.push(`not (${condition(k, rest, params)})`); continue; }
     if (k === "or") {
       const parts = splitTop(v.replace(/^\(|\)$/g, "")).map((p) => { const i = p.indexOf("."); return condition(p.slice(0, i), p.slice(i + 1), params); });
       conds.push(`(${parts.join(" or ")})`);
@@ -206,7 +207,13 @@ async function handleRest(req, res, url, body) {
         return res.end();
       }
       const limit = url.searchParams.get("limit");
-      sql = `select ${selectList(url)} from ${t}${where(url, params)}${orderBy(url)}${limit ? ` limit ${Number(limit)}` : ""}`;
+      const offset = url.searchParams.get("offset");
+      if (prefer.includes("count=exact")) {
+        const cp = [];
+        const { rows } = await runAs(claims, (c) => c.query(`select count(*)::int as n from ${t}${where(url, cp)}`, cp));
+        res.setHeader("content-range", `${offset ?? 0}-*/${rows[0].n}`);
+      }
+      sql = `select ${selectList(url)} from ${t}${where(url, params)}${orderBy(url)}${limit ? ` limit ${Number(limit)}` : ""}${offset ? ` offset ${Number(offset)}` : ""}`;
       returning = true;
     } else if (req.method === "POST") {
       const rows = Array.isArray(body) ? body : [body];

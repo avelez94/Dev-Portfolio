@@ -6,7 +6,7 @@
 // TEST_DATABASE_URL (default: postgres://postgres@localhost:5432/postgres via unix socket).
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import pg from "pg";
 
 const ADMIN_URL = process.env.TEST_DATABASE_URL ?? "postgres://postgres@%2Fvar%2Frun%2Fpostgresql/postgres";
@@ -30,6 +30,12 @@ async function as(role, sub, fn) {
     await db.query("rollback");
   }
 }
+const migrations = () => readdirSync(new URL("supabase/migrations/", root)).filter((f) => f.endsWith(".sql")).sort();
+const rollbacks = () => readdirSync(new URL("supabase/rollback/", root)).filter((f) => f.endsWith(".sql")).sort().reverse();
+async function applyAll(client) {
+  for (const f of migrations()) await client.query(readFileSync(new URL(`supabase/migrations/${f}`, root), "utf8"));
+}
+export { applyAll };
 const denied = (p) => assert.rejects(p, /permission denied|row-level security|violates/);
 
 before(async () => {
@@ -40,7 +46,7 @@ before(async () => {
   db = new pg.Client({ connectionString: ADMIN_URL.replace(/\/[^/]*$/, `/${DB}`) });
   await db.connect();
   await db.query(readFileSync(new URL("tests/db/supabase-stub.sql", root), "utf8"));
-  await db.query(readFileSync(new URL("supabase/migrations/20261111000100_initial_schema.sql", root), "utf8"));
+  await applyAll(db);
   // Users: an active staff member, an owner, and a signed in user who was never granted access.
   await db.query(`insert into auth.users (id, email) values ($1,'staff@example.test'),($2,'outsider@example.test'),($3,'owner@example.test')`, [STAFF, OUTSIDER, OWNER]);
   await db.query(`update public.profiles set is_active = true, role = 'staff' where id = $1`, [STAFF]);
@@ -187,7 +193,7 @@ test("input constraints reject malformed data at the database", async () => {
   });
 });
 
-test("rollback script removes every object cleanly", async () => {
+test("rollback scripts remove every object cleanly", async () => {
   const name = `${DB}_rb`;
   await admin.query(`drop database if exists ${name}`);
   await admin.query(`create database ${name}`);
@@ -195,8 +201,8 @@ test("rollback script removes every object cleanly", async () => {
   await c.connect();
   try {
     await c.query(readFileSync(new URL("tests/db/supabase-stub.sql", root), "utf8"));
-    await c.query(readFileSync(new URL("supabase/migrations/20261111000100_initial_schema.sql", root), "utf8"));
-    await c.query(readFileSync(new URL("supabase/rollback/20261111000100_initial_schema.down.sql", root), "utf8"));
+    await applyAll(c);
+    for (const f of rollbacks()) await c.query(readFileSync(new URL(`supabase/rollback/${f}`, root), "utf8"));
     const { rows } = await c.query(`select count(*)::int as n from information_schema.tables where table_schema = 'public'`);
     assert.equal(rows[0].n, 0);
   } finally {

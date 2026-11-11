@@ -5,7 +5,7 @@
 //  4. Starts both production servers and runs Playwright against them.
 // Usage: npm run test:e2e   (set E2E_SKIP_BUILD=1 to reuse existing builds)
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import pg from "pg";
 import { signJwt } from "./fake-supabase-jwt.mjs";
 
@@ -70,7 +70,9 @@ async function main() {
   const db = new pg.Client({ connectionString: DB_URL });
   await db.connect();
   await db.query(readFileSync(`${root}tests/db/supabase-stub.sql`, "utf8"));
-  await db.query(readFileSync(`${root}supabase/migrations/20261111000100_initial_schema.sql`, "utf8"));
+  for (const f of readdirSync(`${root}supabase/migrations`).filter((f) => f.endsWith(".sql")).sort()) {
+    await db.query(readFileSync(`${root}supabase/migrations/${f}`, "utf8"));
+  }
 
   start("node", ["tests/e2e/harness/fake-supabase.mjs"], { FAKE_SUPABASE_PORT: String(FAKE_PORT) }, "supabase");
   await waitFor(`http://127.0.0.1:${FAKE_PORT}/rest/v1/`);
