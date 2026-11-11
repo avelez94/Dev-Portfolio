@@ -81,6 +81,16 @@ every migration in `supabase/migrations/` has been applied and verified against 
    members are invited from Dashboard > Settings.
 5. Add the environment variables from `.env.example` in Vercel.
 
+## Hosting (Vercel)
+
+Project `velez-freight-group` (team `cutrated-mile`), production address
+https://velez-freight-group.vercel.app. Settings that matter: Root Directory `velez-freight`,
+"Include files outside the root directory" off, Node 22, functions in `iad1` (Washington, D.C.),
+deployments skipped when nothing in this folder changed. Vercel Authentication currently
+protects every address except custom domains, so only signed in Vercel team members can view
+the site until it is made public or a custom domain is connected. Environment variables are
+listed in `.env.example`; `SUPABASE_SERVICE_ROLE_KEY` is added by the owner directly in Vercel.
+
 ## Email notifications
 
 Set `RESEND_API_KEY`, `NOTIFY_EMAIL_FROM` (a sender on a domain verified in Resend) and
