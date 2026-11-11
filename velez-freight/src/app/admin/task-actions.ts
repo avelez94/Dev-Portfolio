@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/data/audit";
 import { addDays, businessToday } from "@/lib/metrics/period";
-import type { ActionState } from "./actions";
+import type { ActionState } from "./form-helpers";
 
 const id = z.uuid();
 

@@ -90,7 +90,7 @@ const launchForm = z.object({
   privacyAck: z.literal(true, { error: "Please confirm the privacy notice." }),
 });
 
-function PrelaunchQuick() {
+function PrelaunchQuick({ body }: { body: string }) {
   const { envelope, honeypot, refresh } = useEnvelope();
   const submit = useSubmitters();
   const [pending, start] = useTransition();
@@ -116,7 +116,7 @@ function PrelaunchQuick() {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8" aria-label="Launch notification sign up">
       <Heading eyebrow={copy.stayConnected.eyebrow} title={copy.stayConnected.title} />
       <div className="flex-1 space-y-4">
-        <p className="text-sm leading-relaxed text-charcoal">{copy.stayConnected.body}</p>
+        <p className="text-sm leading-relaxed text-charcoal">{body}</p>
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field id="ln-name" label="Name" required error={errors.name?.message}>
             <Input autoComplete="name" {...register("name")} />
@@ -149,12 +149,12 @@ function PrelaunchQuick() {
   );
 }
 
-export function QuickInquiry({ operational }: { operational: boolean }) {
+export function QuickInquiry({ operational, stayConnectedBody = copy.stayConnected.body }: { operational: boolean; stayConnectedBody?: string }) {
   return (
     <section id="quick-inquiry" aria-label="Quick inquiry" className="relative z-10 -mt-20 sm:-mt-24">
       <div className="container-site">
         <div data-reveal className="rounded-2xl border border-white/60 bg-ivory p-6 shadow-[var(--shadow-float)] sm:p-8">
-          {operational ? <OperationalQuick /> : <PrelaunchQuick />}
+          {operational ? <OperationalQuick /> : <PrelaunchQuick body={stayConnectedBody} />}
         </div>
       </div>
     </section>

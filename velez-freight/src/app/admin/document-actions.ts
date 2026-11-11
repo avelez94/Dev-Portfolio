@@ -6,16 +6,17 @@ import { z } from "zod";
 import { requireStaff, type StaffSession } from "@/lib/auth";
 import { audit } from "@/lib/data/audit";
 import { serviceClient } from "@/lib/supabase/service";
-import { DOCUMENT_BUCKET, DOCUMENT_TYPES, ENTITY_TABLES, MAX_DOCUMENT_BYTES, STORAGE_PATH, type DocumentEntity } from "@/lib/documents";
-import type { ActionState } from "./actions";
+import { ADMIN_ONLY_ENTITIES, DOCUMENT_BUCKET, DOCUMENT_TYPES, ENTITY_TABLES, MAX_DOCUMENT_BYTES, STORAGE_PATH, type DocumentEntity } from "@/lib/documents";
+import type { ActionState } from "./form-helpers";
 
-const entity = z.enum(["shipment", "carrier_lead", "shipper_prospect"]);
-const docType = z.enum(["rate_confirmation", "bol", "pod", "insurance_certificate", "carrier_agreement", "w9", "other"]);
+const entity = z.enum(["shipment", "carrier_lead", "shipper_prospect", "regulatory_credential"]);
+const docType = z.enum(["rate_confirmation", "bol", "pod", "insurance_certificate", "carrier_agreement", "w9", "other", "authority_record", "surety_bond", "boc3_filing", "registration_record"]);
 const opt = (max: number) => z.string().trim().max(max).optional().transform((v) => v || null);
 const fail = (e: unknown): ActionState => ({ error: e instanceof z.ZodError ? e.issues.map((i) => i.message).join(" ") : "Something went wrong. Please try again." });
 
 /** The record must exist and be visible to this person (checked through Row Level Security). */
 async function canAttach(s: StaffSession, type: DocumentEntity, id: string) {
+  if (ADMIN_ONLY_ENTITIES.has(type) && s.role !== "owner" && s.role !== "admin") return false;
   const { data } = await s.db.from(ENTITY_TABLES[type]).select("id").eq("id", id).maybeSingle();
   return Boolean(data);
 }

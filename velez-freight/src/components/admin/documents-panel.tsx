@@ -1,7 +1,7 @@
 import { Download, FileText, Lock } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/config/admin";
 import { env } from "@/lib/env";
-import { DOC_TYPE_LABELS, RESTRICTED_DOC_TYPES, formatBytes } from "@/lib/documents";
+import { ADMIN_ONLY_ENTITIES, DOC_TYPE_LABELS, RESTRICTED_DOC_TYPES, formatBytes } from "@/lib/documents";
 import { Panel } from "@/components/admin/admin-ui";
 import { DocumentUploadForm } from "@/components/admin/document-upload-form";
 
@@ -11,8 +11,9 @@ export type DocumentRow = {
 };
 
 /** Document list with private file links, plus the upload form. */
-export function DocumentsPanel({ entityType, entityId, docs, docTypes, showExpiry, admin, idPrefix, note }: {
-  entityType: "shipment" | "carrier_lead" | "shipper_prospect";
+export function DocumentsPanel({ entityType, entityId, docs, docTypes, showExpiry, admin, idPrefix, note, title = "Documents" }: {
+  title?: string;
+  entityType: "shipment" | "carrier_lead" | "shipper_prospect" | "regulatory_credential";
   entityId: string;
   docs: DocumentRow[];
   docTypes: string[];
@@ -22,7 +23,7 @@ export function DocumentsPanel({ entityType, entityId, docs, docTypes, showExpir
   note?: string;
 }) {
   return (
-    <Panel title="Documents">
+    <Panel title={title}>
       <DocumentUploadForm
         entityType={entityType}
         entityId={entityId}
@@ -35,7 +36,7 @@ export function DocumentsPanel({ entityType, entityId, docs, docTypes, showExpir
       {docs.length ? (
         <ul className="divide-y divide-border text-sm">
           {docs.map((d) => {
-            const restricted = RESTRICTED_DOC_TYPES.has(d.doc_type) && !admin;
+            const restricted = (RESTRICTED_DOC_TYPES.has(d.doc_type) || ADMIN_ONLY_ENTITIES.has(entityType)) && !admin;
             return (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                 <span className="min-w-0">

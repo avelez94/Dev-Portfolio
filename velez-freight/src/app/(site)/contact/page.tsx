@@ -5,6 +5,7 @@ import { images } from "@/config/images";
 import { copy, faqs } from "@/config/site";
 import { PageHero, SectionHeading } from "@/components/site/page-hero";
 import { ContactForm } from "@/components/forms/contact-form";
+import { BusinessHoursList } from "@/components/site/business-hours";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export const metadata: Metadata = {
@@ -70,6 +71,7 @@ export default async function ContactPage() {
                 )}
                 <li className="flex gap-3"><MapPin aria-hidden="true" className="mt-0.5 size-5 text-brand-red" /><span>Based in {settings.serviceArea}</span></li>
               </ul>
+              {settings.hours && <BusinessHoursList hours={settings.hours} timezone={settings.hoursTimezone} afterHours={settings.afterHours} />}
               {!settings.publicEmail && !settings.publicPhone && (
                 <p className="mt-5 text-sm text-white/75">A direct business email and phone number will be listed here once they are confirmed. Until then, the form is the best way to reach us.</p>
               )}

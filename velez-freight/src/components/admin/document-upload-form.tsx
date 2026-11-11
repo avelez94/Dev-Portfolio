@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DOCUMENT_ACCEPT, DOCUMENT_BUCKET, DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, formatBytes } from "@/lib/documents";
 
 type Props = {
-  entityType: "shipment" | "carrier_lead" | "shipper_prospect";
+  entityType: "shipment" | "carrier_lead" | "shipper_prospect" | "regulatory_credential";
   entityId: string;
   docTypes: { value: string; label: string }[];
   showExpiry?: boolean;

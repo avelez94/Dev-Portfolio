@@ -127,6 +127,50 @@ test("staff cannot change business settings; owners can", async () => {
   });
 });
 
+test("credentials: verified needs evidence, only verified can be public, EIN stays private", async () => {
+  await assert.rejects(db.query(`update public.regulatory_credentials set value = '123456', status = 'verified' where kind = 'mc_number'`), /credential_verified_has_evidence/);
+  await assert.rejects(db.query(`update public.regulatory_credentials set value = '123456', status = 'entered', show_publicly = true where kind = 'mc_number'`), /credential_public_only_when_verified/);
+  await assert.rejects(db.query(`update public.regulatory_credentials set value = 'MC123' where kind = 'mc_number'`), /credential_numbers_format/);
+  await assert.rejects(db.query(`update public.regulatory_credentials set value = '12', status = 'verified', verified_on = current_date, verification_source = 'IRS letter', show_publicly = true where kind = 'ein'`), /credential_ein_private/);
+  await as("authenticated", STAFF, async () => {
+    const { rows } = await db.query(`select kind from public.regulatory_credentials`);
+    assert.ok(rows.length >= 10 && !rows.some((r) => r.kind === "ein"), "staff never see the EIN row");
+    const r = await db.query(`update public.regulatory_credentials set value = '999' where kind = 'usdot_number'`);
+    assert.equal(r.rowCount, 0, "staff cannot change credentials");
+  });
+});
+
+test("credentials: changes are logged append only and MC and USDOT stay in step with settings", async () => {
+  await as("authenticated", OWNER, async () => {
+    await db.query(`update public.regulatory_credentials set value = '765432', status = 'entered' where kind = 'mc_number'`);
+    await db.query(`update public.regulatory_credentials set status = 'verified', verified_on = current_date, verification_source = 'FMCSA licensing and insurance' where kind = 'mc_number'`);
+    const { rows: events } = await db.query(`select action, from_status, to_status, actor from public.credential_events e join public.regulatory_credentials c on c.id = e.credential_id where c.kind = 'mc_number' order by e.id`);
+    assert.deepEqual(events.slice(-2).map((e) => [e.action, e.from_status, e.to_status]), [["status_changed", "not_entered", "entered"], ["status_changed", "entered", "verified"]]);
+    assert.equal(events.at(-1).actor, OWNER);
+  });
+  await db.query(`update public.regulatory_credentials set value = '765432', status = 'entered' where kind = 'mc_number'`);
+  assert.equal((await db.query(`select mc_number from public.business_settings where id = 1`)).rows[0].mc_number, "765432");
+  await assert.rejects(db.query(`update public.credential_events set to_status = 'x'`), /append only/);
+  await assert.rejects(db.query(`delete from public.credential_events`), /append only/);
+  await db.query(`update public.regulatory_credentials set status = 'rejected' where kind = 'mc_number'`);
+  assert.equal((await db.query(`select mc_number from public.business_settings where id = 1`)).rows[0].mc_number, null);
+  await db.query(`update public.regulatory_credentials set value = null, status = 'not_entered', verified_on = null, verification_source = null where kind = 'mc_number'`);
+  const { rows: ein } = await db.query(`update public.regulatory_credentials set value = '12 3456789', status = 'entered' where kind = 'ein' returning id`);
+  const { rows: einEvents } = await db.query(`select value_after from public.credential_events where credential_id = $1`, [ein[0].id]);
+  assert.ok(einEvents.every((e) => e.value_after === null), "the EIN is never copied into history");
+});
+
+test("website text versions are append only and editable by admins only", async () => {
+  await as("authenticated", STAFF, () => denied(db.query(`insert into public.site_content (key, value) values ('hero.body1', 'x')`)));
+  await as("authenticated", OWNER, async () => {
+    await db.query(`insert into public.site_content (key, value) values ('hero.body1', 'New text')`);
+    await db.query(`insert into public.site_content_versions (key, version, value) values ('hero.body1', 1, 'New text')`);
+    await assert.rejects(db.query(`update public.site_content_versions set value = 'tampered'`), /append only|permission denied/);
+  });
+  await db.query(`insert into public.site_content_versions (key, version, value) values ('hero.body2', 1, 'Text')`);
+  await assert.rejects(db.query(`update public.site_content_versions set value = 'tampered'`), /append only/);
+});
+
 test("staff cannot change their own role or activate profiles", async () => {
   await as("authenticated", STAFF, () => denied(db.query(`update public.profiles set role = 'owner' where id = $1`, [STAFF])));
 });

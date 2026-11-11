@@ -13,16 +13,7 @@ import { equipmentOptions } from "@/lib/validation";
 import { site } from "@/config/site";
 import { AUTHORITY_STATUSES, CHECKLIST_STATUSES, LAUNCH_ITEMS, TRADEMARK_STATUSES } from "@/config/launch";
 
-export type ActionState = { ok?: boolean; error?: string; message?: string } | undefined;
-
-const values = <T extends readonly { value: string }[]>(l: T) => l.map((x) => x.value) as [string, ...string[]];
-const text = (max: number) => z.string().trim().max(max).optional().transform((v) => v || null);
-const optDate = z.string().trim().optional().transform((v) => v || null).pipe(z.union([z.null(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]));
-const email = z.string().trim().toLowerCase().transform((v) => v || null).pipe(z.union([z.null(), z.email()]));
-const digits = z.string().trim().transform((v) => v.replace(/\D/g, "") || null).pipe(z.union([z.null(), z.string().max(8)]));
-const uuid = z.uuid();
-const form = (fd: FormData) => Object.fromEntries(fd.entries()) as Record<string, string>;
-const fail = (e: unknown): ActionState => ({ error: e instanceof z.ZodError ? e.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") : "Something went wrong. Please try again." });
+import { type ActionState, digits, email, fail, form, optDate, text, uuid, values } from "./form-helpers";
 
 // ---------------------------------------------------------------------------
 // Authentication (invite only; there is no public sign up anywhere in this app)
@@ -303,7 +294,8 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
   try {
     const raw = form(fd);
     const bool = (k: string) => raw[k] === "on";
-    const v = z.object({ mc_number: digits, usdot_number: digits, authority_verified_on: optDate, authority_verification_note: text(2000) }).parse(raw);
+    // MC and USDOT numbers are managed as regulatory credentials (Regulatory & Compliance tab).
+    const v = z.object({ authority_verified_on: optDate, authority_verification_note: text(2000) }).parse(raw);
     const next = {
       ...v,
       operations_enabled: bool("operations_enabled"),
@@ -315,9 +307,12 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
     const { data: before } = await s.db.from("business_settings").select("operations_enabled").eq("id", 1).single();
     if (next.operations_enabled && !before?.operations_enabled) {
       if (raw.confirm_operations !== "ENABLE OPERATIONS") return { error: "To enable operations, type ENABLE OPERATIONS in the confirmation box." };
-      if (!next.authority_verified_on || !next.mc_number) return { error: "Record the MC number and the date broker authority was verified active before enabling operations." };
-      const { data: id } = await s.db.from("business_settings").select("broker_authority_status").eq("id", 1).single();
+      const { data: id } = await s.db.from("business_settings").select("broker_authority_status, mc_number").eq("id", 1).single();
+      if (!next.authority_verified_on || !id?.mc_number) return { error: "Record the MC number and the date broker authority was verified active before enabling operations." };
       if (id?.broker_authority_status !== "active") return { error: "Set Broker authority status to Active in Business identity (after confirming it in FMCSA records) before enabling operations." };
+      // The MC number must be verified (with recorded evidence), not just entered.
+      const { data: mc } = await s.db.from("regulatory_credentials").select("status").eq("kind", "mc_number").maybeSingle();
+      if (mc?.status !== "verified") return { error: "Verify the MC number in Regulatory & Compliance (record where and when it was checked) before enabling operations." };
     }
     const { error } = await s.db.from("business_settings").update(next).eq("id", 1);
     if (error) throw error;
@@ -335,7 +330,8 @@ export async function saveWebsiteContent(_: ActionState, fd: FormData): Promise<
   try {
     const raw = form(fd);
     const bool = (k: string) => raw[k] === "on";
-    const v = z.object({ public_email: email, public_phone: text(32), status_message: text(500), service_area: z.string().trim().min(2).max(120) }).parse(raw);
+    // Public email and phone are managed in Settings > Contact & Support.
+    const v = z.object({ status_message: text(500), service_area: z.string().trim().min(2).max(120) }).parse(raw);
     const next = { ...v, service_expedited: bool("service_expedited"), service_dedicated: bool("service_dedicated"), service_general: bool("service_general"), updated_by: s.userId };
     const { error } = await s.db.from("business_settings").update(next).eq("id", 1);
     if (error) throw error;
@@ -359,6 +355,9 @@ export async function saveIdentity(_: ActionState, fd: FormData): Promise<Action
     const v = z.object({
       legal_entity_name: text(160),
       business_address: text(300),
+      mailing_address: text(300),
+      entity_type: z.union([z.literal("").transform(() => null), z.enum(["llc", "corporation", "sole_proprietorship", "partnership", "other"])]).optional().transform((x) => x ?? null),
+      formation_state: text(60),
       website_domain: z.string().trim().toLowerCase().transform((x) => x.replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null)
         .pipe(z.union([z.null(), z.string().regex(/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, "Enter a domain such as example.com")])),
       trademark_clearance_status: z.enum(values(TRADEMARK_STATUSES)),

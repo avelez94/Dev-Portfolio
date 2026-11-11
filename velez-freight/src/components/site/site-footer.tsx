@@ -60,19 +60,22 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
         <div className="container-site flex flex-col gap-3 py-5 text-xs text-white/70 md:flex-row md:items-center md:justify-between">
           <p>
             © {year} {legalName}. All rights reserved.
-            {settings.preview ? (
-              <>
-                {/* Launch preview only: shows where verified credentials will appear. */}
-                <span className="ml-2" data-preview-credential>MC {settings.mcNumber ?? "[pending verification]"}</span>
-                <span className="ml-2" data-preview-credential>USDOT {settings.usdotNumber ?? "[pending verification]"}</span>
-              </>
-            ) : (
-              <>
-                {settings.mcNumber && settings.operational && <span className="ml-2">MC {settings.mcNumber}</span>}
-                {settings.usdotNumber && settings.operational && <span className="ml-2">USDOT {settings.usdotNumber}</span>}
-              </>
-            )}
+            {settings.preview
+              ? // Launch preview: verified credentials, or a placeholder where MC and USDOT will appear.
+                (["mc_number", "usdot_number"] as const).map((kind) => {
+                  const c = settings.credentials.find((x) => x.kind === kind);
+                  return <span key={kind} className="ml-2" data-preview-credential>{kind === "mc_number" ? "MC" : "USDOT"} {c?.value ?? "[pending verification]"}</span>;
+                })
+              : settings.operational &&
+                settings.credentials.map((c) => <span key={c.kind} className="ml-2" data-credential={c.kind}>{c.label} {c.value}</span>)}
           </p>
+          {settings.social.length > 0 && (
+            <ul aria-label="Social media" className="flex gap-4">
+              {settings.social.map((n) => (
+                <li key={n.key}><a href={n.url} rel="noopener noreferrer me" target="_blank" className="inline-block py-1.5 hover:text-white">{n.label}<span className="sr-only"> (opens in a new tab)</span></a></li>
+              ))}
+            </ul>
+          )}
           <ul className="flex gap-5">
             <li><Link href="/privacy" className="inline-block py-1.5 hover:text-white">Privacy Policy</Link></li>
             <li><Link href="/terms" className="inline-block py-1.5 hover:text-white">Terms of Use</Link></li>

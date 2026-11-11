@@ -65,8 +65,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <p className="mb-6 rounded-lg border border-line bg-white p-4 text-sm">
           <strong className="text-navy">Prelaunch mode.</strong> Quotes, shipments, invoicing and payables stay off until broker authority is verified and operations are enabled.
           Focus areas now: shipper prospecting, follow ups, carrier relationships and business setup.{" "}
-          <Link href="/admin/settings#launch" className="font-semibold text-brand-red-dark underline">Launch checklist</Link> ({LAUNCH_ITEMS.filter((i) => settings.launchChecklist[i.key]?.status === "done").length} of {LAUNCH_ITEMS.length} done){" "}
-          <span aria-hidden="true">·</span> <Link href="/admin/settings#operating-status" className="font-semibold text-brand-red-dark underline">Activation checklist</Link>{" "}
+          <Link href="/admin/settings?tab=compliance#launch" className="font-semibold text-brand-red-dark underline">Launch checklist</Link> ({LAUNCH_ITEMS.filter((i) => settings.launchChecklist[i.key]?.status === "done").length} of {LAUNCH_ITEMS.length} done){" "}
+          <span aria-hidden="true">·</span> <Link href="/admin/settings?tab=compliance#operating-status" className="font-semibold text-brand-red-dark underline">Activation checklist</Link>{" "}
           <span aria-hidden="true">·</span> <Link href="/admin/preview" className="font-semibold text-brand-red-dark underline">Launch preview</Link>
         </p>
       )}

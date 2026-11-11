@@ -178,7 +178,7 @@ export function AdminNav({ name, role, operational, counts }: { name: string; ro
 
 function ModeBadge({ operational }: { operational: boolean }) {
   return (
-    <Link href="/admin/settings#operating-status" className={cn("mx-1 mb-4 block rounded-md px-3 py-2 text-xs font-semibold", operational ? "bg-success/25 text-white" : "bg-white/10 text-white")}>
+    <Link href="/admin/settings?tab=compliance#operating-status" className={cn("mx-1 mb-4 block rounded-md px-3 py-2 text-xs font-semibold", operational ? "bg-success/25 text-white" : "bg-white/10 text-white")}>
       {operational ? "Active brokerage mode" : "Prelaunch mode"}
       <span className="block font-normal text-white/70">{operational ? "Operations enabled" : "Brokerage features are off"}</span>
     </Link>

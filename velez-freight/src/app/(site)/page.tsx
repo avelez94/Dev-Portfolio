@@ -6,14 +6,14 @@ export default async function HomePage() {
   const settings = await getSettings();
   return (
     <>
-      <Hero operational={settings.operational} />
-      <QuickInquiry operational={settings.operational} />
+      <Hero operational={settings.operational} content={settings.content} />
+      <QuickInquiry operational={settings.operational} stayConnectedBody={settings.content["stayConnected.body"]} />
       <ServicesSection settings={settings} />
       <ProcessSection />
-      <WhySection />
+      <WhySection content={settings.content} />
       <StoryTeaser />
       <CarrierAndFaq operational={settings.operational} />
-      <FinalCta operational={settings.operational} />
+      <FinalCta operational={settings.operational} content={settings.content} />
     </>
   );
 }

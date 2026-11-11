@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getStaff } from "@/lib/auth";
 import { audit } from "@/lib/data/audit";
 import { serviceClient } from "@/lib/supabase/service";
-import { DOCUMENT_BUCKET, RESTRICTED_DOC_TYPES } from "@/lib/documents";
+import { ADMIN_ONLY_ENTITIES, DOCUMENT_BUCKET, RESTRICTED_DOC_TYPES } from "@/lib/documents";
 
 const noStore = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
 
@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!/^[0-9a-f-]{36}$/.test(id)) return new NextResponse("Not found", { status: 404, headers: noStore });
   const { data: doc } = await s.db.from("documents").select("id, entity_type, entity_id, doc_type, storage_path, file_name").eq("id", id).maybeSingle();
   if (!doc?.storage_path) return new NextResponse("Not found", { status: 404, headers: noStore });
-  if (RESTRICTED_DOC_TYPES.has(doc.doc_type) && s.role !== "owner" && s.role !== "admin") {
+  if ((RESTRICTED_DOC_TYPES.has(doc.doc_type) || ADMIN_ONLY_ENTITIES.has(doc.entity_type)) && s.role !== "owner" && s.role !== "admin") {
     return new NextResponse("This document requires owner or admin access", { status: 403, headers: noStore });
   }
   const svc = serviceClient();

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireAdmin, requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/data/audit";
 import { prospectStatuses } from "@/config/admin";
-import type { ActionState } from "./actions";
+import type { ActionState } from "./form-helpers";
 
 const form = (fd: FormData) => Object.fromEntries(fd.entries()) as Record<string, string>;
 const opt = (max: number) => z.string().trim().max(max).optional().transform((v) => v || null);

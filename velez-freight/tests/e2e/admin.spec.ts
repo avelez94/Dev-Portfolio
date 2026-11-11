@@ -195,7 +195,7 @@ test("staff accounts cannot reach financial records or admin only exports", asyn
 test("settings and website content: operations need confirmation; content saves", async ({ page }) => {
   await sql("update public.business_settings set operations_enabled = false, authority_verified_on = null, mc_number = null where id = 1");
   await signIn(page);
-  await page.goto("/admin/settings");
+  await page.goto("/admin/settings?tab=compliance");
   await expect(page.getByText(/BROKER_AUTHORITY_ACTIVE.*false/)).toBeVisible();
   await page.getByLabel("Operations enabled (accept freight quote inquiries)").check();
   await page.getByRole("button", { name: "Save settings" }).click();
@@ -206,9 +206,15 @@ test("settings and website content: operations need confirmation; content saves"
   await expect(page.getByText(/Record the MC number and the date/)).toBeVisible();
   expect((await sql<{ operations_enabled: boolean }>("select operations_enabled from public.business_settings where id = 1"))[0].operations_enabled).toBe(false);
   await page.goto("/admin/content");
-  await page.getByLabel("Public business email").fill("hello@example.test");
+  await page.getByLabel("Service area shown publicly").fill("Maryland, USA");
   await page.getByRole("button", { name: "Save website content" }).click();
   await expect(page.getByText(/Saved. Public pages refresh/)).toBeVisible();
+  await page.goto("/admin/settings?tab=contact");
+  await page.getByLabel("Public business email").fill("hello@example.test");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await page.getByRole("button", { name: "Save contact and support" }).click();
+  await expect(page.getByText("Contact and support details saved.")).toBeVisible();
+  await expect(page.getByText("Unsaved changes")).toHaveCount(0);
 });
 
 test("business identity: legal name hidden until confirmed, launch checklist, operations need active authority", async ({ page }) => {
@@ -230,7 +236,7 @@ test("business identity: legal name hidden until confirmed, launch checklist, op
   await expect(page.getByText("Business identity saved.")).toBeVisible();
   await expect.poll(async () => { await page.goto("/terms"); return page.locator("main").innerText(); }, { timeout: 15000 }).toContain("operated by Mary’s Logistics Group LLC");
   // Launch checklist saves with notes.
-  await page.goto("/admin/settings");
+  await page.goto("/admin/settings?tab=compliance");
   await page.locator("#lc-federal_trademark").selectOption("in_progress");
   await page.locator("#lcn-federal_trademark").fill("Search ordered");
   await page.getByRole("button", { name: "Save checklist" }).click();
@@ -239,7 +245,7 @@ test("business identity: legal name hidden until confirmed, launch checklist, op
   expect(row.c.federal_trademark).toMatchObject({ status: "in_progress", note: "Search ordered" });
   // Operations stay off unless broker authority status is recorded as active.
   await sql("update public.business_settings set mc_number = '123456', authority_verified_on = current_date where id = 1");
-  await page.reload();
+  await page.goto("/admin/settings?tab=compliance");
   await page.getByLabel("Operations enabled (accept freight quote inquiries)").check();
   await page.getByLabel("To turn operations ON, type ENABLE OPERATIONS").fill("ENABLE OPERATIONS");
   await page.getByRole("button", { name: "Save settings" }).click();
@@ -326,7 +332,7 @@ test("axe: main dashboard screens have no WCAG A/AA violations", async ({ page }
   await signIn(page);
   const [sh] = await sql<{ id: string }>("select id from public.shipper_prospects limit 1");
   const [ca] = await sql<{ id: string }>("select id from public.carrier_leads order by created_at limit 1");
-  for (const path of ["/admin", "/admin/tasks", "/admin/shippers", `/admin/shippers/${sh.id}`, `/admin/carriers/${ca.id}`, "/admin/insights?tab=sales", "/admin/reports", "/admin/settings"]) {
+  for (const path of ["/admin", "/admin/tasks", "/admin/shippers", `/admin/shippers/${sh.id}`, `/admin/carriers/${ca.id}`, "/admin/insights?tab=sales", "/admin/reports", "/admin/settings", "/admin/settings?tab=compliance", "/admin/settings?tab=contact", "/admin/content"]) {
     await page.goto(path);
     await page.waitForTimeout(1200);
     const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();

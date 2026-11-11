@@ -40,7 +40,7 @@ export function GatedModule({ title, reason, children }: { title: string; reason
       <h2 className="mt-2 text-2xl font-bold">{title}</h2>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-charcoal">{reason}</p>
       <div className="mt-5 flex flex-wrap gap-3 text-sm">
-        <Link href="/admin/settings#operating-status" className="rounded-md bg-navy px-4 py-2 font-semibold text-white">Review activation checklist</Link>
+        <Link href="/admin/settings?tab=compliance#operating-status" className="rounded-md bg-navy px-4 py-2 font-semibold text-white">Review activation checklist</Link>
         <Link href="/admin/shippers" className="rounded-md border border-line px-4 py-2 font-semibold text-navy">Work on shipper prospecting</Link>
       </div>
       {children}

@@ -6,6 +6,7 @@ import { ActionForm } from "@/components/admin/action-form";
 import { AdminField, Panel, adminInput, adminTextarea } from "@/components/admin/admin-ui";
 import { PageHeader } from "@/components/admin/page-header";
 import { getSettings } from "@/lib/data/settings";
+import { SiteTextEditor } from "./site-text";
 
 export const metadata = { title: "Website Content" };
 
@@ -32,18 +33,16 @@ export default async function ContentPage() {
   return (
     <>
       <PageHeader title="Website Content" crumbs={[{ label: "Website Content" }]}
-        description="Public facts shown on the website. Leave a field empty to hide it; nothing is invented. Page copy itself lives in src/config/site.ts and changes with a site update." />
+        description="Public facts and editable page text, with version history. Leave a field empty to hide it or to use the approved default text." />
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <Panel title="Public business facts">
           <ActionForm action={saveWebsiteContent} submitLabel="Save website content">
             <fieldset disabled={!canEdit} className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
-                <AdminField label="Public business email" htmlFor="wc-email"><input id="wc-email" name="public_email" type="email" defaultValue={v(b.public_email)} className={adminInput} /></AdminField>
-                <AdminField label="Public phone" htmlFor="wc-phone"><input id="wc-phone" name="public_phone" maxLength={32} defaultValue={v(b.public_phone)} className={adminInput} /></AdminField>
                 <AdminField label="Service area shown publicly" htmlFor="wc-area" className="sm:col-span-2"><input id="wc-area" name="service_area" required maxLength={120} defaultValue={b.service_area} className={adminInput} /></AdminField>
                 <AdminField label="Custom prelaunch status message (optional)" htmlFor="wc-msg" className="sm:col-span-2"><textarea id="wc-msg" name="status_message" maxLength={500} defaultValue={v(b.status_message)} className={adminTextarea} placeholder="Leave empty to use the approved prelaunch message." /></AdminField>
               </div>
-              <p className="rounded-md bg-ivory p-3 text-xs">The legal entity name and its confirmation are managed in <Link href="/admin/settings#identity" className="font-semibold text-brand-red-dark underline">Settings, Business identity</Link>. Until it is confirmed the website uses the brand name only.</p>
+              <p className="rounded-md bg-ivory p-3 text-xs">Public email, phone, hours and social links are in <Link href="/admin/settings?tab=contact" className="font-semibold text-brand-red-dark underline">Settings, Contact &amp; Support</Link>. The legal entity name and its confirmation are managed in <Link href="/admin/settings?tab=profile#identity" className="font-semibold text-brand-red-dark underline">Settings, Business identity</Link>. Until it is confirmed the website uses the brand name only.</p>
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy">Services shown on the website</p>
                 <div className="grid gap-2 sm:grid-cols-3">
@@ -60,7 +59,7 @@ export default async function ContentPage() {
             <li><span className="font-semibold text-navy">Mode:</span> {settings.operational ? "Active brokerage (quote requests accepted)" : "Prelaunch (business inquiries and launch sign ups only)"}</li>
             <li><span className="font-semibold text-navy">Email:</span> {settings.publicEmail ?? "Hidden (not set)"}</li>
             <li><span className="font-semibold text-navy">Phone:</span> {settings.publicPhone ?? "Hidden (not set)"}</li>
-            <li><span className="font-semibold text-navy">MC and USDOT in footer:</span> {settings.operational && settings.mcNumber ? "Shown" : "Hidden until operations are enabled"}</li>
+            <li><span className="font-semibold text-navy">Credentials in footer:</span> {settings.operational && settings.credentials.length ? settings.credentials.map((c) => `${c.label} ${c.value}`).join(", ") : "Hidden until verified credentials are selected and operations are enabled"}</li>
           </ul>
           <h3 className="mt-6 font-sans text-xs font-bold uppercase tracking-wider text-navy">Pages</h3>
           <ul className="mt-2 divide-y divide-line text-sm">
@@ -70,6 +69,7 @@ export default async function ContentPage() {
           </ul>
         </Panel>
       </div>
+      <SiteTextEditor canEdit={canEdit} />
     </>
   );
 }

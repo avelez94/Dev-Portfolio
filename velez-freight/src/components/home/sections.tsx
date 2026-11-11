@@ -8,12 +8,13 @@ import { copy, faqs, pillars, processSteps, services } from "@/config/site";
 import { images } from "@/config/images";
 import type { PublicSettings } from "@/lib/data/settings";
 import { PillarIcon, RouteLine, ServiceIcon } from "./icons";
+import { DEFAULT_CONTENT, type SiteContent } from "@/config/content-slots";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // B. Hero
 // ---------------------------------------------------------------------------
-export function Hero({ operational }: { operational: boolean }) {
+export function Hero({ operational, content = DEFAULT_CONTENT }: { operational: boolean; content?: SiteContent }) {
   return (
     <section aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-navy">
       <Image
@@ -47,8 +48,8 @@ export function Hero({ operational }: { operational: boolean }) {
             </span>
           </h1>
           <div className="mt-7 max-w-xl animate-rise space-y-3 text-base leading-relaxed text-white/90 [animation-delay:120ms] sm:mt-8 sm:text-lg">
-            <p>{copy.hero.body[0]}</p>
-            <p className="font-medium text-white">{copy.hero.body[1]}</p>
+            <p>{content["hero.body1"]}</p>
+            <p className="font-medium text-white">{content["hero.body2"]}</p>
           </div>
           <div className="mt-9 flex animate-rise flex-col gap-3 [animation-delay:220ms] sm:flex-row sm:gap-4">
             {operational ? (
@@ -86,7 +87,7 @@ export function ServicesSection({ settings }: { settings: PublicSettings }) {
             <h2 id="services-title" className="text-3xl font-bold sm:text-[2.4rem]">{copy.servicesIntro.title}</h2>
             <span aria-hidden="true" className="hidden h-0.5 w-12 bg-brand-red sm:block" />
           </div>
-          <p className="mx-auto mt-4 max-w-2xl leading-relaxed text-charcoal">{copy.servicesIntro.body}</p>
+          <p className="mx-auto mt-4 max-w-2xl leading-relaxed text-charcoal">{settings.content["servicesIntro.body"]}</p>
           {!settings.operational && (
             <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-muted">Available once our broker registration is complete.</p>
           )}
@@ -162,7 +163,7 @@ export function ProcessSection() {
 // ---------------------------------------------------------------------------
 // F. Why choose
 // ---------------------------------------------------------------------------
-export function WhySection() {
+export function WhySection({ content = DEFAULT_CONTENT }: { content?: SiteContent }) {
   return (
     <section aria-labelledby="why-title" className="py-20 sm:py-24">
       <div className="container-site grid gap-12 lg:grid-cols-[20rem_1fr] lg:items-center">
@@ -170,7 +171,7 @@ export function WhySection() {
           <p className="eyebrow flex items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" /> Our Approach</p>
           <h2 id="why-title" className="mt-3 text-4xl font-bold leading-[1.05] sm:text-[2.7rem]">{copy.why.heading}</h2>
           <p className="mt-4 font-serif text-lg font-semibold leading-snug text-navy-700">{copy.why.title}</p>
-          <p className="mt-3 text-[0.95rem] leading-relaxed text-charcoal">{copy.why.body}</p>
+          <p className="mt-3 text-[0.95rem] leading-relaxed text-charcoal">{content["why.body"]}</p>
         </div>
         <ul className="grid gap-10 sm:grid-cols-3 sm:gap-0">
           {pillars.map((p, i) => (
@@ -283,7 +284,7 @@ export function CarrierAndFaq({ operational }: { operational: boolean }) {
 // ---------------------------------------------------------------------------
 // J. Final call to action
 // ---------------------------------------------------------------------------
-export function FinalCta({ operational }: { operational: boolean }) {
+export function FinalCta({ operational, content = DEFAULT_CONTENT }: { operational: boolean; content?: SiteContent }) {
   return (
     <section aria-labelledby="cta-title" className="relative isolate overflow-hidden bg-navy">
       <Image src={images.roadSunsetFields.src} alt={images.roadSunsetFields.alt} fill sizes="100vw" className="-z-10 object-cover object-[50%_60%]" />
@@ -299,7 +300,7 @@ export function FinalCta({ operational }: { operational: boolean }) {
             {operational ? copy.finalCta.title : copy.prelaunch.title}
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-white/90">
-            {operational ? copy.finalCta.body : copy.prelaunch.body}
+            {operational ? content["finalCta.body"] : content["prelaunch.body"]}
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:gap-4">
             {operational ? (
