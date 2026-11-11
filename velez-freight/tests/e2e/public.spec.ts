@@ -187,7 +187,10 @@ test("our story: story, founder profile with headshot, and approach", async ({ p
   await expect(photo).toBeVisible();
   expect(await photo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   await expect(founder.getByText("Founder & CEO", { exact: true })).toBeVisible();
-  await expect(founder).toContainText("technology, customer support and team leadership");
+  await expect(founder).toContainText("Her experience in the transportation industry began working alongside her father");
+  for (const h of ["Transportation Experience", "Technology & Innovation", "Leadership & Relationships"]) {
+    await expect(founder.getByRole("heading", { level: 3, name: h })).toBeVisible();
+  }
   await expect(page.getByRole("heading", { level: 2, name: "How we work with you" })).toBeVisible();
   for (const h of ["Personalized service", "Clear communication", "Responsible carrier selection", "Organization", "Technology enabled operations"]) {
     await expect(page.getByRole("heading", { level: 3, name: h })).toBeVisible();

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, CircleDashed, ClipboardCheck, Headset, MessageSquareText, MonitorSmartphone, ShieldCheck, UserRound, Users } from "lucide-react";
+import { ArrowRight, Check, CircleDashed, ClipboardCheck, Cpu, Handshake, MessageSquareText, MonitorSmartphone, ShieldCheck, Truck, UserRound } from "lucide-react";
 import { getSettings } from "@/lib/data/settings";
 import { images } from "@/config/images";
 import { PageHero } from "@/components/site/page-hero";
@@ -20,11 +20,14 @@ const founder = {
   photo: { src: "/images/founder-alante-velez.jpg", width: 1122, height: 1402 },
 };
 
-/** Transferable strengths only. No freight brokerage track record is implied. */
+/**
+ * Founder strengths, drawn only from the owner approved biography. No years of experience,
+ * prior licensed brokerage operation or business results are stated or implied.
+ */
 const strengths = [
-  { icon: MonitorSmartphone, title: "Technology", body: "Comfort with the systems and tools that keep information organized, accurate and easy to find." },
-  { icon: Headset, title: "Customer support", body: "Experience helping people resolve issues with patience, clear explanations and reliable follow through." },
-  { icon: Users, title: "Team leadership", body: "Experience coordinating people and priorities toward a shared goal and holding a high standard." },
+  { icon: Truck, title: "Transportation Experience", body: "Hands on experience as her father’s agent, sourcing and booking loads through freight brokers and supporting transportation coordination." },
+  { icon: Cpu, title: "Technology & Innovation", body: "A strong background in information technology and graduate studies in cybersecurity, applied to building efficient, dependable systems." },
+  { icon: Handshake, title: "Leadership & Relationships", body: "Professional experience in technical operations and team leadership, and a commitment to lasting business relationships." },
 ];
 
 const approach = [
@@ -100,13 +103,16 @@ export default async function OurStoryPage() {
             <h2 id="founder-title" className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">{founder.name}</h2>
             <div className="mt-6 space-y-4 text-[1.05rem] leading-relaxed text-charcoal">
               <p className="font-serif text-xl leading-snug text-navy">
-                Alante Velez founded Mary’s Logistics Group to carry a family tradition of entrepreneurship into the freight industry.
+                Alante Velez founded Mary’s Logistics Group with a vision of bringing together hands on transportation experience, modern technology, and a commitment to building lasting business relationships.
               </p>
               <p>
-                Alante’s professional background is in technology, customer support and team leadership: work centered on solving problems, communicating clearly and keeping people informed when it matters most.
+                Her experience in the transportation industry began working alongside her father, assisting with load sourcing, communicating with freight brokers, and coordinating transportation arrangements. That firsthand exposure gave her an understanding of the logistics process, the importance of reliable carrier relationships, and the coordination required to keep freight moving.
               </p>
               <p>
-                Those same strengths shape how the company is being built, with responsive communication for shippers, careful organization behind every detail and modern tools that keep information accurate. As a new brokerage, Mary’s Logistics Group is completing every registration and compliance requirement before arranging freight, and intends to earn trust one relationship at a time.
+                Complementing her industry experience, Alante has a strong background in information technology, graduate studies in cybersecurity, and professional experience in technical operations and team leadership. She brings a strategic, solutions focused approach to building efficient systems and delivering dependable service.
+              </p>
+              <p>
+                Inspired by her family’s entrepreneurial legacy, Alante established Mary’s Logistics Group to combine practical industry knowledge with innovation, accountability, and a personalized approach to freight coordination.
               </p>
             </div>
             <ul className="mt-9 grid gap-6 sm:grid-cols-3" aria-label="Strengths Alante brings to the company">
