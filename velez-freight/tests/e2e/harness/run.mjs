@@ -81,7 +81,7 @@ async function main() {
   // Phases run one after another with one build at a time. Keeping two production builds of the
   // same project side by side caused runtime regenerated pages to reference missing chunks.
   const phases = [
-    { name: "prelaunch", broker: "false", ops: false, port: 3101, specs: ["public.spec.ts", "admin.spec.ts", "a11y.spec.ts"] },
+    { name: "prelaunch", broker: "false", ops: false, port: 3101, specs: ["public.spec.ts", "admin.spec.ts", "a11y.spec.ts", "launch-preview.spec.ts"] },
     { name: "operational", broker: "true", ops: true, port: 3102, specs: ["operational.spec.ts", "brokerage.spec.ts"], synthetic: true },
   ];
   const extraArgs = process.argv.slice(2);

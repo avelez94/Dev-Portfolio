@@ -56,6 +56,10 @@ export default async function SettingsPage() {
           <Check ok={b.operations_enabled}>Dashboard switch &ldquo;Operations enabled&rdquo; is {b.operations_enabled ? "on" : "off"}</Check>
         </ul>
         <p className="mt-4 rounded-md bg-ivory p-3 text-xs leading-relaxed">Before enabling operations, confirm in FMCSA records that broker authority is active, the BMC 84 or BMC 85 financial security is effective, and the BOC 3 process agent filing is on file.</p>
+        <p className="mt-3 text-sm">
+          Want to see the website as it will look at launch, without changing anything? Open the{" "}
+          <Link href="/admin/preview" className="font-semibold text-brand-red-dark underline">launch preview</Link>. It is visible only to signed in administrators, and its forms are simulations.
+        </p>
       </Panel>
 
       <Panel title="Business identity" className="mb-6">

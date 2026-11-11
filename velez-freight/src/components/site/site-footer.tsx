@@ -60,8 +60,18 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
         <div className="container-site flex flex-col gap-3 py-5 text-xs text-white/70 md:flex-row md:items-center md:justify-between">
           <p>
             © {year} {legalName}. All rights reserved.
-            {settings.mcNumber && settings.operational && <span className="ml-2">MC {settings.mcNumber}</span>}
-            {settings.usdotNumber && settings.operational && <span className="ml-2">USDOT {settings.usdotNumber}</span>}
+            {settings.preview ? (
+              <>
+                {/* Launch preview only: shows where verified credentials will appear. */}
+                <span className="ml-2" data-preview-credential>MC {settings.mcNumber ?? "[pending verification]"}</span>
+                <span className="ml-2" data-preview-credential>USDOT {settings.usdotNumber ?? "[pending verification]"}</span>
+              </>
+            ) : (
+              <>
+                {settings.mcNumber && settings.operational && <span className="ml-2">MC {settings.mcNumber}</span>}
+                {settings.usdotNumber && settings.operational && <span className="ml-2">USDOT {settings.usdotNumber}</span>}
+              </>
+            )}
           </p>
           <ul className="flex gap-5">
             <li><Link href="/privacy" className="inline-block py-1.5 hover:text-white">Privacy Policy</Link></li>

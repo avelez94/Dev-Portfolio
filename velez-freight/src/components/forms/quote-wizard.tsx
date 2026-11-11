@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Check, Plus, Trash2 } from "lucide-react";
 import { quoteSchema, type QuoteInput } from "@/lib/validation";
 import { shipmentTypes } from "@/config/site";
-import { submitQuote } from "@/app/actions/public";
+import { useSubmitters } from "@/components/preview/preview-context";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Field, FormAlert, Honeypot, PrivacyCheckbox, SubmitLabel } from "./fields";
@@ -21,6 +21,7 @@ type Prefill = { pickup?: string; delivery?: string; type?: string; weight?: str
 export function QuoteWizard({ prefill }: { prefill: Prefill }) {
   const [step, setStep] = useState(0);
   const { envelope, honeypot, refresh } = useEnvelope();
+  const submit = useSubmitters();
   const [pending, start] = useTransition();
   const [done, setDone] = useState<{ reference: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +56,7 @@ export function QuoteWizard({ prefill }: { prefill: Prefill }) {
     (values) => {
       setError(null);
       start(async () => {
-        const res = await submitQuote(values, envelope());
+        const res = await submit.quote(values, envelope());
         if (res.ok) setDone({ reference: res.reference, message: res.message });
         else {
           Object.entries(res.fieldErrors ?? {}).forEach(([k, m]) => setFieldError(k as "route", { message: m }));

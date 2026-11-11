@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, LockKeyhole } from "lucide-react";
 import { carrierSchema, equipmentOptions, type CarrierInput } from "@/lib/validation";
-import { submitCarrier } from "@/app/actions/public";
+import { useSubmitters } from "@/components/preview/preview-context";
 import { Input, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Field, FormAlert, Honeypot, PrivacyCheckbox, SubmitLabel } from "./fields";
@@ -13,6 +13,7 @@ import { useEnvelope } from "./use-envelope";
 
 export function CarrierForm() {
   const { envelope, honeypot, refresh } = useEnvelope();
+  const submit = useSubmitters();
   const [pending, start] = useTransition();
   const [done, setDone] = useState<{ reference: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export function CarrierForm() {
   const onSubmit = handleSubmit((values) => {
     setError(null);
     start(async () => {
-      const res = await submitCarrier(values, envelope());
+      const res = await submit.carrier(values, envelope());
       if (res.ok) {
         setDone({ reference: res.reference, message: res.message });
       } else {

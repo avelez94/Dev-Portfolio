@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { nav, site } from "@/config/site";
 import { Logo } from "./logo";
+import { toPublicPath } from "@/components/preview/preview-context";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: string }) {
@@ -53,7 +54,8 @@ export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: s
     };
   }, [open]);
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const publicPath = toPublicPath(pathname);
+  const isActive = (href: string) => (href === "/" ? publicPath === "/" : publicPath.startsWith(href));
 
   return (
     <>

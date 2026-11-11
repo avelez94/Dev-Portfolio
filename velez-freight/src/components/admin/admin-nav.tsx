@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import {
   Bell, BarChart3, Building2, ChevronsLeft, ChevronsRight, ClipboardList, FileSpreadsheet, FileText, Globe, Inbox, LayoutDashboard,
-  ListChecks, LogOut, Menu, Receipt, ScrollText, Search, Settings, Truck, Wallet, X, Package,
+  ListChecks, LogOut, Menu, Receipt, ScrollText, Search, Settings, Truck, Wallet, X, Package, Eye,
 } from "lucide-react";
 import { signOut } from "@/app/admin/actions";
 import { Logo, LogoMark } from "@/components/site/logo";
@@ -40,6 +40,7 @@ const groups: { label: string; items: Item[] }[] = [
   ] },
   { label: "System", items: [
     { href: "/admin/content", label: "Website Content", icon: Globe },
+    { href: "/admin/preview", label: "Launch Preview", icon: Eye, adminOnly: true },
     { href: "/admin/settings", label: "Settings", icon: Settings },
     { href: "/admin/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
   ] },

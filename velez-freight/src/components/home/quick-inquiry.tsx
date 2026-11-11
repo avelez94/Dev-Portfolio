@@ -10,7 +10,7 @@ import { Input, NativeSelect } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { copy, shipmentTypes } from "@/config/site";
 import { contactSchema, emailField, shipmentTypeField } from "@/lib/validation";
-import { submitContact } from "@/app/actions/public";
+import { usePreviewHref, useSubmitters } from "@/components/preview/preview-context";
 import { Field, FormAlert, Honeypot, SubmitLabel } from "@/components/forms/fields";
 import { useEnvelope } from "@/components/forms/use-envelope";
 
@@ -38,12 +38,13 @@ const quickQuote = z.object({
 
 function OperationalQuick() {
   const router = useRouter();
+  const previewHref = usePreviewHref();
   const { register, handleSubmit, formState: { errors } } = useForm<z.input<typeof quickQuote>>({ resolver: zodResolver(quickQuote) });
   const onSubmit = handleSubmit((v) => {
     const q = new URLSearchParams({ pickup: v.pickup, delivery: v.delivery, type: v.type });
     if (v.weight) q.set("weight", v.weight);
     if (v.date) q.set("date", v.date);
-    router.push(`/request-quote?${q.toString()}`);
+    router.push(previewHref(`/request-quote?${q.toString()}`));
   });
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8" aria-label="Quick freight inquiry">
@@ -91,6 +92,7 @@ const launchForm = z.object({
 
 function PrelaunchQuick() {
   const { envelope, honeypot, refresh } = useEnvelope();
+  const submit = useSubmitters();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const { register, handleSubmit, setError, reset, formState: { errors } } = useForm<z.input<typeof launchForm>>({ resolver: zodResolver(launchForm) });
@@ -98,7 +100,7 @@ function PrelaunchQuick() {
   const onSubmit = handleSubmit((v) => {
     start(async () => {
       const payload: z.input<typeof contactSchema> = { inquiryType: "launch_notification", name: v.name, email: v.email, company: v.company, shipmentType: v.shipmentType, privacyAck: true };
-      const res = await submitContact(payload, envelope(), "/");
+      const res = await submit.contact(payload, envelope(), "/");
       if (res.ok) {
         setResult({ ok: true, text: `${res.message} Reference: ${res.reference}` });
         reset();

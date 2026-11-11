@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight } from "lucide-react";
 import { contactSchema, type ContactInput } from "@/lib/validation";
 import { shipmentTypes } from "@/config/site";
-import { submitContact } from "@/app/actions/public";
+import { useSubmitters } from "@/components/preview/preview-context";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Field, FormAlert, Honeypot, PrivacyCheckbox, SubmitLabel } from "./fields";
@@ -21,6 +21,7 @@ const topics = [
 
 export function ContactForm({ defaultType = "general", sourcePage = "/contact", operational }: { defaultType?: "general" | "shipper" | "carrier"; sourcePage?: string; operational: boolean }) {
   const { envelope, honeypot, refresh } = useEnvelope();
+  const submit = useSubmitters();
   const [pending, start] = useTransition();
   const [done, setDone] = useState<{ reference: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export function ContactForm({ defaultType = "general", sourcePage = "/contact", 
   const onSubmit = handleSubmit((values) => {
     setError(null);
     start(async () => {
-      const res = await submitContact(values, envelope(), sourcePage);
+      const res = await submit.contact(values, envelope(), sourcePage);
       if (res.ok) setDone({ reference: res.reference, message: res.message });
       else {
         Object.entries(res.fieldErrors ?? {}).forEach(([k, m]) => setFieldError(k as keyof ContactInput, { message: m }));

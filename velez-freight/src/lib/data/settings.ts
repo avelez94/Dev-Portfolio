@@ -3,6 +3,7 @@ import { cache } from "react";
 import { serviceClient } from "@/lib/supabase/service";
 import { env } from "@/lib/env";
 import { brand } from "@/config/brand";
+import { isPreviewMode } from "@/lib/preview-mode";
 
 export type TrademarkStatus = "not_started" | "in_progress" | "cleared" | "conflict_found";
 export type AuthorityStatus = "not_filed" | "application_pending" | "granted_pending_filings" | "active";
@@ -32,9 +33,11 @@ export type PublicSettings = {
   notifyOnCarrier: boolean;
   /** True only when env and admin setting agree. This is the value every gate must use. */
   operational: boolean;
+  /** Admin launch preview: pages render in the launch state, forms only simulate. Never true publicly. */
+  preview: boolean;
 };
 
-const DEFAULTS: Omit<PublicSettings, "operational"> = {
+const DEFAULTS: Omit<PublicSettings, "operational" | "preview"> = {
   publicEmail: null,
   publicPhone: null,
   mcNumber: null,
@@ -101,11 +104,11 @@ export function rowToSettings(row: Row | null): PublicSettings {
         notifyOnCarrier: row.notify_on_carrier,
       }
     : DEFAULTS;
-  return { ...base, operational: env.brokerAuthorityActive && base.operationsEnabled };
+  return { ...base, operational: env.brokerAuthorityActive && base.operationsEnabled, preview: false };
 }
 
 /** Read once per request. Falls back to safe prelaunch defaults if the database is unavailable. */
-export const getSettings = cache(async (): Promise<PublicSettings> => {
+const readSettings = cache(async (): Promise<PublicSettings> => {
   const db = serviceClient();
   if (!db) return rowToSettings(null);
   const { data, error } = await db.from("business_settings").select("*").eq("id", 1).maybeSingle();
@@ -115,6 +118,15 @@ export const getSettings = cache(async (): Promise<PublicSettings> => {
   }
   return rowToSettings(data as Row | null);
 });
+
+/**
+ * Business settings for this request. Inside the authenticated launch preview the pages render
+ * as if operations were live; the stored settings and every server side gate are unchanged.
+ */
+export async function getSettings(): Promise<PublicSettings> {
+  const settings = await readSettings();
+  return isPreviewMode() ? { ...settings, operational: true, preview: true } : settings;
+}
 
 /**
  * Company name for legal and identity statements: the registered legal entity name once the
