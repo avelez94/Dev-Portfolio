@@ -23,13 +23,13 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
           <ul className="flex flex-wrap gap-x-7 gap-y-3 text-sm font-medium md:justify-center">
             {footerNav.map((item) => (
               <li key={item.href}>
-                <Link href={item.href} className="text-white/85 transition-colors hover:text-white hover:underline hover:decoration-brand-red hover:underline-offset-4">
+                <Link href={item.href} className="inline-block py-1 text-white/85 transition-colors hover:text-white hover:underline hover:decoration-brand-red hover:underline-offset-4">
                   {item.label}
                 </Link>
               </li>
             ))}
             <li>
-              <Link href="/request-quote" className="text-white/85 hover:text-white hover:underline hover:decoration-brand-red hover:underline-offset-4">
+              <Link href="/request-quote" className="inline-block py-1 text-white/85 hover:text-white hover:underline hover:decoration-brand-red hover:underline-offset-4">
                 {settings.operational ? "Request a Quote" : "Business Inquiry"}
               </Link>
             </li>
@@ -50,7 +50,7 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
           <p className="flex items-center gap-2.5 text-white/85">
             <MapPin aria-hidden="true" className="size-4 text-brand-red" /> {settings.serviceArea}
           </p>
-          <Link href="/contact" className="inline-block pt-1 font-semibold text-white underline decoration-brand-red underline-offset-4">
+          <Link href="/contact" className="inline-block py-1 font-semibold text-white underline decoration-brand-red underline-offset-4">
             Contact us
           </Link>
         </address>
@@ -64,8 +64,8 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
             {settings.usdotNumber && settings.operational && <span className="ml-2">USDOT {settings.usdotNumber}</span>}
           </p>
           <ul className="flex gap-5">
-            <li><Link href="/privacy" className="hover:text-white">Privacy Policy</Link></li>
-            <li><Link href="/terms" className="hover:text-white">Terms of Use</Link></li>
+            <li><Link href="/privacy" className="inline-block py-1.5 hover:text-white">Privacy Policy</Link></li>
+            <li><Link href="/terms" className="inline-block py-1.5 hover:text-white">Terms of Use</Link></li>
           </ul>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { CircleAlert, CircleCheck, LoaderCircle } from "lucide-react";
 import type { ActionState } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,17 @@ export function ActionForm({
     if (state?.ok && resetOnSuccess) formRef.current?.reset();
   }, [state, resetOnSuccess]);
   return (
-    <form ref={formRef} action={formAction} className={cn("space-y-4", className)}>
+    <form
+      ref={formRef}
+      // Submit through onSubmit so React does not reset the fields automatically: if the server
+      // rejects the input, the person keeps what they typed. Successful saves reset only when asked.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        startTransition(() => formAction(fd));
+      }}
+      className={cn("space-y-4", className)}
+    >
       {children}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant={variant} size="sm" disabled={pending}>

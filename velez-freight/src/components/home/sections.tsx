@@ -222,12 +222,13 @@ export function CarrierAndFaq({ operational }: { operational: boolean }) {
   return (
     <section aria-label="Carrier partnerships and frequently asked questions" className="grid lg:grid-cols-2">
       <div className="relative isolate overflow-hidden bg-navy">
-        <div className="relative h-56 sm:h-72 lg:absolute lg:inset-y-0 lg:left-0 lg:h-auto lg:w-[52%]">
-          <Image src={images.redTruck.src} alt={images.redTruck.alt} fill sizes="(min-width:1024px) 26vw, 100vw" className="object-cover object-[58%_64%]" />
+        <div className="relative h-56 sm:h-72 lg:absolute lg:inset-y-0 lg:left-0 lg:h-auto lg:w-[42%]">
+          <Image src={images.redTruck.src} alt={images.redTruck.alt} fill sizes="(min-width:1024px) 21vw, 100vw" className="object-cover object-[62%_64%]" />
         </div>
         {/* Diagonal navy panel with the signature red stripe */}
-        <div aria-hidden="true" className="absolute inset-0 -z-0 hidden bg-navy lg:block lg:[clip-path:polygon(42%_0,100%_0,100%_100%,30%_100%)]" />
-        <div aria-hidden="true" className="absolute inset-0 hidden bg-brand-red lg:block lg:[clip-path:polygon(40.4%_0,42%_0,30%_100%,28.4%_100%)]" />
+        {/* Diagonal edge confined to the photo area (28% to 42%) so it never sits behind the text */}
+        <div aria-hidden="true" className="absolute inset-y-0 left-[28%] hidden w-[14%] bg-navy lg:block lg:[clip-path:polygon(100%_0,100%_100%,14.3%_100%)]" />
+        <div aria-hidden="true" className="absolute inset-y-0 left-[28%] hidden w-[14%] bg-brand-red lg:block lg:[clip-path:polygon(88.6%_0,100%_0,14.3%_100%,2.9%_100%)]" />
         <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-y-0 right-[-1px] z-10 hidden h-full w-20 lg:block">
           <polygon points="78,0 100,0 100,100 30,100" fill="#F7F5F0" />
           <polygon points="72,0 80,0 32,100 24,100" fill="#E1252F" />

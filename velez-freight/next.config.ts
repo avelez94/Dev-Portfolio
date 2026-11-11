@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   // This app lives inside a larger repository; keep Next.js scoped to this folder.
   turbopack: { root: path.join(__dirname) },
   outputFileTracingRoot: path.join(__dirname),
+  // Separate build folders let the e2e suite run prelaunch and operational builds side by side.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
   images: {
     qualities: [70, 75, 85],

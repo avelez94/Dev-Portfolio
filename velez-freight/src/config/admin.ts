@@ -50,7 +50,11 @@ export type EntityType = (typeof entityTypes)[number];
 
 export const label = (list: readonly { value: string; label: string }[], v: string | null | undefined) => list.find((x) => x.value === v)?.label ?? v ?? "";
 
-export const fmtDate = (d: string | null | undefined) =>
-  d ? new Date(d.length === 10 ? `${d}T12:00:00` : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "";
+/** Calendar dates (YYYY-MM-DD) are formatted as written, never shifted by time zone. */
+export const fmtDate = (d: string | null | undefined) => {
+  if (!d) return "";
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(d);
+  return new Date(day ? `${d}T12:00:00Z` : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: day ? "UTC" : "America/New_York" });
+};
 export const fmtDateTime = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) : "";

@@ -3,6 +3,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { StatusBar } from "@/components/site/status-bar";
 import { RevealOnScroll } from "@/components/site/reveal";
 import { getSettings } from "@/lib/data/settings";
+import { OrganizationSchema } from "@/components/site/org-schema";
 
 // Public pages re-read business settings (operating status, contact details) at most once a minute.
 export const revalidate = 60;
@@ -18,6 +19,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       </main>
       <SiteFooter settings={settings} />
       <RevealOnScroll />
+      <OrganizationSchema settings={settings} />
     </>
   );
 }

@@ -1,10 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat, Source_Serif_4 } from "next/font/google";
+import localFont from "next/font/local";
 import { site } from "@/config/site";
 import "./globals.css";
 
-const serif = Source_Serif_4({ subsets: ["latin"], variable: "--font-source-serif", display: "swap", style: ["normal", "italic"], weight: ["600", "700"] });
-const sans = Montserrat({ subsets: ["latin"], variable: "--font-montserrat", display: "swap", weight: ["400", "500", "600", "700"] });
+// Self hosted variable fonts (SIL Open Font License) from @fontsource: no build or runtime calls to Google.
+const serif = localFont({
+  src: [
+    { path: "../../node_modules/@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2", style: "normal", weight: "200 900" },
+    { path: "../../node_modules/@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-italic.woff2", style: "italic", weight: "200 900" },
+  ],
+  variable: "--font-source-serif",
+  display: "swap",
+});
+const sans = localFont({
+  src: [{ path: "../../node_modules/@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2", style: "normal", weight: "100 900" }],
+  variable: "--font-montserrat",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
@@ -15,7 +27,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: site.name,
     locale: "en_US",
-    images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Velez Freight Group logo over a highway at dusk" }],
+    images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Velez Freight Group logo and tagline beside a truck on a highway at dusk" }],
   },
   twitter: { card: "summary_large_image" },
   formatDetection: { telephone: false, email: false, address: false },

@@ -15,8 +15,8 @@ import { site } from "@/config/site";
 export type ActionState = { ok?: boolean; error?: string; message?: string } | undefined;
 
 const values = <T extends readonly { value: string }[]>(l: T) => l.map((x) => x.value) as [string, ...string[]];
-const text = (max: number) => z.string().trim().max(max).transform((v) => v || null);
-const optDate = z.string().trim().transform((v) => v || null).pipe(z.union([z.null(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]));
+const text = (max: number) => z.string().trim().max(max).optional().transform((v) => v || null);
+const optDate = z.string().trim().optional().transform((v) => v || null).pipe(z.union([z.null(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]));
 const email = z.string().trim().toLowerCase().transform((v) => v || null).pipe(z.union([z.null(), z.email()]));
 const digits = z.string().trim().transform((v) => v.replace(/\D/g, "") || null).pipe(z.union([z.null(), z.string().max(8)]));
 const uuid = z.uuid();
@@ -147,7 +147,7 @@ export async function createTask(_: ActionState, fd: FormData): Promise<ActionSt
     const v = z
       .object({
         title: z.string().trim().min(1, "Add a title.").max(200),
-        details: text(2000),
+        details: z.string().trim().max(2000).optional().transform((v) => v || null),
         due_date: optDate,
         priority: z.enum(["low", "normal", "high"]).default("normal"),
         entity_type: z.union([z.literal("").transform(() => null), z.enum(entityTypes)]).optional().transform((x) => x ?? null),

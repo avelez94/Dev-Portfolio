@@ -32,8 +32,7 @@ export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: s
   useEffect(() => {
     if (!open) return;
     document.body.style.overflow = "hidden";
-    const first = panelRef.current?.querySelector<HTMLElement>("a,button");
-    first?.focus();
+    panelRef.current?.querySelector<HTMLElement>("nav a")?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
@@ -57,6 +56,7 @@ export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: s
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
+    <>
     <header className={cn("sticky top-0 z-50 border-b bg-ivory/95 backdrop-blur supports-[backdrop-filter]:bg-ivory/85 transition-shadow", scrolled ? "border-line shadow-[0_6px_24px_-18px_rgb(20_40_57/0.6)]" : "border-transparent")}>
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded focus:bg-navy focus:px-4 focus:py-2 focus:text-white">
         Skip to content
@@ -106,8 +106,16 @@ export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: s
         </button>
       </div>
 
+    </header>
       {open && (
-        <div id="mobile-menu" ref={panelRef} role="dialog" aria-modal="true" aria-label="Site menu" className="fixed inset-x-0 bottom-0 top-[4.5rem] z-40 overflow-y-auto bg-navy text-white lg:hidden">
+        // Rendered outside <header>: its backdrop filter would otherwise trap this fixed panel.
+        <div id="mobile-menu" ref={panelRef} role="dialog" aria-modal="true" aria-label="Site menu" className="fixed inset-0 z-[60] overflow-y-auto bg-navy text-white lg:hidden">
+          <div className="container-site flex h-[4.5rem] items-center justify-between border-b border-white/10">
+            <Link href="/" aria-label="Velez Freight Group home" onClick={() => setOpen(false)}><Logo variant="reverse" className="w-[8.75rem]" title={null} /></Link>
+            <button type="button" className="inline-flex size-11 items-center justify-center rounded-md hover:bg-white/10" aria-label="Close menu" onClick={() => { setOpen(false); toggleRef.current?.focus(); }}>
+              <X className="size-6" />
+            </button>
+          </div>
           <nav aria-label="Mobile" className="container-site py-6">
             <ul className="divide-y divide-white/10">
               {nav.map((item) => (
@@ -129,6 +137,6 @@ export function SiteHeader({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: s
           </nav>
         </div>
       )}
-    </header>
+    </>
   );
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Building2, Inbox, ListChecks, Truck } from "lucide-react";
 import { requireStaff, isAdminRole } from "@/lib/auth";
-import { fmtDate, fmtDateTime, inquiryTypeLabels, prospectStatuses } from "@/config/admin";
+import { contactStatuses, fmtDate, fmtDateTime, inquiryTypeLabels, label, prospectStatuses, quoteStatuses } from "@/config/admin";
 import { EmptyState, PageTitle, Panel, StatusBadge } from "@/components/admin/admin-ui";
 import { linkFor } from "@/components/admin/panels";
 
@@ -64,7 +64,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                     <span className="font-mono text-xs text-slate-muted">{r.ref}</span>
                     <span className="font-semibold text-navy">{r.who}</span>
                     <span className="text-slate-muted">{r.kind}</span>
-                    <span className="ml-auto flex items-center gap-3"><StatusBadge value={r.status} label={r.status.replace("_", " ")} /><span className="text-xs text-slate-muted">{fmtDateTime(r.at)}</span></span>
+                    <span className="ml-auto flex items-center gap-3"><StatusBadge value={r.status} label={label([...contactStatuses, ...quoteStatuses], r.status)} /><span className="text-xs text-slate-muted">{fmtDateTime(r.at)}</span></span>
                   </Link>
                 </li>
               ))}
