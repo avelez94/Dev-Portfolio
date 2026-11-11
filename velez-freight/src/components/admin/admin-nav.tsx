@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import {
   Bell, BarChart3, Building2, ChevronsLeft, ChevronsRight, ClipboardList, FileSpreadsheet, FileText, Globe, Inbox, LayoutDashboard,
-  ListChecks, LogOut, Menu, Receipt, ScrollText, Search, Settings, Truck, Wallet, X, Package, Eye,
+  ListChecks, LogOut, Menu, Receipt, ScrollText, Search, Settings, Truck, Wallet, X, Package, Eye, Send, Mails, Target, Plug,
 } from "lucide-react";
 import { signOut } from "@/app/admin/actions";
 import { Logo, LogoMark } from "@/components/site/logo";
@@ -13,13 +13,18 @@ import { cn } from "@/lib/utils";
 import { openSearch } from "./global-search";
 
 export type NavCounts = { tasks: number; notifications: number; inquiries: number };
-type Item = { href: string; label: string; icon: typeof Bell; count?: keyof NavCounts; adminOnly?: boolean; activeOnly?: boolean; match?: string[] };
+type Item = { href: string; label: string; icon: typeof Bell; count?: keyof NavCounts; adminOnly?: boolean; activeOnly?: boolean; match?: string[]; exclude?: string[] };
 
 const groups: { label: string; items: Item[] }[] = [
   { label: "Overview", items: [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/tasks", label: "My Tasks", icon: ListChecks, count: "tasks" },
     { href: "/admin/notifications", label: "Notifications", icon: Bell, count: "notifications" },
+  ] },
+  { label: "Sales", items: [
+    { href: "/admin/outreach", label: "Outreach", icon: Send, exclude: ["/admin/outreach/templates"] },
+    { href: "/admin/outreach/templates", label: "Email Templates", icon: Mails },
+    { href: "/admin/opportunities", label: "Opportunities", icon: Target },
   ] },
   { label: "Relationships", items: [
     { href: "/admin/shippers", label: "Shippers", icon: Building2 },
@@ -41,7 +46,8 @@ const groups: { label: string; items: Item[] }[] = [
   { label: "System", items: [
     { href: "/admin/content", label: "Website Content", icon: Globe },
     { href: "/admin/preview", label: "Launch Preview", icon: Eye, adminOnly: true },
-    { href: "/admin/settings", label: "Settings", icon: Settings },
+    { href: "/admin/settings", label: "Business Settings", icon: Settings },
+    { href: "/admin/integrations", label: "Integrations", icon: Plug },
     { href: "/admin/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
   ] },
 ];
@@ -69,7 +75,7 @@ export function AdminNav({ name, role, operational, counts }: { name: string; ro
   if (lastPath !== pathname) { setLastPath(pathname); setMobileOpen(false); }
 
   const isActive = (it: Item) =>
-    it.href === "/admin" ? pathname === "/admin" : pathname.startsWith(it.href) || (it.match ?? []).some((m) => pathname.startsWith(m));
+    it.href === "/admin" ? pathname === "/admin" : (pathname.startsWith(it.href) && !(it.exclude ?? []).some((x) => pathname.startsWith(x))) || (it.match ?? []).some((m) => pathname.startsWith(m));
   const isAdmin = role !== "staff";
 
   const navList = (compact: boolean) => (

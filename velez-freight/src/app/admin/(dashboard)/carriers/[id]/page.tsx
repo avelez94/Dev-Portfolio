@@ -13,6 +13,7 @@ import { NotesPanel, TasksPanel } from "@/components/admin/panels";
 import { ActivityForm, Timeline, type TimelineEvent } from "@/components/admin/crm-panels";
 import { ActionForm } from "@/components/admin/action-form";
 import { recordVerification } from "@/app/admin/crm-actions";
+import { EmailHistoryPanel } from "@/components/admin/email-history-panel";
 import { DocumentsPanel } from "@/components/admin/documents-panel";
 
 export const metadata = { title: "Carrier" };
@@ -120,6 +121,7 @@ export default async function CarrierPage({ params }: { params: Promise<{ id: st
           </Panel>
           <TasksPanel s={s} entityType="carrier_lead" entityId={id} />
           <NotesPanel s={s} entityType="carrier_lead" entityId={id} />
+          <EmailHistoryPanel s={s} kind="carrier" id={id} recipients={c.email ? [{ key: `carrier:${id}`, label: c.contact_name || c.email }] : []} />
           <DocumentsPanel entityType="carrier_lead" entityId={id} docs={docs.data ?? []} docTypes={["insurance_certificate", "carrier_agreement", "w9", "other"]} showExpiry admin={isAdminRole(s.role)} idPrefix="d" note="Files are private. W9 forms open for owners and admins only, and each download is recorded in the audit log." />
           {(shipments.data?.length ?? 0) > 0 && (
             <Panel title="Assigned shipments">

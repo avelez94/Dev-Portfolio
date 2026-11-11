@@ -171,6 +171,45 @@ test("website text versions are append only and editable by admins only", async 
   await assert.rejects(db.query(`update public.site_content_versions set value = 'tampered'`), /append only/);
 });
 
+/** Expects a statement to fail inside an open transaction without aborting the rest of it. */
+async function rejectsIn(q, params, re) {
+  await db.query("savepoint expect_fail");
+  await assert.rejects(db.query(q, params), re);
+  await db.query("rollback to savepoint expect_fail");
+}
+
+test("outreach: nobody signed in can mark a message sent; sent needs provider proof; only admins approve", async () => {
+  await as("authenticated", STAFF, async () => {
+    const { rows: [m] } = await db.query(`insert into public.outreach_messages (to_email, subject, body, status) values ('a@example.test', 'Hi', 'Body', 'draft') returning id`);
+    await rejectsIn(`update public.outreach_messages set status = 'sent', provider_message_id = 'x', sent_at = now() where id = $1`, [m.id], /server only|row-level security|violates/);
+    await rejectsIn(`update public.outreach_messages set status = 'approved', approved_by = $2, approved_at = now() where id = $1`, [m.id, STAFF], /only owners and admins/);
+    await rejectsIn(`update public.outreach_messages set delivery_status = 'delivered' where id = $1`, [m.id], /server only/);
+  });
+  await as("authenticated", OWNER, async () => {
+    const { rows: [m] } = await db.query(`insert into public.outreach_messages (to_email, subject, body, status) values ('b@example.test', 'Hi', 'Body', 'pending_approval') returning id`);
+    const r = await db.query(`update public.outreach_messages set status = 'approved', approved_by = $2, approved_at = now() where id = $1`, [m.id, OWNER]);
+    assert.equal(r.rowCount, 1);
+    await rejectsIn(`update public.outreach_messages set status = 'sending' where id = $1`, [m.id], /server only|row-level security|violates/);
+  });
+  // Even the server cannot record "sent" without the provider's message id.
+  const { rows: [m] } = await db.query(`insert into public.outreach_messages (to_email, subject, body, status, approved_by, approved_at) values ('c@example.test', 'Hi', 'Body', 'approved', $1, now()) returning id`, [OWNER]);
+  await assert.rejects(db.query(`update public.outreach_messages set status = 'sent', sent_at = now() where id = $1`, [m.id]), /outreach_sent_has_proof/);
+  await db.query(`update public.outreach_messages set status = 'sent', sent_at = now(), provider_message_id = 'prov-1' where id = $1`, [m.id]);
+  await assert.rejects(db.query(`insert into public.email_events (event_type) values ('x') returning id`).then(() => db.query(`update public.email_events set event_type = 'y'`)), /append only/);
+});
+
+test("outreach: template edits keep versions; suppressions are admin managed", async () => {
+  const { rows: [t] } = await db.query(`select id, version from public.email_templates where name = 'Introduction to a shipper'`);
+  assert.equal(t.version, 1);
+  await db.query(`update public.email_templates set body = body || ' Edited.', version = 2 where id = $1`, [t.id]);
+  const { rows: versions } = await db.query(`select version from public.email_template_versions where template_id = $1 order by version`, [t.id]);
+  assert.deepEqual(versions.map((v) => v.version), [1, 2]);
+  const { rows: gated } = await db.query(`select name from public.email_templates where requires_operational order by name`);
+  assert.deepEqual(gated.map((g) => g.name), ["Launch announcement", "Quote follow up", "Shipment update"]);
+  await as("authenticated", STAFF, () => denied(db.query(`insert into public.email_suppressions (email, reason) values ('x@example.test', 'manual')`)));
+  await assert.rejects(db.query(`insert into public.email_suppressions (email, reason) values ('Upper@Example.test', 'manual')`), /check/);
+});
+
 test("staff cannot change their own role or activate profiles", async () => {
   await as("authenticated", STAFF, () => denied(db.query(`update public.profiles set role = 'owner' where id = $1`, [STAFF])));
 });

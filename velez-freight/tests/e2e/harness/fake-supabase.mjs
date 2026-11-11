@@ -332,6 +332,28 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+// ---------------------------------------------------------------------------
+// Email provider stand in (Resend API shape). Records messages in memory; sends nothing.
+// ---------------------------------------------------------------------------
+const resendSent = [];
+const resendByKey = new Map();
+function handleResend(req, res, url, body) {
+  if (url.pathname === "/__resend/sent") return send(res, 200, resendSent);
+  if (url.pathname === "/__resend/reset" && req.method === "POST") { resendSent.length = 0; resendByKey.clear(); return send(res, 200, { ok: true }); }
+  if (!/^Bearer re_/.test(req.headers.authorization ?? "")) return send(res, 401, { message: "Missing API key" });
+  if (url.pathname === "/resend/domains") return send(res, 200, { data: [{ name: "marys-logistics.test", status: "verified" }, { name: "pending.test", status: "pending" }] });
+  if (url.pathname === "/resend/emails" && req.method === "POST") {
+    const key = req.headers["idempotency-key"];
+    if (key && resendByKey.has(key)) return send(res, 200, { id: resendByKey.get(key) });
+    if (String(body.to?.[0] ?? "").includes("fail@")) return send(res, 422, { message: "The recipient was rejected" });
+    const id = `re_msg_${resendSent.length + 1}_${Date.now()}`;
+    resendSent.push({ id, ...body, headers: body.headers, idempotencyKey: key });
+    if (key) resendByKey.set(key, id);
+    return send(res, 200, { id });
+  }
+  return send(res, 404, { message: "not found" });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const chunks = [];
@@ -344,6 +366,7 @@ const server = http.createServer(async (req, res) => {
       for (const { email, password } of body.users ?? []) passwords.set(email, password);
       return send(res, 200, { ok: true });
     }
+    if (url.pathname.startsWith("/resend/") || url.pathname.startsWith("/__resend")) return handleResend(req, res, url, body);
     if (url.pathname.startsWith("/auth/v1")) return await handleAuth(req, res, url, body);
     if (url.pathname.startsWith("/rest/v1")) return await handleRest(req, res, url, body);
     send(res, 404, { message: "not found" });

@@ -10,6 +10,7 @@ import { Panel, StatusBadge } from "@/components/admin/admin-ui";
 import { ProspectForm } from "@/components/admin/record-forms";
 import { NotesPanel, TasksPanel } from "@/components/admin/panels";
 import { ActivityForm, ContactsPanel, FollowUpForm, StageForm, StageStepper, Timeline, type TimelineEvent } from "@/components/admin/crm-panels";
+import { EmailHistoryPanel } from "@/components/admin/email-history-panel";
 import { deleteRecord } from "@/app/admin/actions";
 
 export const metadata = { title: "Shipper" };
@@ -87,6 +88,10 @@ export default async function ShipperPage({ params }: { params: Promise<{ id: st
           <TasksPanel s={s} entityType="shipper_prospect" entityId={id} />
           <NotesPanel s={s} entityType="shipper_prospect" entityId={id} />
           <ContactsPanel shipperId={id} contacts={contacts.data ?? []} canDelete={admin} />
+          <EmailHistoryPanel s={s} kind="shipper" id={id} recipients={[
+            ...(p.email ? [{ key: `shipper:${id}`, label: p.contact_name || p.email }] : []),
+            ...(contacts.data ?? []).filter((c: { email: string | null }) => c.email).map((c: { id: string; name: string }) => ({ key: `contact:${c.id}`, label: c.name })),
+          ]} />
           <Panel title="Customer performance">
             <dl className="grid grid-cols-2 gap-4 text-sm">
               <div><dt className="text-xs text-slate-muted">Shipments</dt><dd className="font-serif text-xl font-bold text-navy">{String(m.shipments ?? 0)}</dd></div>

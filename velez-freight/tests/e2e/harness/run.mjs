@@ -25,6 +25,11 @@ const env = {
   SUPABASE_SERVICE_ROLE_KEY: signJwt({ role: "service_role", iss: "e2e" }),
   NEXT_PUBLIC_SITE_URL: "http://localhost:3101",
   FORM_TOKEN_SECRET: "e2e-form-secret",
+  // Local stand in for the email provider (fake-supabase.mjs serves /resend). No real email is sent.
+  RESEND_API_KEY: "re_e2e_local_only",
+  RESEND_API_BASE: `http://127.0.0.1:${FAKE_PORT}/resend`,
+  RESEND_WEBHOOK_SECRET: `whsec_${Buffer.from("e2e webhook secret").toString("base64")}`,
+  UNSUBSCRIBE_SECRET: "e2e-unsubscribe-secret",
   FORM_MIN_FILL_MS: "300",
   RATE_LIMIT_SALT: "e2e-salt",
   NEXT_TELEMETRY_DISABLED: "1",
@@ -81,7 +86,7 @@ async function main() {
   // Phases run one after another with one build at a time. Keeping two production builds of the
   // same project side by side caused runtime regenerated pages to reference missing chunks.
   const phases = [
-    { name: "prelaunch", broker: "false", ops: false, port: 3101, specs: ["public.spec.ts", "admin.spec.ts", "a11y.spec.ts", "launch-preview.spec.ts", "settings-center.spec.ts"] },
+    { name: "prelaunch", broker: "false", ops: false, port: 3101, specs: ["public.spec.ts", "admin.spec.ts", "a11y.spec.ts", "launch-preview.spec.ts", "settings-center.spec.ts", "outreach.spec.ts"] },
     { name: "operational", broker: "true", ops: true, port: 3102, specs: ["operational.spec.ts", "brokerage.spec.ts"], synthetic: true },
   ];
   const extraArgs = process.argv.slice(2);
