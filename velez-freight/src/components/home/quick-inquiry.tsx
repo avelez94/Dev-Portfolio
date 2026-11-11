@@ -8,7 +8,7 @@ import { z } from "zod";
 import { ArrowRight } from "lucide-react";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { shipmentTypes } from "@/config/site";
+import { copy, shipmentTypes } from "@/config/site";
 import { contactSchema, emailField, shipmentTypeField } from "@/lib/validation";
 import { submitContact } from "@/app/actions/public";
 import { Field, FormAlert, Honeypot, SubmitLabel } from "@/components/forms/fields";
@@ -16,7 +16,7 @@ import { useEnvelope } from "@/components/forms/use-envelope";
 
 function Heading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
-    <div className="lg:w-60 lg:shrink-0 lg:border-r lg:border-navy/20 lg:pr-8">
+    <div className="lg:w-64 lg:shrink-0 lg:border-r lg:border-navy/20 lg:pr-8">
       <p className="eyebrow !text-[0.66rem] !text-navy">{eyebrow}</p>
       <h2 className="mt-2 text-[1.85rem] font-bold leading-[1.08] text-navy">{title}</h2>
       <svg aria-hidden="true" viewBox="0 0 120 10" className="mt-2 w-28"><path d="M2 7 C 40 1, 80 1, 118 4" stroke="#E1252F" strokeWidth="3.5" fill="none" strokeLinecap="round" /></svg>
@@ -47,8 +47,10 @@ function OperationalQuick() {
   });
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8" aria-label="Quick freight inquiry">
-      <Heading eyebrow="Get a quick quote" title="Tell Us About Your Shipment" />
-      <div className="grid flex-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-6">
+      <Heading eyebrow="Get a quick quote" title={copy.quick.title} />
+      <div className="flex-1 space-y-4">
+      <p className="text-sm text-charcoal">{copy.quick.body}</p>
+      <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-6">
         <Field id="qq-pickup" label="Pickup location" required error={errors.pickup?.message} className="lg:col-span-3">
           <Input placeholder="City, State or ZIP" autoComplete="off" {...register("pickup")} />
         </Field>
@@ -67,6 +69,7 @@ function OperationalQuick() {
         <Field id="qq-date" label="Desired pickup date" showOptional={false} className="lg:col-span-2">
           <Input type="date" {...register("date")} />
         </Field>
+      </div>
       </div>
       <Button type="submit" size="lg" className="lg:self-center">
         Request a Quote <ArrowRight aria-hidden="true" />
@@ -109,10 +112,10 @@ function PrelaunchQuick() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8" aria-label="Launch notification sign up">
-      <Heading eyebrow="Opening soon" title="Plan Your Shipments With Us" />
+      <Heading eyebrow="Opening soon" title="Stay Informed as We Launch" />
       <div className="flex-1 space-y-4">
         <p className="text-sm text-charcoal">
-          We are completing our broker registration and are <strong>not yet arranging transportation or providing quotes.</strong> Leave your details and we will let you know personally when we begin operating.
+          <strong className="text-navy">{copy.prelaunch.title}</strong> {copy.prelaunch.body} We are <strong>not yet arranging transportation or providing quotes.</strong> Leave your details and we will let you know personally when we begin operating.
         </p>
         <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field id="ln-name" label="Name" required error={errors.name?.message}>

@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { LogoMark } from "@/components/site/logo";
-import { faqs, pillars, processSteps, services } from "@/config/site";
+import { copy, faqs, pillars, processSteps, services } from "@/config/site";
 import { images } from "@/config/images";
 import type { PublicSettings } from "@/lib/data/settings";
 import { PillarIcon, RouteLine, ServiceIcon } from "./icons";
@@ -45,7 +45,7 @@ export function Hero({ operational }: { operational: boolean }) {
             </span>
           </h1>
           <p className="mt-8 max-w-xl animate-rise text-lg leading-relaxed text-white/90 [animation-delay:120ms]">
-            Personalized freight coordination, responsive communication, and transportation solutions built around your business.
+            {copy.hero.body}
           </p>
           <div className="mt-9 flex animate-rise flex-col gap-3 [animation-delay:220ms] sm:flex-row sm:gap-4">
             {operational ? (
@@ -53,8 +53,8 @@ export function Hero({ operational }: { operational: boolean }) {
                 Request a Freight Quote <ArrowRight aria-hidden="true" />
               </Link>
             ) : (
-              <Link href="#quick-inquiry" className={buttonVariants({ size: "lg" })}>
-                Get Launch Updates <ArrowRight aria-hidden="true" />
+              <Link href="/contact" className={buttonVariants({ size: "lg" })}>
+                Contact Us <ArrowRight aria-hidden="true" />
               </Link>
             )}
             <Link href="/services" className={buttonVariants({ variant: "outlineLight", size: "lg" })}>
@@ -80,11 +80,12 @@ export function ServicesSection({ settings }: { settings: PublicSettings }) {
           <p className="eyebrow">Our Services</p>
           <div className="mt-3 flex items-center justify-center gap-5">
             <span aria-hidden="true" className="hidden h-0.5 w-12 bg-brand-red sm:block" />
-            <h2 id="services-title" className="text-3xl font-bold sm:text-[2.4rem]">Transportation Solutions for Your Business</h2>
+            <h2 id="services-title" className="text-3xl font-bold sm:text-[2.4rem]">{copy.servicesIntro.title}</h2>
             <span aria-hidden="true" className="hidden h-0.5 w-12 bg-brand-red sm:block" />
           </div>
+          <p className="mx-auto mt-4 max-w-2xl leading-relaxed text-charcoal">{copy.servicesIntro.body}</p>
           {!settings.operational && (
-            <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-muted">These are the services we are preparing to offer. They will become available once our broker registration is complete.</p>
+            <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-muted">These services will become available once our broker registration is complete.</p>
           )}
         </div>
         <ul className="mt-12 grid gap-6 md:grid-cols-3">
@@ -106,6 +107,11 @@ export function ServicesSection({ settings }: { settings: PublicSettings }) {
             </li>
           ))}
         </ul>
+        <div className="mt-10 text-center">
+          <Link href="/services" className={buttonVariants({ variant: "outline" })}>
+            Explore Our Services <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -156,11 +162,12 @@ export function ProcessSection() {
 export function WhySection() {
   return (
     <section aria-labelledby="why-title" className="py-20 sm:py-24">
-      <div className="container-site grid gap-12 lg:grid-cols-[18rem_1fr] lg:items-center">
+      <div className="container-site grid gap-12 lg:grid-cols-[20rem_1fr] lg:items-center">
         <div data-reveal>
           <p className="eyebrow flex items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" /> Why Choose</p>
           <h2 id="why-title" className="mt-3 text-4xl font-bold leading-[1.05] sm:text-[2.7rem]">Velez Freight Group</h2>
-          <p className="mt-4 text-[0.95rem] leading-relaxed text-slate-muted">The way we intend to work with every customer and carrier, from the first conversation.</p>
+          <p className="mt-4 font-serif text-lg font-semibold leading-snug text-navy-700">{copy.why.title}</p>
+          <p className="mt-3 text-[0.95rem] leading-relaxed text-charcoal">{copy.why.body}</p>
         </div>
         <ul className="grid gap-10 sm:grid-cols-3 sm:gap-0">
           {pillars.map((p, i) => (
@@ -194,12 +201,12 @@ export function StoryTeaser() {
         <div data-reveal className="relative max-w-xl">
           <p className="eyebrow">Our Story</p>
           <h2 id="story-title" className="mt-3 text-3xl font-bold sm:text-[2.4rem]">A Family Legacy in Freight</h2>
-          <p className="mt-5 leading-relaxed text-charcoal">
-            Velez Freight Group is inspired by Elanisoa Devon Velez and a family tradition of entrepreneurship. He has always honored his mother, Mary, through the businesses he built. This company carries that legacy forward with the same work ethic, integrity, and belief in lasting relationships.
-          </p>
-          <p className="mt-5 font-serif text-xl italic text-brand-red-dark">Built on family. Driven to move forward.</p>
+          {copy.storyTeaser.map((p) => (
+            <p key={p} className="mt-4 leading-relaxed text-charcoal">{p}</p>
+          ))}
+          <p className="mt-5 font-serif text-xl italic text-brand-red-dark">{copy.tagline}</p>
           <Link href="/our-story" className={cn(buttonVariants({ variant: "outline" }), "mt-7")}>
-            Read Our Story <ArrowRight aria-hidden="true" />
+            Discover Our Story <ArrowRight aria-hidden="true" />
           </Link>
         </div>
       </div>
@@ -229,11 +236,12 @@ export function CarrierAndFaq({ operational }: { operational: boolean }) {
           <div data-reveal>
             <p className="eyebrow eyebrow-light">Carrier Partnerships</p>
             <h2 className="mt-3 text-3xl font-bold leading-tight text-white sm:text-[2.1rem]">Haul With Velez Freight Group</h2>
-            <p className="mt-4 text-[0.95rem] leading-relaxed text-white/88">
-              We are building relationships with authorized motor carriers who value clear communication and professionalism. Carriers can tell us about their equipment and lanes now, so we can connect once Velez Freight Group begins operating.
-            </p>
-            <Link href="/carriers" className={cn(buttonVariants(), "mt-7")}>
-              Become a Carrier Partner <ArrowRight aria-hidden="true" />
+            {copy.carrierTeaser.map((p) => (
+              <p key={p} className="mt-4 text-[0.95rem] leading-relaxed text-white/88">{p}</p>
+            ))}
+            <p className="mt-4 font-semibold text-white">{copy.carrierTeaserAsk}</p>
+            <Link href="/carriers#carrier-inquiry" className={cn(buttonVariants(), "mt-6")}>
+              Carrier Partnership Inquiry <ArrowRight aria-hidden="true" />
             </Link>
           </div>
         </div>
@@ -275,20 +283,24 @@ export function FinalCta({ operational }: { operational: boolean }) {
             <span aria-hidden="true" className="h-px w-10 bg-white/60" />
           </p>
           <h2 id="cta-title" className="mt-4 text-4xl font-bold text-white sm:text-5xl">
-            {operational ? "Let’s Get Your Shipment Moving." : "Let’s Start the Conversation."}
+            {operational ? copy.finalCta.title : copy.prelaunch.title}
           </h2>
-          {!operational && (
-            <p className="mx-auto mt-4 max-w-2xl text-white/90">
-              We are not arranging shipments yet. If you would like to talk about your future freight needs or our launch, we would be glad to hear from you.
-            </p>
-          )}
+          <p className="mx-auto mt-4 max-w-2xl text-white/90">
+            {operational ? copy.finalCta.body : `${copy.prelaunch.body} ${copy.prelaunch.invite}`}
+          </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:gap-4">
-            <Link href="/request-quote" className={buttonVariants({ size: "lg" })}>
-              {operational ? "Request a Freight Quote" : "Send a Business Inquiry"} <ArrowRight aria-hidden="true" />
-            </Link>
-            <Link href="/contact" className={buttonVariants({ variant: "outlineLight", size: "lg" })}>
-              Contact Us
-            </Link>
+            {operational ? (
+              <>
+                <Link href="/request-quote" className={buttonVariants({ size: "lg" })}>
+                  Request a Freight Quote <ArrowRight aria-hidden="true" />
+                </Link>
+                <Link href="/contact" className={buttonVariants({ variant: "outlineLight", size: "lg" })}>Contact Us</Link>
+              </>
+            ) : (
+              <Link href="/contact" className={buttonVariants({ size: "lg" })}>
+                Contact Us <ArrowRight aria-hidden="true" />
+              </Link>
+            )}
           </div>
         </div>
       </div>

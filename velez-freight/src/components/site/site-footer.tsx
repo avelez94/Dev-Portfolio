@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
-import { nav, site } from "@/config/site";
+import { copy, footerNav, site } from "@/config/site";
 import type { PublicSettings } from "@/lib/data/settings";
 import { Logo } from "./logo";
 
@@ -14,12 +14,14 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
           <Link href="/" aria-label="Velez Freight Group home" className="inline-block">
             <Logo variant="reverse" className="w-40" title={null} />
           </Link>
-          <p className="mt-4 text-sm text-white/75">{settings.serviceArea}</p>
+          <p className="mt-4 font-serif text-[0.95rem] italic text-white/90">{copy.tagline}</p>
+          <p className="mt-1 text-sm text-white/75">{settings.serviceArea}</p>
+          {!settings.operational && <p className="mt-3 inline-block rounded-full border border-white/25 px-3 py-1 text-xs text-white/80">Prelaunch: not yet arranging transportation</p>}
         </div>
 
         <nav aria-label="Footer" className="md:px-10">
           <ul className="flex flex-wrap gap-x-7 gap-y-3 text-sm font-medium md:justify-center">
-            {nav.map((item) => (
+            {footerNav.map((item) => (
               <li key={item.href}>
                 <Link href={item.href} className="text-white/85 transition-colors hover:text-white hover:underline hover:decoration-brand-red hover:underline-offset-4">
                   {item.label}

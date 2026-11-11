@@ -136,6 +136,7 @@ create table public.quote_inquiries (
   pickup_date date not null,
   delivery_deadline date,
   stops jsonb not null default '[]'::jsonb check (jsonb_typeof(stops) = 'array' and jsonb_array_length(stops) <= 10),
+  freight_description text not null check (length(freight_description) between 5 and 1000),
   commodity text not null check (length(commodity) between 2 and 200),
   weight_lbs integer not null check (weight_lbs between 1 and 200000),
   dimensions text check (length(dimensions) <= 200),

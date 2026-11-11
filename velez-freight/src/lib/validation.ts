@@ -98,6 +98,7 @@ export const quoteRouteSchema = z
   });
 
 export const quoteFreightSchema = z.object({
+  description: required("Freight description", 1000).min(5, "Briefly describe the freight."),
   commodity: required("Commodity", 200).min(2, "Describe the commodity."),
   weightLbs: z.coerce.number({ error: "Enter the weight in pounds." }).int("Use whole pounds.").min(1, "Enter the weight in pounds.").max(200000, "That weight is above what we can review online."),
   dimensions: optional(200),

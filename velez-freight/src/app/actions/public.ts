@@ -29,8 +29,6 @@ export async function submitContact(input: unknown, envelope: unknown, sourcePag
   if (!env.success) return { ok: false, code: "spam", error: "Please refresh the page and try again." };
   const parsed = contactSchema.safeParse(input);
   if (!parsed.success) return validationFailure(parsed.error.issues);
-  // Carrier inquiries must use the dedicated carrier form so they are linked to a carrier lead.
-  if (parsed.data.inquiryType === "carrier") return { ok: false, code: "validation", error: "Please use the carrier partnership form on the Carriers page." };
 
   const guard = await guardSubmission(env.data, parsed.data.inquiryType === "launch_notification" ? "launch" : "contact");
   if ("result" in guard) return guard.result;
@@ -193,6 +191,7 @@ export async function submitQuote(input: unknown, envelope: unknown): Promise<Ac
       pickup_date: route.pickupDate,
       delivery_deadline: route.deliveryDeadline ?? null,
       stops: route.stops.filter((s) => s.location).map((s) => s.location),
+      freight_description: freight.description,
       commodity: freight.commodity,
       weight_lbs: freight.weightLbs,
       dimensions: freight.dimensions ?? null,
@@ -223,7 +222,7 @@ export async function submitQuote(input: unknown, envelope: unknown): Promise<Ac
       const result = await notifyAdmin({
         subject: `New freight inquiry ${data.reference} (pending review)`,
         heading: "Freight inquiry pending manual review",
-        rows: [["Reference", data.reference], ["Company", contact.companyName], ["Contact", contact.contactName], ["Email", contact.email], ["Phone", contact.phone], ["Pickup", `${route.pickupAddress} on ${route.pickupDate}`], ["Delivery", route.deliveryAddress], ["Deadline", route.deliveryDeadline], ["Commodity", freight.commodity], ["Weight (lbs)", String(freight.weightLbs)], ["Equipment", labelFor(freight.equipment)]],
+        rows: [["Reference", data.reference], ["Company", contact.companyName], ["Contact", contact.contactName], ["Email", contact.email], ["Phone", contact.phone], ["Pickup", `${route.pickupAddress} on ${route.pickupDate}`], ["Delivery", route.deliveryAddress], ["Deadline", route.deliveryDeadline], ["Description", freight.description], ["Commodity", freight.commodity], ["Weight (lbs)", String(freight.weightLbs)], ["Equipment", labelFor(freight.equipment)]],
         adminPath: `/admin/inquiries/quote/${data.id}`,
       });
       if (result === "failed") await audit({ actorType: "system", action: "notification.failed", entityType: "quote_inquiry", entityId: data.id });
@@ -233,6 +232,6 @@ export async function submitQuote(input: unknown, envelope: unknown): Promise<Ac
   return {
     ok: true,
     reference: data.reference,
-    message: "Your freight inquiry was received and is pending review by our team. This is not a booking or a price confirmation. We will contact you to discuss your shipment.",
+    message: "Thank you for contacting Velez Freight Group. Your request has been received and will be reviewed. Submitting an inquiry does not confirm transportation availability, pricing, or booking.",
   };
 }
