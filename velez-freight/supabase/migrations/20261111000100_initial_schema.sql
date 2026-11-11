@@ -12,9 +12,6 @@
 
 begin;
 
--- Supabase installs pgcrypto in the extensions schema already; this is a no-op there.
-create schema if not exists extensions;
-create extension if not exists pgcrypto with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -26,10 +23,10 @@ begin
   return new;
 end $$;
 
--- Short human readable reference, e.g. VFG-Q-7K3M9P
+-- Short human readable reference, e.g. VFG-Q-7K3M9P2A (core gen_random_uuid, no extension needed)
 create or replace function public.make_reference(prefix text) returns text
 language sql volatile set search_path = '' as $$
-  select 'VFG-' || prefix || '-' || upper(substr(translate(encode(extensions.gen_random_bytes(8), 'base64'), '+/=0O1Il', ''), 1, 6));
+  select 'VFG-' || prefix || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
 $$;
 
 -- ---------------------------------------------------------------------------

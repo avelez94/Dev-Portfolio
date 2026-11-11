@@ -8,9 +8,10 @@
     "start": "next start --port 3100",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test --experimental-strip-types 'tests/unit/*.test.ts'",
-    "test:db": "node --test tests/db/*.test.mjs",
-    "test:e2e": "playwright test --trace off"
+    "test:unit": "node --conditions=react-server --experimental-strip-types --no-warnings --import ./tests/unit/alias-loader.mjs --test 'tests/unit/*.test.ts'",
+    "test:db": "node --test tests/db/schema.test.mjs",
+    "test:e2e": "playwright test --trace off",
+    "test": "npm run test:unit && npm run test:db"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.5",
