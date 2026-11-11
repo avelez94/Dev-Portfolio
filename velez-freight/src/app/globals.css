@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/* Velez Freight Group design tokens. Brand colors are fixed by the approved palette. */
+@theme {
+  --color-brand-red: #E1252F;
+  --color-brand-red-dark: #B81B24;   /* hover and small text on light backgrounds (AA) */
+  --color-navy: #142839;
+  --color-navy-800: #1B3448;
+  --color-navy-700: #24425A;
+  --color-ivory: #F7F5F0;
+  --color-ivory-200: #EFEBE2;
+  --color-champagne: #C5A46D;
+  --color-charcoal: #22272B;
+  --color-slate-muted: #5A6470;
+  --color-line: #E3DED3;
+
+  --font-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 0.875rem;
+  --shadow-float: 0 24px 60px -24px rgb(20 40 57 / 0.35), 0 8px 20px -12px rgb(20 40 57 / 0.2);
+  --shadow-card: 0 1px 2px rgb(20 40 57 / 0.06), 0 10px 30px -18px rgb(20 40 57 / 0.25);
+
+  --animate-rise: rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-fade: fade 1s ease-out both;
+  @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+}
+
+/* shadcn/ui semantic tokens mapped onto the brand palette */
+:root {
+  --background: #FFFFFF;
+  --foreground: #22272B;
+  --primary: #E1252F;
+  --primary-foreground: #FFFFFF;
+  --secondary: #142839;
+  --secondary-foreground: #FFFFFF;
+  --muted: #F7F5F0;
+  --muted-foreground: #5A6470;
+  --border: #E3DED3;
+  --input: #D8D2C5;
+  --ring: #E1252F;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body { background: var(--color-ivory); color: var(--color-charcoal); font-family: var(--font-sans); font-feature-settings: "kern"; text-rendering: optimizeLegibility; }
+  h1, h2, h3, h4 { font-family: var(--font-serif); color: var(--color-navy); letter-spacing: -0.01em; }
+  ::selection { background: var(--color-brand-red); color: #fff; }
+  :focus-visible { outline: 3px solid var(--color-brand-red); outline-offset: 2px; border-radius: 4px; }
+  [id] { scroll-margin-top: 6rem; }
+}
+
+@layer components {
+  .eyebrow { font-family: var(--font-sans); font-weight: 700; font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; color: var(--color-brand-red-dark); }
+  .eyebrow-light { color: var(--color-ivory); }
+  .container-site { width: 100%; max-width: 80rem; margin-inline: auto; padding-inline: 1rem; }
+  @media (min-width: 640px) { .container-site { padding-inline: 1.5rem; } }
+  @media (min-width: 1024px) { .container-site { padding-inline: 2rem; } }
+  .prose-site p { margin-block: 0 1rem; line-height: 1.75; }
+  .prose-site h2 { font-size: 1.6rem; font-weight: 700; margin: 2.25rem 0 0.75rem; }
+  .prose-site h3 { font-size: 1.2rem; font-weight: 700; margin: 1.5rem 0 0.5rem; }
+  .prose-site ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 1rem; }
+  .prose-site li { margin-bottom: 0.4rem; line-height: 1.7; }
+  .prose-site a { color: var(--color-brand-red-dark); text-decoration: underline; text-underline-offset: 3px; }
+}
+
+/* Scroll reveal: content is visible by default; JS adds .reveal-ready only when motion is allowed. */
+.reveal-ready [data-reveal] { opacity: 0; transform: translateY(16px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.reveal-ready [data-reveal].is-visible { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+@keyframes acc-down { from { height: 0; } to { height: var(--radix-accordion-content-height); } }
+@keyframes acc-up { from { height: var(--radix-accordion-content-height); } to { height: 0; } }
