@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { contactStatuses, fmtDate, fmtDateTime, inquiryTypeLabels, label } from "@/config/admin";
 import { shipmentTypes } from "@/config/site";
-import { PageTitle, Panel, StatusBadge } from "@/components/admin/admin-ui";
+import { Panel, StatusBadge } from "@/components/admin/admin-ui";
+import { PageHeader } from "@/components/admin/page-header";
 import { DetailList, InquiryStatusForm } from "@/components/admin/inquiry-status-form";
 import { NotesPanel, TasksPanel } from "@/components/admin/panels";
 import { ActionForm } from "@/components/admin/action-form";
@@ -21,8 +21,7 @@ export default async function ContactInquiryPage({ params }: { params: Promise<{
   const { data: prospect } = await s.db.from("shipper_prospects").select("id").eq("source_inquiry_id", id).maybeSingle();
   return (
     <>
-      <Link href="/admin/inquiries" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-red-dark"><ArrowLeft aria-hidden="true" className="size-4" /> All inquiries</Link>
-      <PageTitle title={r.company || r.name} description={`${inquiryTypeLabels[r.inquiry_type]} inquiry ${r.reference} received ${fmtDateTime(r.created_at)}`} actions={<StatusBadge value={r.status} label={label(contactStatuses, r.status)} />} />
+      <PageHeader crumbs={[{ label: "Freight Inquiries", href: "/admin/inquiries" }, { label: r.company || r.name }]} title={r.company || r.name} description={`${inquiryTypeLabels[r.inquiry_type]} inquiry ${r.reference} received ${fmtDateTime(r.created_at)}`} actions={<StatusBadge value={r.status} label={label(contactStatuses, r.status)} />} />
       <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
         <div className="space-y-6">
           <Panel title="Submission">

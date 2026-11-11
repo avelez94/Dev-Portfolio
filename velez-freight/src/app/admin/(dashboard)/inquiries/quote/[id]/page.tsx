@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { fmtDate, fmtDateTime, label, quoteStatuses } from "@/config/admin";
 import { shipmentTypes } from "@/config/site";
-import { PageTitle, Panel, StatusBadge } from "@/components/admin/admin-ui";
+import { Panel, StatusBadge } from "@/components/admin/admin-ui";
+import { PageHeader } from "@/components/admin/page-header";
 import { DetailList, InquiryStatusForm } from "@/components/admin/inquiry-status-form";
 import { NotesPanel, TasksPanel } from "@/components/admin/panels";
 
@@ -19,8 +18,7 @@ export default async function QuoteInquiryPage({ params }: { params: Promise<{ i
   const stops = Array.isArray(r.stops) ? (r.stops as string[]) : [];
   return (
     <>
-      <Link href="/admin/inquiries?type=quote" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-red-dark"><ArrowLeft aria-hidden="true" className="size-4" /> Freight inquiries</Link>
-      <PageTitle title={r.company_name} description={`Freight inquiry ${r.reference} received ${fmtDateTime(r.created_at)}`} actions={<StatusBadge value={r.status} label={label(quoteStatuses, r.status)} />} />
+      <PageHeader crumbs={[{ label: "Freight Inquiries", href: "/admin/inquiries" }, { label: r.company_name }]} title={r.company_name} description={`Freight inquiry ${r.reference} received ${fmtDateTime(r.created_at)}`} actions={<StatusBadge value={r.status} label={label(quoteStatuses, r.status)} />} />
       <p className="mb-6 rounded-md border border-line bg-white p-3 text-sm">Pricing is prepared manually. This system does not generate quotes, book loads, or contact carriers automatically.</p>
       <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
         <div className="space-y-6">

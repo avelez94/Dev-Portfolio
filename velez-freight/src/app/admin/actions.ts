@@ -150,11 +150,17 @@ export async function createTask(_: ActionState, fd: FormData): Promise<ActionSt
         details: z.string().trim().max(2000).optional().transform((v) => v || null),
         due_date: optDate,
         priority: z.enum(["low", "normal", "high"]).default("normal"),
+        priority_tier: z.coerce.number().int().min(1).max(5).optional(),
+        category: z.enum(["follow_up", "inquiry_review", "quote", "carrier_verification", "document", "invoice", "payable", "shipment", "compliance", "admin", "other"]).optional(),
+        recurrence: z.enum(["none", "daily", "weekly", "monthly"]).default("none"),
+        assigned_to: z.union([z.literal("").transform(() => null), z.uuid()]).optional(),
         entity_type: z.union([z.literal("").transform(() => null), z.enum(entityTypes)]).optional().transform((x) => x ?? null),
         entity_id: z.union([z.literal("").transform(() => null), uuid]).optional().transform((x) => x ?? null),
       })
       .parse(raw);
-    const { data, error } = await s.db.from("follow_up_tasks").insert({ ...v, created_by: s.userId, assigned_to: s.userId }).select("id").single();
+    const tier = v.priority_tier ?? (v.category === "follow_up" || (!v.category && v.entity_type === "shipper_prospect") ? 4 : 5);
+    const category = v.category ?? (v.entity_type === "carrier_lead" ? "carrier_verification" : v.entity_type === "shipper_prospect" ? "follow_up" : "admin");
+    const { data, error } = await s.db.from("follow_up_tasks").insert({ ...v, priority_tier: tier, category, priority: tier <= 2 ? "high" : "normal", created_by: s.userId, assigned_to: v.assigned_to === undefined ? s.userId : v.assigned_to }).select("id").single();
     if (error) throw error;
     await audit({ actorType: "admin", actorId: s.userId, action: "follow_up_task.created", entityType: "follow_up_task", entityId: data.id });
     revalidatePath("/admin", "layout");
@@ -178,13 +184,16 @@ export async function setTaskStatus(fd: FormData) {
 // ---------------------------------------------------------------------------
 const prospectSchema = z.object({
   company: z.string().trim().min(1, "Company is required.").max(160),
+  source: z.enum(["research", "website", "referral", "inbound_inquiry", "manual", "other"]).default("research"),
+  industry_category: z.enum(["manufacturing", "distribution", "automotive", "industrial", "retail", "food_beverage", "construction", "other"]).default("other"),
+  website: text(200),
   contact_name: text(120),
   email,
   phone: text(32),
   industry: text(120),
   location: text(160),
   freight_needs: text(2000),
-  status: z.enum(values(prospectStatuses)),
+  status: z.enum(values(prospectStatuses)).optional(),
   notes: text(4000),
   next_follow_up: optDate,
 });
@@ -194,16 +203,19 @@ export async function saveProspect(_: ActionState, fd: FormData): Promise<Action
   let id: string | null = null;
   try {
     const raw = form(fd);
-    const v = prospectSchema.parse(raw);
+    const parsed = prospectSchema.parse(raw);
     if (raw.id) {
       id = uuid.parse(raw.id);
+      // Stage and follow up dates change through their own workflows (history and tasks).
+      const { status: _status, next_follow_up: _next, ...v } = parsed;
+      void _status; void _next;
       const { error } = await s.db.from("shipper_prospects").update(v).eq("id", id);
       if (error) throw error;
-      await audit({ actorType: "admin", actorId: s.userId, action: "shipper_prospect.updated", entityType: "shipper_prospect", entityId: id, metadata: { status: v.status } });
+      await audit({ actorType: "admin", actorId: s.userId, action: "shipper_prospect.updated", entityType: "shipper_prospect", entityId: id });
       revalidatePath("/admin", "layout");
       return { ok: true, message: "Saved." };
     }
-    const { data, error } = await s.db.from("shipper_prospects").insert({ ...v, owner_id: s.userId, source: "manual" }).select("id").single();
+    const { data, error } = await s.db.from("shipper_prospects").insert({ ...parsed, status: parsed.status ?? "researching", owner_id: s.userId }).select("id").single();
     if (error) throw error;
     id = data.id;
     await audit({ actorType: "admin", actorId: s.userId, action: "shipper_prospect.created", entityType: "shipper_prospect", entityId: data.id });
@@ -236,6 +248,13 @@ const carrierSchema = z.object({
   fleet_size: z.string().trim().transform((v) => (v ? Number(v) : null)).pipe(z.union([z.null(), z.number().int().min(1).max(100000)])),
   verification_status: z.enum(values(verificationStatuses)),
   verified_on: optDate,
+  legal_name: text(160),
+  onboarding_status: z.enum(["not_started", "packet_sent", "documents_received", "complete", "declined"]).default("not_started"),
+  insurance_provider: text(160),
+  auto_liability_limit: z.string().trim().optional().transform((v) => (v ? Number(v.replace(/[$,]/g, "")) : null)).pipe(z.union([z.null(), z.number().min(0).max(100_000_000)])),
+  cargo_limit: z.string().trim().optional().transform((v) => (v ? Number(v.replace(/[$,]/g, "")) : null)).pipe(z.union([z.null(), z.number().min(0).max(100_000_000)])),
+  insurance_expires_on: optDate,
+  agreement_signed_on: optDate,
   notes: text(4000),
   next_follow_up: optDate,
 });
@@ -247,7 +266,14 @@ export async function saveCarrier(_: ActionState, fd: FormData): Promise<ActionS
     const raw = form(fd);
     const v = carrierSchema.parse(raw);
     const equipment = fd.getAll("equipment").map(String).filter((e) => equipmentOptions.some((o) => o.value === e));
-    if (v.verification_status === "verified" && !v.verified_on) return { error: "Record the date you verified authority and insurance before marking a carrier verified." };
+    if (v.verification_status === "verified") {
+      if (!v.verified_on) return { error: "Record the date you verified authority and insurance before marking a carrier verified." };
+      if (!raw.id) return { error: "Save the carrier first, then record authority and insurance checks before marking it verified." };
+      const { data: q } = await s.db.rpc("carrier_qualification", { p_carrier: raw.id, p_on: null });
+      const qual = q as { authority_current?: boolean; insurance_check_passed?: boolean } | null;
+      if (!qual?.authority_current || !qual?.insurance_check_passed) return { error: "Verified requires a passing authority check from the last 30 days and a passing insurance check. Record them in Verification evidence first." };
+      if (!v.insurance_expires_on || !v.agreement_signed_on) return { error: "Add the insurance expiration date and the agreement signed date before marking verified." };
+    }
     const row = { ...v, equipment };
     if (raw.id) {
       id = uuid.parse(raw.id);

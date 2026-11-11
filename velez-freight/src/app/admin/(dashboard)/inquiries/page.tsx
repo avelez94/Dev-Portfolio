@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth";
 import { contactStatuses, fmtDate, fmtDateTime, inquiryTypeLabels, label, quoteStatuses } from "@/config/admin";
-import { EmptyState, FilterLinks, PageTitle, Panel, StatusBadge } from "@/components/admin/admin-ui";
+import { EmptyState, FilterLinks, Panel, StatusBadge } from "@/components/admin/admin-ui";
+import { PageHeader } from "@/components/admin/page-header";
 
-export const metadata = { title: "Website Inquiries" };
+export const metadata = { title: "Freight Inquiries" };
 
 const types = [
   { value: "general", label: "General" },
@@ -48,7 +49,7 @@ export default async function InquiriesPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <PageTitle title="Website Inquiries" description="Every submission from the public website. Filter by type and status, set follow up dates, and resolve." />
+      <PageHeader title="Freight Inquiries" crumbs={[{ label: "Freight Inquiries" }]} description="Everything submitted through the website: business, shipper and carrier inquiries, launch sign ups, and freight quote requests. New items create a review task automatically; marking an item reviewed closes that task." />
       <Panel className="mb-6">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3"><span className="text-xs font-bold uppercase tracking-wide text-navy">Type</span><FilterLinks base="/admin/inquiries" param="type" current={type} options={types} /></div>

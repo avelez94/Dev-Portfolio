@@ -1,17 +1,15 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
-import { PageTitle, Panel } from "@/components/admin/admin-ui";
+import { Panel } from "@/components/admin/admin-ui";
+import { PageHeader } from "@/components/admin/page-header";
 import { ProspectForm } from "@/components/admin/record-forms";
 
-export const metadata = { title: "New prospect" };
+export const metadata = { title: "Add shipper" };
 
-export default async function NewProspectPage() {
+export default async function NewShipperPage() {
   await requireStaff();
   return (
     <>
-      <Link href="/admin/shippers" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-red-dark"><ArrowLeft aria-hidden="true" className="size-4" /> Shipper CRM</Link>
-      <PageTitle title="New shipper prospect" />
+      <PageHeader title="Add a shipper" crumbs={[{ label: "Shippers", href: "/admin/shippers" }, { label: "Add" }]} description="Start with the company name. Everything else can be added later from the shipper's profile." />
       <Panel className="max-w-3xl"><ProspectForm /></Panel>
     </>
   );

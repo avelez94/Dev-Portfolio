@@ -82,3 +82,37 @@ export function NotConfigured() {
     </div>
   );
 }
+
+/** Previous and next page links that keep the current filters. */
+export function Pager({ base, params, page, pageSize, total }: { base: string; params: Record<string, string | undefined>; page: number; pageSize: number; total: number }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const href = (p: number) => {
+    const q = new URLSearchParams();
+    Object.entries({ ...params, page: p > 1 ? String(p) : undefined }).forEach(([k, v]) => v && q.set(k, v));
+    const s = q.toString();
+    return s ? `${base}?${s}` : base;
+  };
+  if (total === 0) return null;
+  return (
+    <nav aria-label="Pagination" className="mt-4 flex items-center justify-between text-sm">
+      <p className="text-slate-muted">Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total}</p>
+      <div className="flex gap-2">
+        {page > 1 ? <Link href={href(page - 1)} className="rounded-md border border-line bg-white px-3 py-1.5 font-semibold text-navy hover:bg-ivory">Previous</Link> : <span className="rounded-md border border-line px-3 py-1.5 text-slate-muted">Previous</span>}
+        {page < pages ? <Link href={href(page + 1)} className="rounded-md border border-line bg-white px-3 py-1.5 font-semibold text-navy hover:bg-ivory">Next</Link> : <span className="rounded-md border border-line px-3 py-1.5 text-slate-muted">Next</span>}
+      </div>
+    </nav>
+  );
+}
+
+/** Small GET filter form: selects submit on change through the Apply button; Clear resets. */
+export function FilterBar({ base, children, active }: { base: string; children: React.ReactNode; active: boolean }) {
+  return (
+    <form method="get" action={base} className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-white p-4">
+      {children}
+      <button className="h-10 rounded-md bg-navy px-4 text-sm font-semibold text-white">Apply</button>
+      {active && <Link href={`${base}?clear=1`} className="h-10 rounded-md px-3 py-2.5 text-sm font-semibold text-navy hover:bg-ivory-200">Clear filters</Link>}
+    </form>
+  );
+}
+
+export const filterSelect = "h-10 rounded-md border border-input bg-white px-3 text-sm";

@@ -1,17 +1,15 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
-import { PageTitle, Panel } from "@/components/admin/admin-ui";
+import { Panel } from "@/components/admin/admin-ui";
+import { PageHeader } from "@/components/admin/page-header";
 import { CarrierLeadForm } from "@/components/admin/record-forms";
 
-export const metadata = { title: "New carrier lead" };
+export const metadata = { title: "Add carrier" };
 
 export default async function NewCarrierPage() {
   await requireStaff();
   return (
     <>
-      <Link href="/admin/carriers" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-red-dark"><ArrowLeft aria-hidden="true" className="size-4" /> Carrier Leads</Link>
-      <PageTitle title="New carrier lead" />
+      <PageHeader title="Add a carrier" crumbs={[{ label: "Carriers", href: "/admin/carriers" }, { label: "Add" }]} description="Record the carrier first; verification checks are recorded on its profile." />
       <Panel className="max-w-3xl"><CarrierLeadForm /></Panel>
     </>
   );
