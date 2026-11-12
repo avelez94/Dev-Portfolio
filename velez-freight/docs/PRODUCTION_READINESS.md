@@ -82,3 +82,20 @@ inquiries) was applied on 2026-11-12 with owner approval, after a logical snapsh
 | Browser tests, prelaunch and operating builds, including accessibility scans | See the phase report |
 | Type check and lint | Clean |
 | Real email sent | None; tests use a local stand in for the provider |
+
+## 8. Production verification, 2026-11-12 (deployment fd282e0)
+
+* Migration `inquiry_attribution` applied once and recorded; existing records unchanged
+  (logical snapshot of every public table taken first).
+* 12 public pages: status 200, one title, one H1, canonical URL correct, descriptions 66 to 156
+  characters, no noindex; structured data Organization on all, WebSite on home, BreadcrumbList on
+  the three service pages; no Service data (prelaunch). Sitemap lists the 12 pages; robots.txt
+  blocks /admin, /api/ and /unsubscribe. Unknown pages return 404 with noindex.
+* `/admin`, `/admin/insights?tab=seo` and `/admin/preview/...` show the sign in page with
+  `X-Robots-Tag: noindex` and `no-store`. Vercel Authentication still protects all vercel.app
+  addresses (site private).
+* Prelaunch notice on every public page; no quote buttons; operations off; broker authority
+  "not filed"; email sending not approved, no sender identities, nothing sent; all agents off.
+* No runtime errors after deployment.
+* Not verified in production: signed in views (the Search & SEO tab was tested against a local
+  production build) and form submission (no test inquiry was created in the live database).
