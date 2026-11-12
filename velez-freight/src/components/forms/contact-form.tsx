@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight } from "lucide-react";
-import { contactSchema, type ContactInput } from "@/lib/validation";
+import type { ContactInput } from "@/lib/validation";
+import { lazyZodResolver } from "./lazy-resolver";
 import { shipmentTypes } from "@/config/site";
 import { useSubmitters } from "@/components/preview/preview-context";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
@@ -31,7 +31,7 @@ export function ContactForm({ defaultType = "general", sourcePage = "/contact", 
     if (error) alertRef.current?.focus();
   }, [error]);
   const { register, handleSubmit, control, setError: setFieldError, formState: { errors } } = useForm<ContactInput>({
-    resolver: zodResolver(contactSchema),
+    resolver: lazyZodResolver<ContactInput>(() => import("@/lib/validation").then((m) => m.contactSchema)),
     defaultValues: { inquiryType: defaultType },
   });
   const type = useWatch({ control, name: "inquiryType" });

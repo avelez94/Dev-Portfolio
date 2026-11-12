@@ -23,6 +23,9 @@ export default async function PrivacyPage() {
         <li><strong>Information you submit.</strong> When you use a form, we collect what you enter, such as your name, company, business email, phone number, and message. Freight inquiry forms may also collect shipment details such as locations, dates, commodity, weight, and equipment needs. Carrier inquiries may include MC and USDOT numbers, equipment types, and operating regions.</li>
         <li><strong>Technical information.</strong> To protect our forms from abuse, we create a one way, salted hash of your IP address when you submit a form. We do not store your raw IP address with your inquiry. Our hosting provider may keep standard server logs.</li>
         <li><strong>How you found us.</strong> When you submit a form, we also record the first page you visited on this site and a general category for how you arrived (for example, a search engine, a link on another site, or typing our address), including the search engine’s name if you came from search. We do not record your search terms, the full address of the page you came from, or use cookies for this; the information stays in your browser tab until you submit a form.</li>
+        {process.env.NEXT_PUBLIC_WEB_ANALYTICS === "vercel" && (
+          <li><strong>Page view statistics.</strong> We use Vercel Web Analytics to count visits to public pages. It does not use cookies, does not identify you, and reports only totals such as page views, the page address without any query details, the referring website, country, browser, and device type.</li>
+        )}
         <li><strong>Administrative accounts.</strong> If you are invited to our private dashboard, we store your email address and the actions you take there for security and audit purposes.</li>
       </ul>
       <p>Please do not submit Social Security numbers, bank or payment details, tax forms, or identity documents through this website. We do not request them here.</p>

@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, LockKeyhole } from "lucide-react";
-import { carrierSchema, equipmentOptions, type CarrierInput } from "@/lib/validation";
+import type { CarrierInput } from "@/lib/validation";
+import { equipmentOptions } from "@/config/equipment";
+import { lazyZodResolver } from "./lazy-resolver";
 import { useSubmitters } from "@/components/preview/preview-context";
 import { Input, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ export function CarrierForm() {
     if (error) alertRef.current?.focus();
   }, [error]);
   const { register, handleSubmit, setError: setFieldError, formState: { errors } } = useForm<CarrierInput>({
-    resolver: zodResolver(carrierSchema),
+    resolver: lazyZodResolver<CarrierInput>(() => import("@/lib/validation").then((m) => m.carrierSchema)),
     defaultValues: { equipment: [] },
   });
 

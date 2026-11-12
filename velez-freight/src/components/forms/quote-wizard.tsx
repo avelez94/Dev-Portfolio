@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Check, Plus, Trash2 } from "lucide-react";
-import { quoteSchema, type QuoteInput } from "@/lib/validation";
+import type { QuoteInput } from "@/lib/validation";
+import { lazyZodResolver } from "./lazy-resolver";
 import { shipmentTypes } from "@/config/site";
 import { useSubmitters } from "@/components/preview/preview-context";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
@@ -29,7 +29,7 @@ export function QuoteWizard({ prefill }: { prefill: Prefill }) {
   const validType = shipmentTypes.some((s) => s.value === prefill.type) ? prefill.type : "";
 
   const form = useForm<QuoteInput>({
-    resolver: zodResolver(quoteSchema),
+    resolver: lazyZodResolver<QuoteInput>(() => import("@/lib/validation").then((m) => m.quoteSchema)),
     mode: "onTouched",
     defaultValues: {
       route: { pickupAddress: prefill.pickup ?? "", deliveryAddress: prefill.delivery ?? "", pickupDate: prefill.date ?? "", deliveryDeadline: "", stops: [] },

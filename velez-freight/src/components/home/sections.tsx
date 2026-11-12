@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { LogoMark } from "@/components/site/logo";
+import { LogoMarkImage } from "@/components/site/logo";
 import { copy, faqs, pillars, processSteps, services } from "@/config/site";
 import { images } from "@/config/images";
 import type { PublicSettings } from "@/lib/data/settings";
@@ -205,7 +205,7 @@ export function StoryTeaser() {
         </svg>
       </div>
       <div className="relative px-4 py-16 sm:px-10 lg:py-20 lg:pl-8 lg:pr-12 xl:pr-24">
-        <LogoMark className="pointer-events-none absolute -right-16 bottom-0 w-[30rem] opacity-[0.06]" />
+        <LogoMarkImage className="pointer-events-none absolute -right-16 bottom-0 w-[30rem] opacity-[0.06]" />
         <div data-reveal className="relative max-w-xl">
           <p className="eyebrow">Our Story</p>
           <h2 id="story-title" className="mt-3 text-3xl font-bold sm:text-[2.4rem]">{copy.storyTeaser.title}</h2>

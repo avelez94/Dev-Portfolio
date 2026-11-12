@@ -5,6 +5,7 @@ import { RevealOnScroll } from "@/components/site/reveal";
 import { getSettings } from "@/lib/data/settings";
 import { OrganizationSchema } from "@/components/site/org-schema";
 import { ArrivalTracker } from "@/components/site/arrival-tracker";
+import { WebAnalytics } from "@/components/site/web-analytics";
 
 // Public pages re-read business settings (operating status, contact details) at most once a minute.
 export const revalidate = 60;
@@ -21,6 +22,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <SiteFooter settings={settings} />
       <RevealOnScroll />
       <ArrivalTracker />
+      <WebAnalytics />
       <OrganizationSchema settings={settings} />
     </>
   );

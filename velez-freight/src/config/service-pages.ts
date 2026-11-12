@@ -40,7 +40,7 @@ export const SERVICE_PAGES: ServicePage[] = [
     eyebrow: "Expedited Freight",
     h1: "Expedited Freight for Time Sensitive Shipments",
     intro: "When a production line is waiting or a customer can’t wait, the plan matters as much as the truck. Expedited freight is about moving urgent shipments with fewer delays and more attention.",
-    image: { ...images.openRoadSunrise, position: "50% 60%" },
+    image: { ...images.desertHighwayDusk, position: "50% 55%" },
     lead: {
       pre: "We plan to make expedited freight a focus once our broker registration is complete. Here is how it works and how we intend to approach it.",
       op: "Expedited freight is one of our areas of focus. Here is how it works and how we approach each urgent request.",

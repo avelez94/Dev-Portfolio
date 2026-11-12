@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { copy, footerNav, site } from "@/config/site";
 import { companyName, type PublicSettings } from "@/lib/data/settings";
-import { Logo } from "./logo";
+import { LogoImage } from "./logo";
 
 export function SiteFooter({ settings }: { settings: PublicSettings }) {
   const year = new Date().getFullYear();
@@ -12,7 +12,7 @@ export function SiteFooter({ settings }: { settings: PublicSettings }) {
       <div className="container-site grid gap-10 py-12 md:grid-cols-[auto_1fr_auto] md:items-center md:gap-0">
         <div className="md:border-r md:border-white/20 md:pr-10">
           <Link href="/" aria-label={`${site.name} home`} className="inline-block">
-            <Logo variant="reverse" layout="stacked" className="w-44" title={null} />
+            <LogoImage variant="reverse" layout="stacked" className="w-44" />
           </Link>
           <p className="mt-4 font-serif text-[0.95rem] italic text-white/90">{copy.tagline}</p>
           <p className="mt-1 text-sm text-white/75">{settings.serviceArea}</p>

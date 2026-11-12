@@ -6,7 +6,7 @@ import { ArrowRight, Check, CircleDashed, ClipboardCheck, Cpu, Handshake, Messag
 import { getSettings } from "@/lib/data/settings";
 import { images } from "@/config/images";
 import { PageHero } from "@/components/site/page-hero";
-import { LogoMark } from "@/components/site/logo";
+import { LogoMarkImage } from "@/components/site/logo";
 import { buttonVariants } from "@/components/ui/button";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -52,7 +52,7 @@ export default async function OurStoryPage() {
 
       {/* 1. Our Story */}
       <section aria-labelledby="story-title" className="relative overflow-hidden py-16 sm:py-24">
-        <LogoMark className="pointer-events-none absolute -right-24 top-10 w-[36rem] opacity-[0.05]" />
+        <LogoMarkImage className="pointer-events-none absolute -right-24 top-10 w-[36rem] opacity-[0.05]" />
         <div className="container-site relative grid gap-12 lg:grid-cols-[1.3fr_1fr] lg:items-center lg:gap-16">
           <div className="max-w-2xl">
             <p className="eyebrow flex items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" /> Our Story</p>

@@ -3,13 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { ArrowRight } from "lucide-react";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { copy, shipmentTypes } from "@/config/site";
-import { contactSchema, emailField, shipmentTypeField } from "@/lib/validation";
+import type { ContactInput } from "@/lib/validation";
+import type { LaunchFormInput, QuickQuoteInput } from "./quick-schemas";
+import { lazyZodResolver } from "@/components/forms/lazy-resolver";
 import { usePreviewHref, useSubmitters } from "@/components/preview/preview-context";
 import { Field, FormAlert, Honeypot, SubmitLabel } from "@/components/forms/fields";
 import { useEnvelope } from "@/components/forms/use-envelope";
@@ -28,18 +28,10 @@ function Heading({ eyebrow, title }: { eyebrow: string; title: string }) {
 // Operational: collect route basics, then continue into the detailed multi step inquiry.
 // Nothing is stored at this step; the detailed form performs the validated submission.
 // ---------------------------------------------------------------------------
-const quickQuote = z.object({
-  pickup: z.string().trim().min(2, "Enter a pickup city, state or ZIP.").max(300),
-  delivery: z.string().trim().min(2, "Enter a delivery city, state or ZIP.").max(300),
-  type: shipmentTypeField,
-  weight: z.string().trim().regex(/^\d{0,6}$/, "Use whole pounds.").optional(),
-  date: z.string().optional(),
-});
-
 function OperationalQuick() {
   const router = useRouter();
   const previewHref = usePreviewHref();
-  const { register, handleSubmit, formState: { errors } } = useForm<z.input<typeof quickQuote>>({ resolver: zodResolver(quickQuote) });
+  const { register, handleSubmit, formState: { errors } } = useForm<QuickQuoteInput>({ resolver: lazyZodResolver<QuickQuoteInput>(() => import("./quick-schemas").then((m) => m.quickQuote)) });
   const onSubmit = handleSubmit((v) => {
     const q = new URLSearchParams({ pickup: v.pickup, delivery: v.delivery, type: v.type });
     if (v.weight) q.set("weight", v.weight);
@@ -82,24 +74,16 @@ function OperationalQuick() {
 // ---------------------------------------------------------------------------
 // Prelaunch: no freight orders. Offer a launch notification instead.
 // ---------------------------------------------------------------------------
-const launchForm = z.object({
-  name: z.string().trim().min(1, "Your name is required.").max(120),
-  email: emailField,
-  company: z.string().trim().max(160).optional(),
-  shipmentType: z.union([z.literal(""), shipmentTypeField]).optional(),
-  privacyAck: z.literal(true, { error: "Please confirm the privacy notice." }),
-});
-
 function PrelaunchQuick({ body }: { body: string }) {
   const { envelope, honeypot, refresh } = useEnvelope();
   const submit = useSubmitters();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-  const { register, handleSubmit, setError, reset, formState: { errors } } = useForm<z.input<typeof launchForm>>({ resolver: zodResolver(launchForm) });
+  const { register, handleSubmit, setError, reset, formState: { errors } } = useForm<LaunchFormInput>({ resolver: lazyZodResolver<LaunchFormInput>(() => import("./quick-schemas").then((m) => m.launchForm)) });
 
   const onSubmit = handleSubmit((v) => {
     start(async () => {
-      const payload: z.input<typeof contactSchema> = { inquiryType: "launch_notification", name: v.name, email: v.email, company: v.company, shipmentType: v.shipmentType, privacyAck: true };
+      const payload: ContactInput = { inquiryType: "launch_notification", name: v.name, email: v.email, company: v.company, shipmentType: v.shipmentType, privacyAck: true };
       const res = await submit.contact(payload, envelope(), "/");
       if (res.ok) {
         setResult({ ok: true, text: `${res.message} Reference: ${res.reference}` });

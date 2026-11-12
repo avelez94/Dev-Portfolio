@@ -42,3 +42,25 @@ export function LogoMark({ className, tone = "brand" }: { className?: string; to
     </svg>
   );
 }
+
+const FILES: Record<Layout, Record<Variant, { src: string; w: number; h: number }>> = {
+  horizontal: { primary: { src: "/brand/mlg-logo-horizontal.svg", w: 2483, h: 400 }, reverse: { src: "/brand/mlg-logo-horizontal-reverse.svg", w: 2483, h: 400 } },
+  stacked: { primary: { src: "/brand/mlg-logo-stacked.svg", w: 1424, h: 820 }, reverse: { src: "/brand/mlg-logo-stacked-reverse.svg", w: 1424, h: 820 } },
+};
+
+/**
+ * The same logo as <Logo>, served from the static SVG files generated from the same paths. Used
+ * on public pages so the artwork is cached by the browser instead of repeated in every page's
+ * HTML and JavaScript. Pass alt="" when a surrounding link already names it.
+ */
+export function LogoImage({ variant = "primary", layout = "horizontal", className, alt = "", eager = false }: { variant?: Variant; layout?: Layout; className?: string; alt?: string; eager?: boolean }) {
+  const f = FILES[layout][variant];
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={f.src} width={f.w} height={f.h} alt={alt} className={cn("h-auto", className)} loading={eager ? "eager" : "lazy"} decoding="async" />;
+}
+
+/** Decorative monogram from the static file (same artwork as <LogoMark>). */
+export function LogoMarkImage({ className }: { className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/mlg-mark.svg" width={1113} height={477} alt="" aria-hidden="true" className={className} loading="lazy" decoding="async" />;
+}

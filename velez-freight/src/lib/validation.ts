@@ -56,16 +56,8 @@ export const contactSchema = z
 export type ContactInput = z.input<typeof contactSchema>;
 
 // ---------------------------------------------------------------------------
-export const equipmentOptions = [
-  { value: "dry_van", label: "Dry van" },
-  { value: "reefer", label: "Refrigerated (reefer)" },
-  { value: "flatbed", label: "Flatbed" },
-  { value: "step_deck", label: "Step deck" },
-  { value: "box_truck", label: "Box truck" },
-  { value: "sprinter", label: "Cargo van / Sprinter" },
-  { value: "power_only", label: "Power only" },
-  { value: "other", label: "Other" },
-] as const;
+import { equipmentOptions } from "@/config/equipment";
+export { equipmentOptions };
 const equipmentValues = equipmentOptions.map((e) => e.value) as [string, ...string[]];
 
 export const carrierSchema = z.object({

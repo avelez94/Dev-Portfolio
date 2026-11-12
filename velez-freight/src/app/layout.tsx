@@ -33,6 +33,8 @@ export const metadata: Metadata = {
   },
   twitter: { card: "summary_large_image", title: `${site.name} | Freight Brokerage & Transportation Coordination`, description: site.description, images: ["/og-image.jpg"] },
   formatDetection: { telephone: false, email: false, address: false },
+  // Optional Search Console HTML tag verification. A Domain property verified by DNS is preferred.
+  ...(process.env.GOOGLE_SITE_VERIFICATION ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } } : {}),
 };
 
 export const viewport: Viewport = { themeColor: "#142839", width: "device-width", initialScale: 1 };

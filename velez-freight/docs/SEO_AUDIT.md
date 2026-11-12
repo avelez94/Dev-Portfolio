@@ -79,3 +79,37 @@ Fixed: homepage canonical; per page Open Graph and X metadata; descriptive title
 lengths; three service pages with breadcrumbs; WebSite and BreadcrumbList data; richer
 Organization data; sitemap with every indexable page and review dates; preview deployments kept
 out of search; branded 404 with one title; hero photo painted immediately.
+
+## Mobile LCP work (2026-11-12, second pass)
+
+Method changed to give steadier numbers: the server's image cache is warmed first (as the CDN is
+after the first visitor), then each page is measured three times and the median is reported.
+Run to run variation on this shared machine is still up to about 0.6 s, so transferred bytes are
+the more reliable comparison.
+
+| Page | Bytes before | Bytes after | Median LCP after (simulated slow 4G) |
+| --- | --- | --- | --- |
+| Home | 620 KB | 518 KB | 3.8 s |
+| Services | 580 KB | 479 KB | 3.6 s (2.9 s in the other full run) |
+| Expedited Freight | 653 KB | 497 KB | 3.7 s |
+| Contact | 582 KB | 495 KB | 3.8 s (3.2 s in the other full run) |
+| Our Story | 729 KB | 627 KB | 4.1 s |
+
+Kept:
+* Form validation code (about 100 KB compressed) loads only when a form is first validated,
+  instead of before the hero photo. Same rules; the server still validates every submission.
+* Public pages show the logo from its cached SVG file instead of repeating the drawing in every
+  page's HTML and JavaScript (page HTML 168 KB to 111 KB uncompressed). Identical artwork.
+* Expedited Freight hero uses the dusk highway photo (16 KB instead of 71 KB at phone width).
+
+Tried and rejected:
+* Inlining CSS (experimental Next.js option): the stylesheet is duplicated into the page data,
+  HTML grew to 317 KB and LCP got worse.
+* Not preloading the serif font: small LCP gain on one page, small layout shift on others.
+* Limiting font weight ranges: saves 35 KB with identical rendering at the weights used, but
+  Source Serif’s license reserves its name for modified versions; not worth the licensing risk.
+* Re-encoding the Our Story photo: only 13 to 27 percent smaller without visibly softening it.
+
+Remaining weight is mostly the framework’s JavaScript (about 238 KB compressed) and the three
+font files (138 KB). Real visitor (field) data will be available from Vercel Web Analytics and
+Search Console once the site is public.

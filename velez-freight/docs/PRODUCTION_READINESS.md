@@ -20,11 +20,8 @@ Deployed to production on 2026-11-11 with owner approval (commit 3863954). Check
 deploying: public pages load, signed out visitors are sent to sign in, the unsubscribe page
 rejects invalid links, and no runtime errors.
 
-### Pending approval
-
-| Migration | Adds |
-| --- | --- |
-| `20261123000100_inquiry_attribution.sql` | Landing page, channel and search engine for website inquiries (Insights, Search & SEO). Until it is applied, inquiries still save normally and the SEO tab shows no attributed inquiries |
+`20261123000100_inquiry_attribution.sql` (landing page, channel and search engine for website
+inquiries) was applied on 2026-11-12 with owner approval, after a logical snapshot of every row.
 
 ## 2. Hosting environment (owner approval required)
 
@@ -35,7 +32,9 @@ rejects invalid links, and no runtime errors.
 | `NOTIFY_EMAIL_FROM`, `NOTIFY_EMAIL_TO` | Internal alerts | Not set |
 | `RESEND_WEBHOOK_SECRET` | Delivery updates | Not set; create the webhook first |
 | `BROKER_AUTHORITY_ACTIVE` | Brokerage master switch | `false`; stays false until authority is verified |
-| `GSC_SITE_URL`, `GSC_CLIENT_EMAIL`, `GSC_PRIVATE_KEY` | Search Console data in Insights (read only) | Not set; see `docs/SEO_STRATEGY.md` |
+| `GSC_SITE_URL`, `GSC_CLIENT_EMAIL`, `GSC_PRIVATE_KEY` | Search Console data in Insights (read only) | Not set; waits for the verified business domain |
+| `NEXT_PUBLIC_WEB_ANALYTICS` | `vercel` turns on Vercel Web Analytics page views (no custom events) | Not set; enable Web Analytics in the Vercel project first |
+| `GOOGLE_SITE_VERIFICATION` | Optional Search Console HTML tag (DNS verification preferred) | Not set |
 
 ## 3. Domain and email
 
