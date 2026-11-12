@@ -14,6 +14,7 @@ import { Chart } from "@/components/admin/charts/chart";
 import { C } from "@/components/admin/charts/types";
 import { EmptyState, filterSelect } from "@/components/admin/admin-ui";
 import { cn } from "@/lib/utils";
+import { SeoTab } from "./seo-tab";
 
 export const metadata = { title: "Insights" };
 
@@ -24,6 +25,7 @@ const TABS = [
   { value: "financial", label: "Financial Performance", adminOnly: true },
   { value: "carriers", label: "Carrier Performance" },
   { value: "customers", label: "Customer Performance" },
+  { value: "seo", label: "Search & SEO" },
 ] as const;
 
 type SP = { tab?: string; period?: string; from?: string; to?: string; grain?: string; shipper?: string; carrier?: string; freight?: string; origin?: string; dest?: string };
@@ -103,6 +105,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
       {tab === "financial" && admin && <Financial />}
       {tab === "carriers" && <CarriersTab />}
       {tab === "customers" && <CustomersTab />}
+      {tab === "seo" && <SeoTab s={s} period={period} />}
     </>
   );
 

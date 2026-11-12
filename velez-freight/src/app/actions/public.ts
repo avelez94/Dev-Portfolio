@@ -8,6 +8,7 @@ import { flattenErrors, guardSubmission, type ActionResult } from "@/lib/securit
 import { getSettings } from "@/lib/data/settings";
 import { audit } from "@/lib/data/audit";
 import { notifyAdmin } from "@/lib/email/notify";
+import { recordAttribution } from "@/lib/attribution-server";
 import { shipmentTypes } from "@/config/site";
 
 /** Issues a signed timestamp used to reject bots that submit instantly or replay old pages. */
@@ -56,6 +57,7 @@ export async function submitContact(input: unknown, envelope: unknown, sourcePag
   }
 
   after(async () => {
+    await recordAttribution("contact", data.id, d.inquiryType, env.data.arrival);
     await audit({ actorType: "public", action: "contact_inquiry.created", entityType: "contact_inquiry", entityId: data.id, metadata: { type: d.inquiryType } });
     const settings = await getSettings();
     if (settings.notifyOnContact) {
@@ -144,6 +146,7 @@ export async function submitCarrier(input: unknown, envelope: unknown): Promise<
   }
 
   after(async () => {
+    await recordAttribution("contact", inquiry.id, "carrier", env.data.arrival);
     await audit({ actorType: "public", action: "carrier_inquiry.created", entityType: "carrier_lead", entityId: leadId ?? undefined, metadata: { inquiry: inquiry.id } });
     const settings = await getSettings();
     if (settings.notifyOnCarrier) {
@@ -217,6 +220,7 @@ export async function submitQuote(input: unknown, envelope: unknown): Promise<Ac
   }
 
   after(async () => {
+    await recordAttribution("quote", data.id, "quote", env.data.arrival);
     await audit({ actorType: "public", action: "quote_inquiry.created", entityType: "quote_inquiry", entityId: data.id });
     if (settings.notifyOnQuote) {
       const result = await notifyAdmin({

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { getFormToken } from "@/app/actions/public";
+import { readArrival } from "@/components/site/arrival-tracker";
 
 /** Fetches a signed form token on mount and exposes the honeypot field id. */
 export function useEnvelope() {
@@ -14,6 +15,6 @@ export function useEnvelope() {
     refresh();
   }, [refresh]);
   // Read at submit time (event handler), never during render.
-  const envelope = () => ({ token, website: (document.getElementById(honeypotId) as HTMLInputElement | null)?.value ?? "" });
+  const envelope = () => ({ token, website: (document.getElementById(honeypotId) as HTMLInputElement | null)?.value ?? "", arrival: readArrival() });
   return { envelope, honeypot: honeypotId, refresh, ready: token !== "" };
 }

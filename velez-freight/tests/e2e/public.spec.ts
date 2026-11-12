@@ -15,7 +15,7 @@ test("homepage renders the approved hero and an honest prelaunch status", async 
 
 test("every public route renders with its own title", async ({ page }) => {
   const routes: [string, RegExp][] = [
-    ["/services", /Freight Services/], ["/shippers", /For Shippers/], ["/carriers", /Carrier Partnerships/], ["/our-story", /Our Story/],
+    ["/services", /Freight Brokerage Services/], ["/shippers", /Freight Coordination for Shippers/], ["/carriers", /Carrier Partnerships/], ["/our-story", /Our Story/],
     ["/contact", /Contact/], ["/request-quote", /Business Inquiry/], ["/privacy", /Privacy Policy/], ["/terms", /Terms of Use/],
   ];
   for (const [path, title] of routes) {
@@ -168,7 +168,7 @@ test("no old brand name appears on any public page, in metadata or in the manife
     expect(await page.locator("body").innerText(), path).not.toMatch(/\\u[0-9a-fA-F]{4}/);
   }
   await page.goto("/");
-  await expect(page).toHaveTitle("Mary’s Logistics Group | Freight Brokerage & Transportation Coordination");
+  await expect(page).toHaveTitle("Mary’s Logistics Group | Maryland Freight Brokerage");
   await expect(page.getByRole("link", { name: "Mary’s Logistics Group home" }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Why Choose Mary’s Logistics Group?" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "A Legacy That Moves Us Forward" })).toBeVisible();

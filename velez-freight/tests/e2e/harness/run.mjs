@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 // End to end test orchestrator.
 //  1. Creates a fresh local Postgres database with the real migration applied.
 //  2. Starts the test only Supabase stand in (harness/fake-supabase.mjs).
@@ -5,7 +6,7 @@
 //  4. Starts both production servers and runs Playwright against them.
 // Usage: npm run test:e2e   (set E2E_SKIP_BUILD=1 to reuse existing builds)
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
 import pg from "pg";
 import { signJwt } from "./fake-supabase-jwt.mjs";
 import { generateSyntheticBrokerage } from "../../fixtures/synthetic-brokerage.mjs";
@@ -66,6 +67,8 @@ async function waitFor(url) {
   throw new Error(`timed out waiting for ${url}`);
 }
 
+const gscKey = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" }, publicKeyEncoding: { type: "spki", format: "pem" } }).privateKey;
+
 async function main() {
   const admin = new pg.Client({ connectionString: ADMIN_URL });
   await admin.connect();
@@ -86,8 +89,8 @@ async function main() {
   // Phases run one after another with one build at a time. Keeping two production builds of the
   // same project side by side caused runtime regenerated pages to reference missing chunks.
   const phases = [
-    { name: "prelaunch", broker: "false", ops: false, port: 3101, specs: ["public.spec.ts", "admin.spec.ts", "a11y.spec.ts", "launch-preview.spec.ts", "settings-center.spec.ts", "outreach.spec.ts", "agents.spec.ts"] },
-    { name: "operational", broker: "true", ops: true, port: 3102, specs: ["operational.spec.ts", "brokerage.spec.ts"], synthetic: true },
+    { name: "prelaunch", broker: "false", ops: false, port: 3101, specs: ["public.spec.ts", "admin.spec.ts", "a11y.spec.ts", "launch-preview.spec.ts", "settings-center.spec.ts", "outreach.spec.ts", "agents.spec.ts", "seo.spec.ts"] },
+    { name: "operational", broker: "true", ops: true, port: 3102, specs: ["operational.spec.ts", "brokerage.spec.ts", "seo-operational.spec.ts"], synthetic: true },
   ];
   const extraArgs = process.argv.slice(2);
   let status = 0;
@@ -97,14 +100,24 @@ async function main() {
     if (!specs.length) continue;
     const flags = extraArgs.filter((a) => !a.endsWith(".spec.ts"));
     const site = `http://localhost:${phase.port}`;
-    const phaseEnv = { NEXT_DIST_DIR: ".next-e2e", BROKER_AUTHORITY_ACTIVE: phase.broker, NEXT_PUBLIC_SITE_URL: site };
+    // The operating phase also connects a local stand in for Google Search Console (never Google).
+    const gscEnv = phase.ops ? {
+      GSC_SITE_URL: "sc-domain:maryslogistics.test", GSC_CLIENT_EMAIL: "seo-reader@e2e.iam.gserviceaccount.com",
+      GSC_PRIVATE_KEY: gscKey, GSC_TOKEN_URL: `http://127.0.0.1:${FAKE_PORT}/gsc/token`, GSC_API_BASE: `http://127.0.0.1:${FAKE_PORT}/gsc`,
+    } : {};
+    const phaseEnv = { NEXT_DIST_DIR: ".next-e2e", BROKER_AUTHORITY_ACTIVE: phase.broker, NEXT_PUBLIC_SITE_URL: site, ...gscEnv };
     await db.query(phase.ops
       ? `update public.business_settings set operations_enabled = true, authority_verified_on = current_date, mc_number = '000000' where id = 1`
       : `update public.business_settings set operations_enabled = false where id = 1`);
     // The developed brokerage phase loads clearly labeled SYNTHETIC history into the local test database only.
     if (phase.synthetic) await db.query(generateSyntheticBrokerage().sql);
     console.log(`\n=== ${phase.name}: building ===`);
-    if (!process.env.E2E_SKIP_BUILD) run("npx", ["next", "build"], phaseEnv);
+    // Start each phase from an empty build folder: cached data (such as business settings read
+    // during prerendering) must not carry over from the other operating mode.
+    if (!process.env.E2E_SKIP_BUILD) {
+      rmSync(`${root}.next-e2e`, { recursive: true, force: true });
+      run("npx", ["next", "build"], phaseEnv);
+    }
     await assertPortFree(phase.port);
     const server = start("npx", ["next", "start", "-p", String(phase.port)], phaseEnv, phase.name);
     await waitFor(`${site}/`);

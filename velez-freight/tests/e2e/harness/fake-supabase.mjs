@@ -354,6 +354,29 @@ function handleResend(req, res, url, body) {
   return send(res, 404, { message: "not found" });
 }
 
+// ---------------------------------------------------------------------------
+// Google Search Console stand in: token exchange, search analytics and sitemaps. Sample rows
+// exist only in this test process and are never shown outside automated tests.
+// ---------------------------------------------------------------------------
+function handleGsc(req, res, url, raw) {
+  if (url.pathname === "/gsc/token") {
+    const form = new URLSearchParams(raw.toString("utf8"));
+    if (form.get("grant_type") !== "urn:ietf:params:oauth:grant-type:jwt-bearer" || (form.get("assertion") ?? "").split(".").length !== 3) return send(res, 400, { error: "invalid_grant" });
+    return send(res, 200, { access_token: "gsc-e2e-token", expires_in: 3600, token_type: "Bearer" });
+  }
+  if (req.headers.authorization !== "Bearer gsc-e2e-token") return send(res, 401, { error: { message: "Unauthorized" } });
+  if (url.pathname.endsWith("/sitemaps")) return send(res, 200, { sitemap: [{ path: "https://maryslogistics.test/sitemap.xml", isPending: false, errors: "0", warnings: "1", contents: [{ type: "web", submitted: "14", indexed: "9" }] }] });
+  if (url.pathname.endsWith("/searchAnalytics/query")) {
+    const q = JSON.parse(raw.toString("utf8") || "{}");
+    const dim = q.dimensions?.[0];
+    if (dim === "date") return send(res, 200, { rows: [0, 1, 2].map((i) => ({ keys: [q.startDate.slice(0, 8) + String(10 + i)], clicks: 2 + i, impressions: 40 + i * 10, ctr: 0.05, position: 12 })) });
+    if (dim === "query") return send(res, 200, { rows: [{ keys: ["maryland freight broker"], clicks: 4, impressions: 60, ctr: 0.0667, position: 9.5 }, { keys: ["expedited freight maryland"], clicks: 2, impressions: 30, ctr: 0.0667, position: 14.2 }] });
+    if (dim === "page") return send(res, 200, { rows: [{ keys: ["https://maryslogistics.test/services/expedited-freight"], clicks: 3, impressions: 50, ctr: 0.06, position: 11 }] });
+    return send(res, 200, { rows: [] });
+  }
+  return send(res, 404, { error: { message: "not found" } });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const chunks = [];
@@ -361,6 +384,8 @@ const server = http.createServer(async (req, res) => {
   const raw = Buffer.concat(chunks);
   try {
     if (url.pathname.startsWith("/storage/v1")) return await handleStorage(req, res, url, raw);
+    // Form encoded token requests: handled before the JSON body parser.
+    if (url.pathname.startsWith("/gsc/")) return handleGsc(req, res, url, raw);
     const body = raw.length ? JSON.parse(raw.toString("utf8")) : {};
     if (url.pathname === "/__seed" && req.method === "POST") {
       for (const { email, password } of body.users ?? []) passwords.set(email, password);

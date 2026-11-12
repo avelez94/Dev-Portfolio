@@ -129,4 +129,5 @@ export type QuoteInput = z.input<typeof quoteSchema>;
 export const spamEnvelope = z.object({
   token: z.string().max(200),
   website: z.string().max(200).optional(), // honeypot: real users never fill this
+  arrival: z.unknown().optional(), // landing page and channel; validated by parseArrival
 });

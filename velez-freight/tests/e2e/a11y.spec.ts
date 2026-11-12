@@ -4,7 +4,7 @@ import { PRELAUNCH } from "./helpers";
 
 // Automated WCAG 2.2 A/AA checks with axe-core. Automated scans catch roughly a third to half of
 // issues; they do not replace manual screen reader and keyboard review.
-const pages = ["/", "/services", "/shippers", "/carriers", "/our-story", "/contact", "/request-quote", "/privacy", "/terms", "/admin/login"];
+const pages = ["/", "/services", "/services/expedited-freight", "/services/dedicated-transportation", "/services/general-freight-coordination", "/shippers", "/carriers", "/our-story", "/contact", "/request-quote", "/privacy", "/terms", "/admin/login"];
 
 for (const path of pages) {
   test(`axe: ${path} has no WCAG A/AA violations (prelaunch)`, async ({ page }) => {

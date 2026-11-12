@@ -106,7 +106,7 @@ test("global search finds records with Ctrl K and opens them", async ({ page }) 
 });
 
 test("task center: complete with undo, snooze, and views", async ({ page }) => {
-  await sql(`insert into public.follow_up_tasks (title, due_date, category, priority_tier) values ('Call the insurance agent', current_date, 'admin', 5), ('Renew domain', current_date, 'admin', 5)`);
+  await sql(`insert into public.follow_up_tasks (title, due_date, category, priority_tier) values ('Call the insurance agent', public.vfg_today(), 'admin', 5), ('Renew domain', public.vfg_today(), 'admin', 5)`);
   await signIn(page);
   await page.goto("/admin/tasks?view=today");
   const call = page.getByRole("listitem").filter({ hasText: "Call the insurance agent" });
@@ -332,7 +332,7 @@ test("axe: main dashboard screens have no WCAG A/AA violations", async ({ page }
   await signIn(page);
   const [sh] = await sql<{ id: string }>("select id from public.shipper_prospects limit 1");
   const [ca] = await sql<{ id: string }>("select id from public.carrier_leads order by created_at limit 1");
-  for (const path of ["/admin", "/admin/tasks", "/admin/shippers", `/admin/shippers/${sh.id}`, `/admin/carriers/${ca.id}`, "/admin/insights?tab=sales", "/admin/reports", "/admin/settings", "/admin/settings?tab=compliance", "/admin/settings?tab=contact", "/admin/content", "/admin/outreach", "/admin/outreach/compose", "/admin/outreach/setup", "/admin/outreach/templates", "/admin/opportunities", "/admin/integrations", "/admin/agents"]) {
+  for (const path of ["/admin", "/admin/tasks", "/admin/shippers", `/admin/shippers/${sh.id}`, `/admin/carriers/${ca.id}`, "/admin/insights?tab=sales", "/admin/reports", "/admin/settings", "/admin/settings?tab=compliance", "/admin/settings?tab=contact", "/admin/content", "/admin/outreach", "/admin/outreach/compose", "/admin/outreach/setup", "/admin/outreach/templates", "/admin/opportunities", "/admin/integrations", "/admin/agents", "/admin/insights?tab=seo"]) {
     await page.goto(path);
     await page.waitForTimeout(1200);
     const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();

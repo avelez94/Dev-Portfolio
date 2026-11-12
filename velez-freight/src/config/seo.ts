@@ -102,7 +102,7 @@ export const SEO = {
     updated: "2026-11-12",
     index: true,
   },
-  privacy: { path: "/privacy", title: "Privacy Policy", description: "How Mary’s Logistics Group collects, uses, and protects information submitted through this website.", updated: "2026-11-11", index: true },
+  privacy: { path: "/privacy", title: "Privacy Policy", description: "How Mary’s Logistics Group collects, uses, and protects information submitted through this website.", updated: "2026-11-12", index: true },
   terms: { path: "/terms", title: "Terms of Use", description: "Terms that apply to the use of the Mary’s Logistics Group website.", updated: "2026-11-11", index: true },
 } satisfies Record<string, PageSeo>;
 

@@ -59,3 +59,23 @@ These are lab figures from one machine, not field data from real visitors.
 * No FAQ structured data (correct: it is not needed).
 * No analytics or Search Console verification installed yet.
 * Accessibility 100 on all tested pages; no layout shift.
+
+## After changes (2026-11-12, same method)
+
+| Page | Performance | LCP | TBT | CLS | Accessibility, Best practices, SEO |
+| --- | --- | --- | --- | --- | --- |
+| Home | 76 (was 53) | 4.8 s | 310 ms (was 2,760) | 0 | 100, 100, 100 |
+| Services | 83 | 4.7 s | 60 ms | 0 | 100, 100, 100 |
+| Expedited Freight (new) | 90 | 3.6 s | 50 ms | 0 | 100, 100, 100 |
+| Shippers | 89 (was 83) | 3.8 s | 40 ms | 0 | 100, 100, 100 |
+| Contact | 79 | 4.8 s | 220 ms | 0 | 100, 100, 100 |
+| Our Story | 79 | 5.4 s | 100 ms | 0 | 100, 100, 100 |
+
+Lab results from a local machine with simulated slow 4G and a slowed CPU; they vary a few points
+between runs and are not real visitor (field) measurements. Not preloading the serif font was
+tried and reverted: it improved the homepage LCP slightly but introduced small layout shifts.
+
+Fixed: homepage canonical; per page Open Graph and X metadata; descriptive titles; description
+lengths; three service pages with breadcrumbs; WebSite and BreadcrumbList data; richer
+Organization data; sitemap with every indexable page and review dates; preview deployments kept
+out of search; branded 404 with one title; hero photo painted immediately.
