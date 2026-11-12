@@ -11,6 +11,9 @@ import ContactPage from "@/app/(site)/contact/page";
 import RequestQuotePage from "@/app/(site)/request-quote/page";
 import PrivacyPage from "@/app/(site)/privacy/page";
 import TermsPage from "@/app/(site)/terms/page";
+import ExpeditedPage from "@/app/(site)/services/expedited-freight/page";
+import DedicatedPage from "@/app/(site)/services/dedicated-transportation/page";
+import GeneralPage from "@/app/(site)/services/general-freight-coordination/page";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 type PageComponent = (props: { searchParams: SearchParams }) => Promise<React.ReactNode> | React.ReactNode;
@@ -21,6 +24,9 @@ const pages: Record<string, { title: string; Page: PageComponent }> = {
   shippers: { title: "For Shippers", Page: ShippersPage },
   carriers: { title: "For Carriers", Page: CarriersPage },
   services: { title: "Services", Page: ServicesPage },
+  "services/expedited-freight": { title: "Expedited Freight", Page: ExpeditedPage },
+  "services/dedicated-transportation": { title: "Dedicated Transportation", Page: DedicatedPage },
+  "services/general-freight-coordination": { title: "General Freight Coordination", Page: GeneralPage },
   "our-story": { title: "Our Story", Page: OurStoryPage },
   contact: { title: "Contact", Page: ContactPage },
   "request-quote": { title: "Request a Freight Quote", Page: RequestQuotePage as PageComponent },

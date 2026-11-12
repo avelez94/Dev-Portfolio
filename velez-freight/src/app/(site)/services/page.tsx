@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
@@ -9,12 +10,11 @@ import { PageHero, PrelaunchNotice } from "@/components/site/page-hero";
 import { ServiceIcon } from "@/components/home/icons";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { servicePageFor } from "@/config/service-pages";
 
-export const metadata: Metadata = {
-  title: "Freight Services",
-  description: "Expedited freight, dedicated transportation, and general freight coordination from Mary’s Logistics Group, a family owned freight brokerage being established in Maryland.",
-  alternates: { canonical: "/services" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("services", (await getSettings()).operational);
+}
 
 export default async function ServicesPage() {
   const settings = await getSettings();
@@ -60,6 +60,9 @@ export default async function ServicesPage() {
                   <p className="mt-3 font-serif text-xl italic text-navy-700">{s.tagline}</p>
                   {s.detail.map((p) => <p key={p} className="mt-4 leading-relaxed text-charcoal">{p}</p>)}
                   {!enabled && <p className="mt-4 text-sm font-semibold text-brand-red-dark">This service is not currently offered.</p>}
+                  <Link href={servicePageFor(s.slug)!.route} className="mt-5 inline-flex items-center gap-1.5 font-semibold text-brand-red-dark underline-offset-4 hover:underline">
+                    More about {s.title.toLowerCase()} <ArrowRight aria-hidden="true" className="size-4" />
+                  </Link>
                 </div>
                 <div data-reveal className="space-y-5">
                   <div className="rounded-[var(--radius-card)] border border-line bg-ivory p-6">

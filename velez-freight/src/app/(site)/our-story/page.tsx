@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check, CircleDashed, ClipboardCheck, Cpu, Handshake, MessageSquareText, MonitorSmartphone, ShieldCheck, Truck, UserRound } from "lucide-react";
@@ -8,11 +9,9 @@ import { PageHero } from "@/components/site/page-hero";
 import { LogoMark } from "@/components/site/logo";
 import { buttonVariants } from "@/components/ui/button";
 
-export const metadata: Metadata = {
-  title: "Our Story",
-  description: "Mary’s Logistics Group is named in honor of Mary and inspired by a family tradition of entrepreneurship. Meet founder Alante Velez and learn how we approach freight coordination.",
-  alternates: { canonical: "/our-story" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("ourStory", (await getSettings()).operational);
+}
 
 const founder = {
   name: "Alante Velez",

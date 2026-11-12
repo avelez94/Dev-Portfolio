@@ -3,7 +3,7 @@ import Image from "next/image";
 export function PageHero({ eyebrow, title, intro, image, imageAlt, position = "50% 50%" }: { eyebrow: string; title: string; intro?: string; image: string; imageAlt: string; position?: string }) {
   return (
     <section className="relative isolate overflow-hidden bg-navy">
-      <Image src={image} alt={imageAlt} fill preload sizes="100vw" className="-z-10 object-cover" style={{ objectPosition: position }} />
+      <Image src={image} alt={imageAlt} fill preload fetchPriority="high" sizes="100vw" className="-z-10 object-cover" style={{ objectPosition: position }} />
       <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgb(20_40_57/0.93)_0%,rgb(20_40_57/0.78)_50%,rgb(20_40_57/0.45)_100%)]" />
       <div aria-hidden="true" className="absolute inset-x-0 bottom-0 -z-10 h-1.5 bg-brand-red" />
       <div className="container-site py-16 sm:py-20 lg:py-24">

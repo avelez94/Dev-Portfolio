@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { HelpCircle, Mail, MapPin, Phone, Truck, Warehouse } from "lucide-react";
 import { getSettings } from "@/lib/data/settings";
 import { images } from "@/config/images";
@@ -8,11 +9,9 @@ import { ContactForm } from "@/components/forms/contact-form";
 import { BusinessHoursList } from "@/components/site/business-hours";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-export const metadata: Metadata = {
-  title: "Contact",
-  description: "Contact Mary’s Logistics Group, a family owned freight brokerage in Maryland, with business, shipper, or carrier partnership inquiries.",
-  alternates: { canonical: "/contact" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("contact", (await getSettings()).operational);
+}
 
 export default async function ContactPage() {
   const settings = await getSettings();

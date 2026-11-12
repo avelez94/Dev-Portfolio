@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { Check, FileSignature, Handshake, LockKeyhole, Mail, MessagesSquare, Truck } from "lucide-react";
 import { getSettings } from "@/lib/data/settings";
 import { images } from "@/config/images";
 import { PageHero, PrelaunchNotice, SectionHeading } from "@/components/site/page-hero";
 import { CarrierForm } from "@/components/forms/carrier-form";
 
-export const metadata: Metadata = {
-  title: "Carrier Partnerships",
-  description: "Mary’s Logistics Group aims to build relationships with authorized motor carriers who value communication, safety, professionalism, and consistent service.",
-  alternates: { canonical: "/carriers" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("carriers", (await getSettings()).operational);
+}
 
 const equipment = ["Cargo vans and Sprinter vans", "Box trucks", "Dry vans", "Flatbeds and other appropriate equipment types"];
 

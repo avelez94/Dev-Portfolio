@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { LegalPage } from "@/components/site/legal-page";
 import { companyName, getSettings } from "@/lib/data/settings";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "How Mary’s Logistics Group collects, uses, and protects information submitted through this website.",
-  alternates: { canonical: "/privacy" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("privacy", (await getSettings()).operational);
+}
 
 // Update this date whenever the policy text changes.
 const UPDATED = "November 11, 2026";

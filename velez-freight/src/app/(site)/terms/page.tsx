@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { LegalPage } from "@/components/site/legal-page";
 import { companyName, getSettings } from "@/lib/data/settings";
 import { site } from "@/config/site";
 
-export const metadata: Metadata = {
-  title: "Terms of Use",
-  description: "Terms that apply to the use of the Mary’s Logistics Group website.",
-  alternates: { canonical: "/terms" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("terms", (await getSettings()).operational);
+}
 
 const UPDATED = "November 11, 2026";
 

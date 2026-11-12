@@ -9,6 +9,7 @@ import { images } from "@/config/images";
 import type { PublicSettings } from "@/lib/data/settings";
 import { PillarIcon, RouteLine, ServiceIcon } from "./icons";
 import { DEFAULT_CONTENT, type SiteContent } from "@/config/content-slots";
+import { servicePageFor } from "@/config/service-pages";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -24,8 +25,10 @@ export function Hero({ operational, content = DEFAULT_CONTENT }: { operational: 
         preload
         sizes="100vw"
         quality={75}
-        className="-z-10 object-cover object-[68%_45%] animate-fade"
+        fetchPriority="high"
+        className="-z-10 object-cover object-[68%_45%]"
       />
+      <div aria-hidden="true" className="absolute inset-0 -z-10 animate-unveil bg-navy" />
       {/* Navy overlay: strong on the text side, opening up over the truck */}
       <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgb(20_40_57/0.93)_0%,rgb(20_40_57/0.78)_36%,rgb(20_40_57/0.25)_68%,rgb(20_40_57/0.05)_100%)]" />
       {/* Warm sunset grade over the sky, matching the approved mockup's golden hour tone */}
@@ -37,6 +40,7 @@ export function Hero({ operational, content = DEFAULT_CONTENT }: { operational: 
 
       <div className="container-site pb-36 pt-16 sm:pb-40 sm:pt-20 lg:pb-44 lg:pt-24">
         <div className="max-w-2xl">
+          <p className="eyebrow eyebrow-light mb-4 flex animate-rise items-center gap-3"><span aria-hidden="true" className="h-0.5 w-8 bg-brand-red" />Family owned freight brokerage in Maryland</p>
           <h1 id="hero-title" className="animate-rise font-serif text-[2.35rem] font-bold leading-[1.04] text-white min-[400px]:text-[2.6rem] sm:text-6xl lg:text-[4.4rem]">
             Your freight.
             <br />
@@ -96,7 +100,7 @@ export function ServicesSection({ settings }: { settings: PublicSettings }) {
           {available.map((s, i) => (
             <li key={s.slug} data-reveal style={{ transitionDelay: `${i * 90}ms` }}>
               <Link
-                href={`/services#${s.slug}`}
+                href={servicePageFor(s.slug)?.route ?? "/services"}
                 className="group flex h-full items-start gap-5 rounded-[var(--radius-card)] border border-line bg-white p-6 shadow-[var(--shadow-card)] transition duration-300 hover:-translate-y-1 hover:border-brand-red/40 hover:shadow-[var(--shadow-float)]"
               >
                 <ServiceIcon name={s.icon} className="mt-1 size-12 shrink-0 text-brand-red" />

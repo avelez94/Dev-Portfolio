@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { ShieldCheck } from "lucide-react";
 import { getSettings } from "@/lib/data/settings";
 import { copy } from "@/config/site";
@@ -8,14 +9,7 @@ import { QuoteWizard } from "@/components/forms/quote-wizard";
 import { ContactForm } from "@/components/forms/contact-form";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { operational } = await getSettings();
-  return {
-    title: operational ? "Request a Freight Quote" : "Business Inquiry",
-    description: operational
-      ? "Tell Mary’s Logistics Group about your shipment. Every inquiry is reviewed by a person before any pricing is discussed."
-      : "Send Mary’s Logistics Group a business inquiry. We are preparing to launch and are not yet arranging transportation.",
-    alternates: { canonical: "/request-quote" },
-  };
+  return pageMetadata("requestQuote", (await getSettings()).operational);
 }
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.slice(0, 300);

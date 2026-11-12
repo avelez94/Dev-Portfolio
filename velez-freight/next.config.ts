@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       { source: "/admin/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }, { key: "Cache-Control", value: "no-store" }] },
+      // Preview deployments must never be indexed. Production builds (VERCEL_ENV=production) and
+      // local builds are unaffected.
+      ...(process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production"
+        ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]
+        : []),
     ];
   },
 };

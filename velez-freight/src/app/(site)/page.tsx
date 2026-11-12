@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
+import { pageMetadata, JsonLd, websiteData } from "@/lib/seo";
 import { getSettings } from "@/lib/data/settings";
 import { QuickInquiry } from "@/components/home/quick-inquiry";
 import { CarrierAndFaq, FinalCta, Hero, ProcessSection, ServicesSection, StoryTeaser, WhySection } from "@/components/home/sections";
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("home", (await getSettings()).operational);
+}
 
 export default async function HomePage() {
   const settings = await getSettings();
@@ -14,6 +20,7 @@ export default async function HomePage() {
       <StoryTeaser />
       <CarrierAndFaq operational={settings.operational} />
       <FinalCta operational={settings.operational} content={settings.content} />
+      <JsonLd data={websiteData()} />
     </>
   );
 }

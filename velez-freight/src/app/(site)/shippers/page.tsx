@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, Building2, CalendarDays, ClipboardList, Clock, Factory, LifeBuoy, MapPin, MessagesSquare, Package, Route, Truck, Warehouse, Wrench } from "lucide-react";
@@ -8,11 +9,9 @@ import { copy } from "@/config/site";
 import { PageHero, PrelaunchNotice, SectionHeading } from "@/components/site/page-hero";
 import { buttonVariants } from "@/components/ui/button";
 
-export const metadata: Metadata = {
-  title: "For Shippers",
-  description: "A freight partner that understands your business: responsive communication, thoughtful coordination, and relationships that extend beyond a single shipment.",
-  alternates: { canonical: "/shippers" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata("shippers", (await getSettings()).operational);
+}
 
 const audiences = [
   { icon: Factory, label: "Manufacturers" },
@@ -59,6 +58,11 @@ export default async function ShippersPage() {
           <div data-reveal className="space-y-5 text-[1.05rem] leading-relaxed text-charcoal">
             <p className="font-serif text-2xl leading-snug text-navy">When you hand over a shipment, you’re trusting someone with your reputation. We take that seriously.</p>
             <p>That means listening first, asking good questions, keeping you informed, and earning your trust one load at a time. We’re building relationships meant to last well beyond a single shipment.</p>
+            <p>
+              Whether you need <Link href="/services/expedited-freight" className="font-semibold text-brand-red-dark underline underline-offset-4">expedited freight</Link> for a time sensitive shipment,{" "}
+              <Link href="/services/dedicated-transportation" className="font-semibold text-brand-red-dark underline underline-offset-4">dedicated transportation</Link> for recurring moves, or{" "}
+              <Link href="/services/general-freight-coordination" className="font-semibold text-brand-red-dark underline underline-offset-4">general freight coordination</Link> for palletized and commercial goods, we start with your requirements.
+            </p>
             {!settings.operational && (
               <PrelaunchNotice title="Opening soon">
                 {copy.prelaunch.short} We’d still love to hear about your business now.
