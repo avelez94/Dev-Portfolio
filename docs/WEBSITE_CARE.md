@@ -213,3 +213,7 @@ Public samples: two fictional reports (no outstanding issues; an issue plus unve
 8. **Record work and write:** as you finish work during the period, use **Quick add work** on the website page (it shows up in the report automatically). For anything larger, create an estimate and record the client's approval before starting. At review time, check the agreed price, tick that all completed work is recorded, and write a short summary.
 9. **Approve:** Mark ready for review, open the client report and PDF preview, tick sign off, type your name, and approve.
 10. **Send:** check the name and exact email, adjust the subject and message, type the address to confirm, then Send Report. Or download the PDF without sending. The review counts as complete only once sent.
+
+## Agreements signed outside the app (exception, no button)
+
+Enrollment uses online agreements only. For the rare case of a care agreement you already hold that was signed elsewhere, `POST /api/care/admin/sites/<id>/agreement/offline` records it (signer, date, method `paper`, `email` or `other_esign`, where the copy is kept, optional PDF under 3 MB, and `confirm_covers: true`). It is marked "Signed outside the app", never replaces a signed agreement, and is logged. It is deliberately not in the dashboard or the owner's guide.

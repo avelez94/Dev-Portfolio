@@ -123,7 +123,7 @@ The client pays on Stripe’s page. Stripe’s verified payment notice then sets
 
 The order is always: **signed agreement, then actual payment, then record the paid period, then the check runs.**
 
-1. **Signed agreement.** The client signs through the agreement link. If they already signed a care agreement outside the app (on paper, by email, or with another e-signature service), open **Care agreement**, **Record an existing signed agreement** and enter who signed, the date, how, and where the signed copy is kept, with the PDF if you have it. It shows as **Signed outside the app**. The app refuses to record a paid period until a signed agreement covers the current scope, plan and price.
+1. **Signed agreement.** Confirm the technical scope, send the agreement link, and the client signs it online. The app refuses to record a paid period until a signed agreement covers the current scope, plan and price.
 2. **Actual payment.** Bill the client yourself: a Fixed Fee invoice from Pipeline (marked paid when it’s paid), or Zelle, check or cash.
 3. **Record the paid period.** On the website’s page, open **Billed outside Stripe? Record a paid period**. Enter the period dates, then choose how it was paid:
    - **One of my invoices, marked paid**: pick the invoice. Revenue counts the invoice; the period adds nothing more.
@@ -501,7 +501,7 @@ It lists, newest first: uploaded files, proposals, statements of work, contracts
 | **Signature needed for the current details** | The price, plan or scope changed after signing. | **Send updated agreement**; payment opens once they sign it. |
 | **Quick add work** is greyed out | The client’s care terms aren’t current. | Record the terms (setup confirmation or **Mark agreement reviewed**). |
 | Plan time says **No paid billing period yet** | There’s no paid period for this website. | Wait for the first payment, or record a paid period. |
-| “A paid period can only be added after the client signs…” | No signed agreement covers the current scope, plan and price. | Send the agreement link, or record an existing signed agreement. |
+| “A paid period can only be added after the client signs…” | No signed agreement covers the current scope, plan and price. | Send the agreement link so the client signs online. |
 | “…isn’t marked paid yet” | The invoice you chose is still pending. | Mark it paid in Revenue or Pipeline, then record the period. |
 | “The database needs …20261108…” | The production database is missing the latest Website Care migration. | Run that file in the Supabase SQL editor (see the release record). |
 | “needs X standard minutes but only Y are available” | Recording would go past the allowance. | Create an estimate for the larger work. |

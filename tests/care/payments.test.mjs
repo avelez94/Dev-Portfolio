@@ -57,7 +57,7 @@ test('a paid period can’t be recorded until a signed agreement covers the webs
   const r = await api(`sites/${ids.site}/cycles`, { method: 'POST', json: direct() })
   assert.equal(r.status, 409)
   assert.match(r.data.error, /only be added after the client signs the current care agreement/)
-  assert.match(r.data.error, /Record an existing signed agreement/)
+  assert.match(r.data.error, /Send the agreement link so they can sign it online/)
   assert.equal(rows(`select id from care_cycles where site_id = ${q(ids.site)} and period_start >= '2026-11-30'`).length, 0)
 })
 

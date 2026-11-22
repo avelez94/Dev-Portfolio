@@ -28,3 +28,9 @@ test('the runner and its workflow point at the www origin and stop on a redirect
   assert.match(run, /redirect: 'manual'/)
   assert.doesNotMatch(readFileSync(ROOT + 'docs/WEBSITE_CARE.md', 'utf8'), /https:\/\/<deployment>\/api\/care\/stripe\/webhook/)
 })
+
+test('enrollment is online agreements only: no offline agreement button or instructions', () => {
+  for (const f of ['src/app/admin/(dashboard)/care/AgreementPanel.tsx', 'src/app/admin/(dashboard)/care/ManualPeriodPanel.tsx', 'docs/WEBSITE_CARE_GUIDE.md']) {
+    assert.doesNotMatch(readFileSync(ROOT + f, 'utf8'), /Record an existing signed agreement|agreement\/offline/, f)
+  }
+})

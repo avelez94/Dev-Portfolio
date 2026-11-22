@@ -32,7 +32,7 @@ export default function ManualPeriodPanel({ site, onDone }: { site: Row; onDone:
         </p>
         {agreement.data && !signed && (
           <div className="care-err" role="alert">
-            A paid period can be recorded only after the client signs the current care agreement. Send the agreement link above, or use <b>Record an existing signed agreement</b> if they already signed one outside the app.
+            A paid period can be recorded only after the client signs the current care agreement online. Send the agreement link above.
           </div>
         )}
         <div className="care-two">

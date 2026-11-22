@@ -483,14 +483,15 @@ export async function coveringAgreement(siteId: string): Promise<Row | null> {
   return covers(cur, site, client) ? cur : null
 }
 
-export const NEEDS_SIGNED_AGREEMENT = 'A paid period can only be added after the client signs the current care agreement for this scope, plan and price. Send the agreement link, or, if the client already signed one outside the app, record it under Agreement: Record an existing signed agreement.'
+export const NEEDS_SIGNED_AGREEMENT = 'A paid period can only be added after the client signs the current care agreement for this scope, plan and price. Send the agreement link so they can sign it online.'
 
 const OFFLINE_METHODS = ['paper', 'email', 'other_esign'] as const
 export const OFFLINE_METHOD_LABEL: Record<(typeof OFFLINE_METHODS)[number], string> = { paper: 'Signed on paper', email: 'Accepted by email', other_esign: 'Signed with another e-signature service' }
 
 /**
- * Records a care agreement the client already signed outside the app, for an
- * existing client or one who signed on paper. It is kept as the website's
+ * Records a care agreement the client already signed outside the app. Not part
+ * of enrollment (agreements are signed online) and has no button: an admin API
+ * exception only, documented in docs/WEBSITE_CARE.md. It is kept as the website's
  * signed agreement for the current scope, plan and price, marked "signed
  * outside the app" with who signed, when, how, and where the signed copy is.
  * A copy of the signed PDF can be attached. Only for a website with a

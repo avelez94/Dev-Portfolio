@@ -23,48 +23,6 @@ const STATE: Record<string, [string, 'ok' | 'warn' | 'bad' | 'info' | 'coral']> 
 
 const OFFLINE_LABEL: Record<string, string> = { paper: 'Signed on paper', email: 'Accepted by email', other_esign: 'Signed with another e-signature service' }
 
-/**
- * For a client who already signed a care agreement outside the app (on paper,
- * by email, or with another e-signature service). It becomes the website's
- * signed agreement for the current scope, plan and price, clearly marked as
- * signed outside the app. Not for new clients: send them the agreement link.
- */
-function OfflineAgreement({ siteId, onDone }: { siteId: string; onDone: () => void }) {
-  const blank = { signer_name: '', signed_on: '', method: '', evidence: '', confirm_covers: false, pdf_base64: '' }
-  const [f, setF] = useState(blank)
-  const [fileName, setFileName] = useState('')
-  const pick = (file: File | undefined) => {
-    if (!file) { setF({ ...f, pdf_base64: '' }); setFileName(''); return }
-    // Requests to the app are capped at 4.5 MB, so the PDF (larger once encoded) must stay under 3 MB.
-    if (file.size > 3_000_000) { setF({ ...f, pdf_base64: '' }); setFileName('Too large: choose a PDF under 3 MB, or leave it out and note where the copy is kept.'); return }
-    const r = new FileReader()
-    r.onload = () => { setF((cur) => ({ ...cur, pdf_base64: String(r.result) })); setFileName(file.name) }
-    r.readAsDataURL(file)
-  }
-  return (
-    <details className="care-sub" style={{ marginTop: 10 }} data-testid="offline-agreement">
-      <summary>Record an existing signed agreement</summary>
-      <p className="care-muted" style={{ margin: '8px 0' }}>Only for a client who already signed a care agreement outside this app that covers this website, plan, monthly price and scope. New clients should sign through the agreement link instead.</p>
-      <div className="care-grid">
-        <div className="care-two">
-          <Field label="Signed by" id="o-n"><input id="o-n" value={f.signer_name} onChange={(e) => setF({ ...f, signer_name: e.target.value })} /></Field>
-          <Field label="Date signed" id="o-d"><input id="o-d" type="date" value={f.signed_on} onChange={(e) => setF({ ...f, signed_on: e.target.value })} /></Field>
-        </div>
-        <Field label="How it was signed" id="o-m">
-          <select id="o-m" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })}>
-            <option value="">Choose</option>
-            {Object.entries(OFFLINE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </Field>
-        <Field label="The signed document and where its copy is kept" id="o-e"><textarea id="o-e" value={f.evidence} onChange={(e) => setF({ ...f, evidence: e.target.value })} placeholder="Signed Website Care agreement, Business Care at $129 a month, saved in Google Drive, Clients folder" /></Field>
-        <Field label="Signed PDF (optional, up to 3 MB)" id="o-f"><input id="o-f" type="file" accept="application/pdf" onChange={(e) => pick(e.target.files?.[0])} />{fileName && <small className="care-muted">{fileName}</small>}</Field>
-        <label className="care-row"><input type="checkbox" checked={f.confirm_covers} onChange={(e) => setF({ ...f, confirm_covers: e.target.checked })} /> The signed document covers this website, plan, monthly price and scope.</label>
-        <div><Action label="Record signed agreement" run={() => careApi(`sites/${siteId}/agreement/offline`, { method: 'POST', json: f })} done={() => { setF(blank); setFileName(''); onDone() }} /></div>
-      </div>
-    </details>
-  )
-}
-
 const STEPS = ['Confirm technical scope', 'Send agreement link', 'Client signs', 'Signed copy emailed', 'Payment unlocked', 'Payment queues the check']
 
 export default function AgreementPanel({ siteId, tz, onChange }: { siteId: string; tz: string; onChange: () => void }) {
@@ -115,7 +73,6 @@ export default function AgreementPanel({ siteId, tz, onChange }: { siteId: strin
         {a.state === 'signed' && a.payment?.open === false && <span className="care-muted" data-testid="payment-off">{a.payment.message}</span>}
         {a.state === 'signed' && a.payment?.open !== false && <Action small label="Copy payment link" run={() => careApi<Row>(`sites/${siteId}/checkout`, { method: 'POST', json: {} })} done={(r) => setLink((r as Row).url)} />}
       </div>
-      {a.scope_confirmed && !['signed', 'paid'].includes(a.state) && <OfflineAgreement siteId={siteId} onDone={refresh} />}
       {link && <div className="care-sub" style={{ marginTop: 8 }}><div className="care-label">Payment link (Stripe)</div><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Payment link" /><small className="care-muted">The client can also pay from their agreement page any time. Only Stripe’s verified payment notice starts the plan and queues the check.</small></div>}
       {preview && (
         <div className="care-paper" style={{ marginTop: 10, maxHeight: 420, overflow: 'auto' }}>
