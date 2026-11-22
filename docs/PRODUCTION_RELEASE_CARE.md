@@ -12,6 +12,7 @@ Production: Vercel project `dev-portfolio` (team cutrated-mile), Supabase projec
 | 3 to 7 | `20261031_care_work_ledger`, `20261103_care_report_suggestions`, `20261104_care_checkout_invitations`, `20261105_care_agreements_and_dispatch`, `20261106_care_agreement_links` (as `supabase/release/20261030/03_apply.sql`, one transaction; 1 and 2 again, no change) | owner, SQL editor |
 | 8 | `pending/website-care/20261107_care_function_search_path.sql` | connector |
 | 9 | `pending/website-care/20261108_care_payments_and_offline_agreements.sql` (payment method on each paid period, test websites, agreements signed outside the app). **Not applied yet** as of Nov 22: run it in the SQL editor. Until then, recording a paid period or an offline agreement is refused with a message naming this file; nothing else changes. | owner, SQL editor |
+| 10 | `pending/website-care/20261109_care_introductions.sql` (Website Care introduction on project completion, once per project). **Not applied yet**: run after 9. Until then, completing a project works and the introduction option says it needs this file. | owner, SQL editor |
 
 Precheck: no care objects existed; `clients.id` and `invoices.client_id` uuid; no duplicate invoice schedules; lockdown intact. Verify: record counts unchanged (clients 3, invoices 4, pricing 8, proposals 2, sows 2, contracts 1, documents 0, invoice_milestones 0); no client care records created.
 

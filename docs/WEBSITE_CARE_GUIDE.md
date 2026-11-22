@@ -478,6 +478,24 @@ It lists, newest first: uploaded files, proposals, statements of work, contracts
 
 **Possibly this client’s, not linked** collects older records that only match the client’s email (for example a proposal sent before it was linked to a client record). They aren’t counted as the client’s. Open each one and check it; nothing is merged automatically.
 
+### 4. Completing a project: the Website Care introduction
+
+When the project is delivered, press **Advance to Closed** on the client (Pipeline). Before anything changes you see:
+
+- **Send a Website Care introduction**, ticked by default, with the recipient’s name and email.
+- A **preview** of the email: it explains the three optional plans with their monthly prices and included time, links to the Website Care page, and asks the client to reply with the plan they choose.
+
+Untick it to complete the project without sending. **Complete and send introduction** moves the client to Closed and sends it.
+
+- **Once per project.** If the project is reopened and completed again, or you press twice, nothing is sent again; the dialog says when it was sent and to whom. A new project for the same client is a new offer.
+- **Recorded under the client** as **Care introduction** in their documents.
+- **Skipped automatically** when the client already has active Website Care, when they have no email address, or while client emails are limited to your test addresses (the allowlist).
+- **If the send fails**, the project is still completed. Open the client and press **Website Care introduction** to send it again.
+
+**After the client replies with a plan:** enroll the website (Website Care, **Enroll a website**), confirm the technical scope, and send their online agreement. Signing, payment and the first check then follow as in sections 1 and 2.
+
+**Testing:** use a test client with your own address (for example `alante.v+care1@gmail.com`). Real clients can’t receive it until client emails are switched on for them.
+
 ## Less frequent tasks
 
 - **Pause or end care:** on the website’s page, **Pause reviews** / **Resume reviews**, or **End care for this website** (reports are kept).

@@ -34,6 +34,7 @@ const input = {
     documents: [
       { kind: 'care_agreement', id: 'a1', site_id: 'st1', site_label: 'Clinic', title: 'Website Care agreement care-agreement-2026-11', date: '2026-10-01', status: 'Signed by Sam', pdf: '/api/care/admin/sites/st1/agreements/a1/pdf' },
       { kind: 'care_report', id: 'r1', site_id: 'st1', site_label: 'Clinic', title: 'Website health report', date: '2026-10-20', status: 'Sent to sam@example.com', pdf: '/api/care/admin/cycles/y/pdf?version=1&download=1' },
+      { kind: 'care_intro', id: 'ci1', site_id: null, site_label: null, title: 'Website Care introduction', date: '2026-10-21', status: 'Sent to sam@example.com', pdf: null },
     ],
     unlinked: [{ kind: 'care_agreement', id: 'a0', title: 'Website Care agreement', date: '2026-08-01', reason: 'no client id recorded' }],
   },
@@ -41,8 +42,8 @@ const input = {
 
 test('every document type is included when linked by id, newest first', () => {
   const { documents } = assembleClientDocuments(input)
-  assert.deepEqual(documents.map((d) => d.id), ['r1', 'a1', 'i1', 'k1', 's1', 'p1', 'f1'])
-  assert.deepEqual([...new Set(documents.map((d) => d.kind))].sort(), [...DOC_KINDS].sort(), 'files, proposals, SOWs, contracts, invoices, care agreements and care reports')
+  assert.deepEqual(documents.map((d) => d.id), ['ci1', 'r1', 'a1', 'i1', 'k1', 's1', 'p1', 'f1'])
+  assert.deepEqual([...new Set(documents.map((d) => d.kind))].sort(), [...DOC_KINDS].sort(), 'files, proposals, SOWs, contracts, invoices, care agreements, care reports and care introductions')
   const byId = Object.fromEntries(documents.map((d) => [d.id, d]))
   assert.equal(byId.a1.pdf, '/api/care/admin/sites/st1/agreements/a1/pdf', 'the signed agreement PDF downloads directly')
   assert.equal(byId.a1.open, '/admin/care?site=st1')

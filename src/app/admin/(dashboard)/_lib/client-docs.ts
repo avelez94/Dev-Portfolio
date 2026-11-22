@@ -16,12 +16,12 @@
 
 type R = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type DocKind = 'file' | 'proposal' | 'sow' | 'contract' | 'invoice' | 'care_agreement' | 'care_report'
+export type DocKind = 'file' | 'proposal' | 'sow' | 'contract' | 'invoice' | 'care_agreement' | 'care_report' | 'care_intro'
 export type ClientDoc = { kind: DocKind; id: string; title: string; date: string; status: string; open?: string; download?: { path: string; name: string }; pdf?: string; note?: string }
 export type UnlinkedDoc = { kind: DocKind; id: string; title: string; date: string; reason: string; open?: string }
 
 export const DOC_KIND_LABEL: Record<DocKind, string> = {
-  file: 'File', proposal: 'Proposal', sow: 'Statement of work', contract: 'Contract', invoice: 'Invoice', care_agreement: 'Care agreement', care_report: 'Care report',
+  file: 'File', proposal: 'Proposal', sow: 'Statement of work', contract: 'Contract', invoice: 'Invoice', care_agreement: 'Care agreement', care_report: 'Care report', care_intro: 'Care introduction',
 }
 
 /** Every kind of document the client history covers, in the order the filters show them. */
@@ -87,7 +87,7 @@ export function assembleClientDocuments(input: {
   }
 
   for (const d of input.care?.documents || []) {
-    docs.push({ kind: d.kind, id: d.id, title: `${d.title} (${d.site_label})`, date: d.date, status: d.status, pdf: d.pdf || undefined, open: `/admin/care?site=${d.site_id}`, note: d.note })
+    docs.push({ kind: d.kind, id: d.id, title: d.site_label ? `${d.title} (${d.site_label})` : d.title, date: d.date, status: d.status, pdf: d.pdf || undefined, open: d.site_id ? `/admin/care?site=${d.site_id}` : undefined, note: d.note })
   }
   for (const u of input.care?.unlinked || []) unlinked.push({ kind: u.kind, id: u.id, title: u.title, date: u.date, reason: u.reason })
 

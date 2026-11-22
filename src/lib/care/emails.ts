@@ -234,6 +234,38 @@ export function dispatchBlocked(p: { client: string; site: string; siteUrl: stri
   }
 }
 
+/** One care plan as the introduction describes it. */
+export type IntroPlan = { name: string; price: string; forWho: string; time: string }
+
+/**
+ * The Website Care introduction, offered when a project is marked complete.
+ * It explains the optional plans and links to the Website Care page. Choosing
+ * a plan is a reply; you then confirm the scope and send the personalized
+ * online agreement. Nothing is charged by this email.
+ */
+export function careIntroduction(p: { name: string; business: string; projectName: string; plans: IntroPlan[]; careUrl: string }): Email {
+  const first = String(p.name || '').trim().split(/\s+/)[0] || 'there'
+  return {
+    subject: oneLine(`Keeping ${p.business || 'your new website'} running smoothly`),
+    ...renderEmail({
+      audience: 'client',
+      preheader: 'Optional Website Care plans for your new site: monthly checks, a report, and time for updates.',
+      eyebrow: 'Website Care',
+      title: 'Your site is live.',
+      titleAccent: 'Here’s how I can look after it.',
+      blocks: [
+        { type: 'p', html: `Hi ${esc(first)},` },
+        { type: 'p', html: `Thank you for working with me on ${esc(p.projectName || 'your website')}. Now that it’s finished, I offer optional monthly Website Care for clients who’d like someone keeping an eye on their site.` },
+        { type: 'p', html: 'Each month I check that your agreed pages load securely, images show, layouts fit phones and desktops, and links work. You get a plain language report, and depending on the plan, time for updates or troubleshooting.' },
+        { type: 'details', title: 'The plans', rows: p.plans.map((pl) => [pl.name, `${esc(pl.price)} a month<br>${esc(pl.forWho)}<br>${esc(pl.time)}`] as [string, string]) },
+        { type: 'buttons', items: [{ label: 'See Website Care', href: p.careUrl }], fallbackLink: true },
+        { type: 'p', html: '<strong>If you’d like a plan,</strong> reply to this email with the one you choose. I’ll confirm exactly what’s checked on your site and send you a short online agreement to review and sign. Your plan starts once you’ve signed and made your first monthly payment, and the first check runs right after.' },
+        { type: 'note', html: 'Website Care is optional, and there’s nothing to do if you’d rather not. Reply any time with questions.' },
+      ],
+    }),
+  }
+}
+
 /**
  * The client's report email: your message, then the complete approved report,
  * built from the same frozen snapshot as the attached PDF. Tables with inline

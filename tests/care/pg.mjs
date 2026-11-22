@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const ROOT = new URL('../..', import.meta.url).pathname
-const MIGRATIONS = ['supabase/pending/website-care/20261030_website_care.sql', 'supabase/pending/website-care/20261031_care_work_ledger.sql', 'supabase/pending/website-care/20261103_care_report_suggestions.sql', 'supabase/pending/website-care/20261104_care_checkout_invitations.sql', 'supabase/pending/website-care/20261105_care_agreements_and_dispatch.sql', 'supabase/pending/website-care/20261106_care_agreement_links.sql', 'supabase/pending/website-care/20261107_care_function_search_path.sql', 'supabase/pending/website-care/20261108_care_payments_and_offline_agreements.sql']
+const MIGRATIONS = ['supabase/pending/website-care/20261030_website_care.sql', 'supabase/pending/website-care/20261031_care_work_ledger.sql', 'supabase/pending/website-care/20261103_care_report_suggestions.sql', 'supabase/pending/website-care/20261104_care_checkout_invitations.sql', 'supabase/pending/website-care/20261105_care_agreements_and_dispatch.sql', 'supabase/pending/website-care/20261106_care_agreement_links.sql', 'supabase/pending/website-care/20261107_care_function_search_path.sql', 'supabase/pending/website-care/20261108_care_payments_and_offline_agreements.sql', 'supabase/pending/website-care/20261109_care_introductions.sql']
 
 function findBin() {
   if (process.env.PG_BIN) return process.env.PG_BIN
@@ -48,7 +48,9 @@ export async function startDb({ raw = false } = {}) {
   sql(`create role anon; create role authenticated; create role service_role;
        create table public.clients (id uuid primary key default gen_random_uuid(), name text, email text, business text);
        create table public.invoices (id uuid primary key default gen_random_uuid(), client_id uuid, invoice_number text, invoice_type text,
-         total_fee numeric, deposit_amount numeric, amount numeric, due_date date, service_desc text, status text, paid_date date, deposit_paid_date date, created_at timestamptz default now());`)
+         total_fee numeric, deposit_amount numeric, amount numeric, due_date date, service_desc text, status text, paid_date date, deposit_paid_date date, created_at timestamptz default now());
+       create table public.projects (id uuid primary key default gen_random_uuid(), client_id uuid, name text, type text, status text default 'active', value numeric default 0,
+         platform text, start_date date, end_date date, notes text, created_at timestamptz default now());`)
   for (const m of MIGRATIONS) sql(readFileSync(join(ROOT, m), 'utf8'))
 }
 

@@ -7,13 +7,13 @@
 import { db, CareError, type Row } from './db'
 
 export type CareDoc = {
-  kind: 'care_agreement' | 'care_report'
+  kind: 'care_agreement' | 'care_report' | 'care_intro'
   id: string
   title: string
   date: string
   status: string
-  site_id: string
-  site_label: string
+  site_id: string | null
+  site_label: string | null
   /** Admin download for the stored PDF, when one exists. */
   pdf: string | null
   note?: string
@@ -59,6 +59,15 @@ export async function clientCareDocuments(clientId: string) {
       date: snd.finished_at || snd.created_at,
       status: `Sent to ${snd.recipient_email}${snd.delivery_status !== 'unknown' ? ` (${snd.delivery_status})` : ''}`,
       pdf: ver ? `/api/care/admin/cycles/${c.id}/pdf?version=${ver}&download=1` : null,
+    })
+  }
+
+  // Website Care introductions sent to this client (Pipeline, when a project was completed). Missing before 20261109.
+  const intros = ((await db.from('care_introductions').select('id, project_id, recipient_email, status, error, created_at, finished_at').eq('client_id', clientId).order('created_at', { ascending: false })).data || []) as Row[]
+  for (const i of intros) {
+    docs.push({
+      kind: 'care_intro', id: i.id, site_id: null, site_label: null, title: 'Website Care introduction', date: i.finished_at || i.created_at, pdf: null,
+      status: i.status === 'sent' ? `Sent to ${i.recipient_email}` : i.status === 'failed' ? `Not sent: ${i.error || 'the email failed'}` : 'Sending',
     })
   }
 

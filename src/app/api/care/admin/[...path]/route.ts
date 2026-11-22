@@ -11,6 +11,7 @@ import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCK
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
 import { createCycle, enqueueScan, cancelScan, releaseHeldCycles, retryDispatch, dispatchConfigured, isMissingColumn, PAYMENTS_MIGRATION, type CyclePayment } from '@/lib/care/cycles'
 import { carePayments } from '@/lib/care/revenue'
+import { introductionPreview, sendIntroduction } from '@/lib/care/introduction'
 import { pipeline } from '@/lib/care/pipeline'
 import { coveringAgreement, recordOfflineAgreement, NEEDS_SIGNED_AGREEMENT, agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy, revokeLink, replaceLink, agreementVersion } from '@/lib/care/agreement'
 import { siteHistory, runResults } from '@/lib/care/history'
@@ -273,6 +274,16 @@ async function agreementReplace({ seg, body }: Ctx) {
   return ok(await replaceLink(id(seg[1]), { reason: String(body.reason || '') }, ACTOR))
 }
 /** The client's Website Care documents, by client id (signed agreements and sent reports). */
+/** The Website Care introduction for a project being completed: recipient, whether it will be sent, and the email. Sends nothing. */
+async function introPreview({ req, seg }: Ctx) {
+  const project = req.nextUrl.searchParams.get('project')
+  return ok(await introductionPreview(id(seg[1]), project ? id(project) : null))
+}
+/** Sends it, once per project. */
+async function introSend({ seg, body }: Ctx) {
+  return ok(await sendIntroduction(id(seg[1]), body.project_id ? id(String(body.project_id)) : null, ACTOR), 201)
+}
+
 async function clientDocs({ seg }: Ctx) {
   return ok(await clientCareDocuments(id(seg[1])))
 }
@@ -651,6 +662,8 @@ const routes: [string, string, Handler][] = [
   ['POST', 'settings/approve-policy', approvePolicy],
   ['GET', 'clients', clients],
   ['GET', 'clients/:id/documents', clientDocs],
+  ['GET', 'clients/:id/introduction', introPreview],
+  ['POST', 'clients/:id/introduction', introSend],
   ['GET', 'template', template],
   ['GET', 'activity', activity],
   ['POST', 'check-url', checkUrl],

@@ -15,6 +15,7 @@ import { useRows } from '../../_lib/useRows'
 import { PIPELINE_STAGES, STAGE_LABELS } from '../../_lib/leads'
 import type { Client } from '../../_lib/types'
 import ClientPanel from './ClientPanel'
+import CompleteProjectDialog from './CompleteProjectDialog'
 
 const blankClient = () => ({ name: '', email: '', business: '', platform: 'direct', pipeline_stage: 'discovery_call' })
 
@@ -27,6 +28,7 @@ export default function PipelineView() {
   const [showAdd, setShowAdd] = useState(false)
   const [nc, setNc] = useState(blankClient)
   const [advancing, setAdvancing] = useState<Client | null>(null)
+  const [completing, setCompleting] = useState<Client | null>(null)
   const [projectForm, setProjectForm] = useState({ value: '', end_date: '' })
   const [preview, setPreview] = useState<PendingPreview | null>(null)
   useUnsaved(showAdd && Boolean(nc.name || nc.email || nc.business))
@@ -40,6 +42,8 @@ export default function PipelineView() {
     if (i === PIPELINE_STAGES.length - 1) return
     const nextStage = PIPELINE_STAGES[i + 1]
     if (nextStage === 'active_project') { setAdvancing(c); return }
+    // Completing a project offers the Website Care introduction first.
+    if (nextStage === 'closed') { setCompleting(c); return }
     await supabase.from('clients').update({ pipeline_stage: nextStage }).eq('id', c.id)
     await clients.reload()
   }
@@ -127,6 +131,7 @@ export default function PipelineView() {
           </div>
         ))}
       </PageState>
+      {completing && <CompleteProjectDialog client={completing} onClose={() => setCompleting(null)} onDone={() => void clients.reload()} />}
       {advancing && (
         <Dialog label="Start active project" onClose={() => setAdvancing(null)} maxWidth={380} closeOnBackdrop={false}>
           <div style={{ fontFamily: ADMIN_FONTS.display, fontSize: 18, fontWeight: 600, color: d.text, marginBottom: 6 }}>Moving to Active Project</div>

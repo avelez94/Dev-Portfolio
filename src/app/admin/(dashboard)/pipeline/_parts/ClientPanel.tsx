@@ -6,6 +6,7 @@
  * submitted for a different person.
  */
 import { useState } from 'react'
+import CompleteProjectDialog from './CompleteProjectDialog'
 import { supabase } from '@/lib/supabase-admin-browser'
 import { nyOffset } from '@/lib/time'
 import { useTheme } from '../../_components/theme'
@@ -37,6 +38,7 @@ export default function ClientPanel({ client, onAdvance, onLost, onSaved, onPrev
   const { d, inputStyle } = useTheme()
   const [showInvoice, setShowInvoice] = useState(false)
   const [showMeeting, setShowMeeting] = useState(false)
+  const [intro, setIntro] = useState(false)
   const [meetingForm, setMeetingForm] = useState({ title: 'Project Check-in', date: '', time: '' })
   const [scheduling, setScheduling] = useState(false)
   const [showEmail, setShowEmail] = useState(false)
@@ -83,6 +85,7 @@ export default function ClientPanel({ client, onAdvance, onLost, onSaved, onPrev
       </div>
       <div className="rp-actions" style={{ marginBottom: 16 }}>
         {open && <button className="ra-btn fill" onClick={() => onAdvance(client)}>Advance to {STAGE_LABELS[PIPELINE_STAGES[PIPELINE_STAGES.indexOf(client.pipeline_stage) + 1]]}</button>}
+        {client.pipeline_stage === 'closed' && <button className="ra-btn" style={{ background: d.surface, color: d.text, border: '1px solid ' + d.border }} onClick={() => setIntro(true)}>Website Care introduction</button>}
         {open && <button className="ra-btn" style={{ background: d.red, color: d.redText, border: '1px solid ' + d.redText + '44' }} onClick={() => onLost(client)}>Mark as Lost</button>}
         {client.pipeline_stage === 'lost' && <button className="ra-btn" style={{ background: d.surface, color: d.text2, border: '1px solid ' + d.border }} onClick={() => onAdvance(client)}>Reactivate</button>}
         <button className="ra-btn" style={{ background: d.surface, color: d.text2, border: '1px solid ' + d.border }} onClick={() => setShowEmail(true)}>Email {first}</button>
@@ -210,6 +213,7 @@ export default function ClientPanel({ client, onAdvance, onLost, onSaved, onPrev
       <ClientDocuments client={client} links={<CareLinks clientId={client.id} />} />
       {showEmail && <EmailDialog client={client} onClose={() => setShowEmail(false)} />}
       {viewing && <InvoiceDialog invoice={viewing} client={client} onClose={() => setViewing(null)} />}
+      {intro && <CompleteProjectDialog client={client} sendOnly onClose={() => setIntro(false)} onDone={onSaved} />}
     </>
   )
 }

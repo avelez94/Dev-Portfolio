@@ -497,6 +497,31 @@ test('practice: immediate cancellation flags the open review for your decision',
   await close()
 })
 
+test('completing a project offers the Website Care introduction: recipient and preview first, sent once, recorded under the client', async () => {
+  const { page, close } = await signedIn()
+  const GARDEN = '00000000-0000-4000-8000-000000000105'
+  await page.goto(`${APP}/admin/pipeline?client=${GARDEN}`)
+  await page.getByRole('button', { name: 'Advance to Closed' }).click()
+  const box = page.getByTestId('care-intro')
+  await box.getByText(/Send a Website Care introduction to/).waitFor()
+  assert.match(await box.textContent(), /Casey Rivera, casey@example\.com/)
+  assert.equal(await box.getByRole('checkbox').isChecked(), true, 'ticked by default')
+  const frame = page.frameLocator('iframe[title="Website Care introduction preview"]')
+  await frame.getByText('Business Care').first().waitFor()
+  await page.getByRole('button', { name: 'Complete and send introduction' }).click()
+  await page.getByText(/Project complete\. Website Care introduction sent to casey@example\.com/).waitFor()
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  const log = await simulated(page)
+  assert.match(log, /Email to casey@example\.com: Keeping Rivera Garden Design running smoothly/)
+  // Recorded under the client, and never sent twice for the same project.
+  await page.reload()
+  await page.locator('li[data-kind="care_intro"]').getByText(/Sent to casey@example\.com/).waitFor()
+  await page.getByRole('button', { name: 'Website Care introduction' }).click()
+  await page.getByTestId('care-intro').getByText(/Already sent for this project/).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Send introduction' }).isDisabled(), true)
+  await close()
+})
+
 test('the owner’s guide opens from Website Care and is searchable', async () => {
   const { page, close } = await signedIn({ width: 375, height: 800 })
   await page.goto(`${APP}/admin/care`)

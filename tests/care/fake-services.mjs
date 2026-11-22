@@ -86,12 +86,18 @@ export function startFakeStripe(port) {
 }
 
 export function startFakeResend(port) {
-  const s = { emails: [] }
+  // `failNext`: refuse the next n messages the way Resend refuses one (nothing is recorded as sent).
+  const s = { emails: [], failNext: 0 }
   s.server = http.createServer((req, res) => {
     let body = ''
     req.on('data', (c) => { body += c })
     req.on('end', () => {
       const m = body ? JSON.parse(body) : {}
+      if (s.failNext > 0) {
+        s.failNext--
+        res.writeHead(422, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ name: 'validation_error', message: 'Refused by the local stand in', statusCode: 422 }))
+      }
       const id = rid('email')
       s.emails.push({ id, ...m, idempotencyKey: req.headers['idempotency-key'] })
       res.writeHead(200, { 'content-type': 'application/json' })
