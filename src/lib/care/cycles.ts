@@ -32,8 +32,28 @@ type CycleInput = {
   amountPaid?: number | null
   currency?: string | null
   billingReason?: string | null
+  /** How the period was paid (migration 20261108). Stored on the cycle for Revenue. */
+  payment?: CyclePayment
   actor: string
 }
+
+export type CyclePayment = {
+  method: 'stripe' | 'invoice' | 'direct'
+  is_test: boolean
+  invoice_id?: string | null
+  amount_cents?: number | null
+  received_on?: string | null
+  reference?: string | null
+  agreement_id?: string | null
+}
+
+/** True when the database is missing columns a newer migration adds. */
+export function isMissingColumn(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false
+  return err.code === '42703' || err.code === 'PGRST204' || /column .* does not exist|Could not find the .* column/i.test(err.message ?? '')
+}
+
+export const PAYMENTS_MIGRATION = 'supabase/pending/website-care/20261108_care_payments_and_offline_agreements.sql'
 
 export type HoldReason = 'enrollment' | 'setup_changed' | 'paused' | 'ended'
 
@@ -84,7 +104,17 @@ export async function createCycle(i: CycleInput): Promise<{ cycle: Row; created:
     hold_reason: hold,
     hold_flagged_at: hold && i.source === 'stripe' ? new Date().toISOString() : null,
   }
-  const ins = await db.from('care_cycles').insert(row).select('*').single()
+  const pay = i.payment ? {
+    payment_method: i.payment.method, is_test: i.payment.is_test, payment_invoice_id: i.payment.invoice_id ?? null,
+    payment_amount_cents: i.payment.amount_cents ?? null, payment_received_on: i.payment.received_on ?? null,
+    payment_reference: i.payment.reference ?? null, agreement_id: i.payment.agreement_id ?? null,
+  } : {}
+  let ins = await db.from('care_cycles').insert({ ...row, ...pay }).select('*').single()
+  if (ins.error && i.payment && isMissingColumn(ins.error)) {
+    // Money Stripe already took is never dropped: without the payment columns the period is still saved.
+    if (i.source !== 'stripe') throw new CareError(`The database needs ${PAYMENTS_MIGRATION} before a paid period can be recorded here.`, 503)
+    ins = await db.from('care_cycles').insert(row).select('*').single()
+  }
   if (ins.error) {
     if (ins.error.code === '23505') {
       // Already have this period (or this invoice): return the existing cycle.

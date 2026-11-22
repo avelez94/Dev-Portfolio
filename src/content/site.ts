@@ -6,8 +6,16 @@
  * Copy rule: no dashes of any kind in visitor facing text.
  */
 
+/** The canonical origin. The bare domain redirects here, and servers calling back (Stripe, the check runner) don't follow redirects. */
+export const CANONICAL_ORIGIN = 'https://www.alantevelez.com'
+
+/** Rewrites the bare alantevelez.com domain to the canonical www origin and drops trailing slashes. Other hosts (previews, localhost) are kept. */
+export function canonicalUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '').replace(/^https?:\/\/alantevelez\.com(?=$|[/:?#])/i, CANONICAL_ORIGIN)
+}
+
 /** One fallback for every absolute link (metadata, booking links in emails). */
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com').replace(/\/+$/, '')
+export const SITE_URL = canonicalUrl(process.env.NEXT_PUBLIC_SITE_URL || CANONICAL_ORIGIN)
 export const CONTACT_EMAIL = 'alante@alantevelez.com'
 
 /* ------------------------------------------------------------------ */

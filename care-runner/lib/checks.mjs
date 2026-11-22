@@ -14,7 +14,7 @@ import { chromium } from 'playwright'
 import { checkLink } from './safe-fetch.mjs'
 import { hostInDomains } from './ip-guard.mjs'
 
-export const UA_SUFFIX = 'AlanteVelezWebsiteCare/1.0 (+https://alantevelez.com/care; read only monthly check)'
+export const UA_SUFFIX = 'AlanteVelezWebsiteCare/1.0 (+https://www.alantevelez.com/care; read only monthly check)'
 const RISKY_LINK = /(log ?out|sign ?out|signout|logout|delete|remove|unsubscribe|add[-_]?to[-_]?cart|cart\/add|checkout|confirm|cancel|wp-admin|wp-login|\/admin|\/account|\/login)/i
 const BOT_WALL = /(captcha|are you a robot|verify you are human|just a moment|attention required|access denied|cf-chl|challenge-platform|perimeterx|datadome)/i
 

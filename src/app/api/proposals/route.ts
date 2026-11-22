@@ -1,3 +1,4 @@
+import { SITE_URL } from '@/content/site'
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { requireAdmin } from '@/lib/admin-auth'
@@ -107,7 +108,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
+    const siteUrl = SITE_URL
     const proposalUrl = `${siteUrl}/proposals/${proposal.id}`
 
     const m = mail.proposalSent({ clientName, projectTitle, message, url: proposalUrl })

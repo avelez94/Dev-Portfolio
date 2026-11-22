@@ -23,6 +23,7 @@ import { db, must, CareError, logActivity, putObject, getObject, type Row } from
 import { appUrl, clientEmailAllowed } from './config'
 import { plan as planInfo } from './plans'
 import { setupHash } from './sites'
+import { isMissingColumn, PAYMENTS_MIGRATION } from './cycles'
 import { verifyCheckoutPrice, expectedCharge, openCheckout, closeCheckout, stripeConfigured, PAYMENT_NOT_CONNECTED, type CheckoutLink } from './stripe'
 import { agreementLink, agreementSignedClient, agreementSignedOwner } from './emails'
 import { agreementPdf, type SignatureFacts } from './agreement-pdf'
@@ -261,8 +262,9 @@ export type AgreementState = 'not_ready' | 'ready' | 'sent' | 'viewed' | 'signed
 export async function agreementStatus(siteId: string) {
   const { site, client } = await loadSite(siteId)
   const cur = await currentAgreement(site)
-  const history = (await db.from('care_agreements').select('id, terms_version, status, issued_at, signed_at, signer_name, signed_email_status, signed_emailed_at, signed_email_error, superseded_reason, amount_cents, first_viewed_at, signed_pdf_path')
-    .eq('site_id', siteId).order('issued_at', { ascending: false }).limit(20)).data || []
+  // '*' so this keeps working before and after 20261108 adds the offline columns; signature data is dropped below.
+  const history = ((await db.from('care_agreements').select('*').eq('site_id', siteId).order('issued_at', { ascending: false }).limit(20)).data || [])
+    .map((h: Row) => ({ id: h.id, terms_version: h.terms_version, status: h.status, issued_at: h.issued_at, signed_at: h.signed_at, signer_name: h.signer_name, signed_email_status: h.signed_email_status, signed_emailed_at: h.signed_emailed_at, signed_email_error: h.signed_email_error, superseded_reason: h.superseded_reason, amount_cents: h.amount_cents, first_viewed_at: h.first_viewed_at, signed_pdf_path: h.signed_pdf_path, signed_offline: !!h.signed_offline, offline_method: h.offline_method || null, offline_evidence: h.offline_evidence || null }))
   const subscribed = !!site.stripe_subscription_id && !['canceled', 'incomplete_expired'].includes(site.subscription_status || '')
   const problems = cur && cur.status === 'signed' && covers(cur, site, client) ? [] : await issueProblems(site, client)
   let state: AgreementState
@@ -278,7 +280,7 @@ export async function agreementStatus(siteId: string) {
     link: site.agreement_token ? agreementUrl(site.agreement_token) : null,
     recipient: { name: site.recipient_name || client.name || '', email: recipient, allowed: recipient ? clientEmailAllowed(recipient) : { ok: false, reason: 'No recipient email.' } },
     sent: site.agreement_sent_at ? { at: site.agreement_sent_at, to: site.agreement_sent_to } : null,
-    current: cur ? { id: cur.id, status: cur.status, issued_at: cur.issued_at, signed_at: cur.signed_at, signer_name: cur.signer_name, amount_cents: cur.amount_cents, email_status: cur.signed_email_status, email_error: cur.signed_email_error, has_pdf: !!cur.signed_pdf_path, viewed_at: cur.first_viewed_at } : null,
+    current: cur ? { id: cur.id, status: cur.status, issued_at: cur.issued_at, signed_at: cur.signed_at, signer_name: cur.signer_name, amount_cents: cur.amount_cents, email_status: cur.signed_email_status, email_error: cur.signed_email_error, has_pdf: !!cur.signed_pdf_path, viewed_at: cur.first_viewed_at, signed_offline: !!cur.signed_offline, offline_method: cur.offline_method || null, offline_evidence: cur.offline_evidence || null } : null,
     history: history.map(({ signed_pdf_path, ...h }: Row) => ({ ...h, has_pdf: !!signed_pdf_path })),
     links: await linkHistory(siteId),
     link_off: !site.agreement_token && (await db.from('care_agreement_links').select('id').eq('site_id', siteId).limit(1)).data?.length ? true : false,
@@ -468,4 +470,69 @@ export async function ownerCheckout(siteId: string, actor: string): Promise<Chec
   const cur = await currentAgreement(site)
   if (!covers(cur, site, client)) throw new CareError('Payment unlocks once the client signs the current care agreement. Send the agreement link first.', 409)
   return openCheckout(siteId, actor)
+}
+
+/* ------------------------------------------------------------------ */
+/* Paid periods added by hand, and agreements signed outside the app    */
+/* ------------------------------------------------------------------ */
+
+/** The signed agreement that covers the website's confirmed scope, plan and price right now, or null. */
+export async function coveringAgreement(siteId: string): Promise<Row | null> {
+  const { site, client } = await loadSite(siteId)
+  const cur = await currentAgreement(site)
+  return covers(cur, site, client) ? cur : null
+}
+
+export const NEEDS_SIGNED_AGREEMENT = 'A paid period can only be added after the client signs the current care agreement for this scope, plan and price. Send the agreement link, or, if the client already signed one outside the app, record it under Agreement: Record an existing signed agreement.'
+
+const OFFLINE_METHODS = ['paper', 'email', 'other_esign'] as const
+export const OFFLINE_METHOD_LABEL: Record<(typeof OFFLINE_METHODS)[number], string> = { paper: 'Signed on paper', email: 'Accepted by email', other_esign: 'Signed with another e-signature service' }
+
+/**
+ * Records a care agreement the client already signed outside the app, for an
+ * existing client or one who signed on paper. It is kept as the website's
+ * signed agreement for the current scope, plan and price, marked "signed
+ * outside the app" with who signed, when, how, and where the signed copy is.
+ * A copy of the signed PDF can be attached. Only for a website with a
+ * confirmed scope and no current signed agreement; never replaces one.
+ */
+export async function recordOfflineAgreement(siteId: string, body: Row, actor: string) {
+  const { site, client } = await loadSite(siteId)
+  const problems = await issueProblems(site, client)
+  if (problems.length) throw new CareError(`An agreement can’t be recorded yet. ${problems.join(' ')}`, 409)
+  const cur = await currentAgreement(site)
+  if (covers(cur, site, client)) throw new CareError('This website already has a signed agreement for its current scope, plan and price.', 409)
+  const name = typeof body.signer_name === 'string' ? body.signer_name.trim() : ''
+  if (name.length < 2 || name.length > 120) throw new CareError('Enter the name of the person who signed.', 422)
+  const on = String(body.signed_on || '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(on) || Number.isNaN(Date.parse(on)) || on > new Date().toISOString().slice(0, 10) || on < '2020-01-01') throw new CareError('Enter the date it was signed (not in the future).', 422)
+  const method = String(body.method || '') as (typeof OFFLINE_METHODS)[number]
+  if (!OFFLINE_METHODS.includes(method)) throw new CareError('Choose how it was signed.', 422)
+  const evidence = typeof body.evidence === 'string' ? body.evidence.trim() : ''
+  if (evidence.length < 10 || evidence.length > 1000) throw new CareError('Describe the signed document and where its copy is kept (at least 10 characters).', 422)
+  if (body.confirm_covers !== true) throw new CareError('Confirm the signed document covers this website, plan, monthly price and scope.', 422)
+  let pdf: Buffer | null = null
+  if (body.pdf_base64) {
+    const raw = String(body.pdf_base64).replace(/^data:application\/pdf;base64,/, '')
+    pdf = Buffer.from(raw, 'base64')
+    if (pdf.length < 100 || pdf.length > 3_000_000 || pdf.subarray(0, 5).toString() !== '%PDF-') throw new CareError('The attached file must be a PDF under 3 MB.', 422)
+  }
+  const snap = buildSnapshot(site, client)
+  await supersedeOpen(siteId, 'A signed agreement was recorded from outside the app.', actor)
+  const signedAt = new Date(`${on}T12:00:00Z`).toISOString()
+  const ins = await db.from('care_agreements').insert({
+    site_id: siteId, client_id: site.client_id, terms_version: CARE_AGREEMENT_VERSION, snapshot: snap, snapshot_hash: hashOf(snap), setup_hash: site.confirmed_hash,
+    amount_cents: snap.price.amount_cents, issued_by: actor, status: 'signed', signer_name: name, signer_email: snap.client.email || null, signed_at: signedAt,
+    signed_offline: true, offline_method: method, offline_evidence: evidence, offline_recorded_by: actor,
+  }).select('*').single()
+  if (ins.error && isMissingColumn(ins.error)) throw new CareError(`The database needs ${PAYMENTS_MIGRATION} before an offline agreement can be recorded.`, 503)
+  const a = must(ins, 'Agreement')
+  if (pdf) {
+    const path = `${site.id}/${a.id}.pdf`
+    await putObject(AGREEMENTS_BUCKET, path, pdf, 'application/pdf')
+    await db.from('care_agreements').update({ signed_pdf_path: path, signed_pdf_sha256: createHash('sha256').update(pdf).digest('hex') }).eq('id', a.id)
+  }
+  await db.from('care_sites').update({ agreement_id: a.id, updated_at: new Date().toISOString() }).eq('id', siteId)
+  await logActivity({ site_id: siteId, actor, action: 'agreement_recorded_offline', detail: { agreement: a.id, method, signed_on: on, signer: name, pdf: !!pdf } })
+  return { agreement_id: a.id, signed_at: signedAt, has_pdf: !!pdf }
 }

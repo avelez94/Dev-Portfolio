@@ -1,3 +1,4 @@
+import { SITE_URL } from '@/content/site'
 import { NextRequest, NextResponse } from 'next/server'
 import { DOC_BRAND_VERSION, missingBrandColumn } from '@/lib/brand-version'
 import { supabaseAdmin } from '@/lib/supabase-admin'
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest) {
     const ms = await supabaseAdmin.from('invoice_milestones').insert(rows)
     if (ms.error) throw ms.error
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
+    const siteUrl = SITE_URL
     const contractUrl = `${siteUrl}/contracts/${contract.id}`
 
     const m = mail.contractReady({

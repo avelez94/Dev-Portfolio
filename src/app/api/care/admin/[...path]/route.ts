@@ -9,9 +9,10 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { careEnabled, careOff, clientEmailAllowed } from '@/lib/care/config'
 import { db, must, CareError, getSettings, logActivity, getObject, EVIDENCE_BUCKET, REPORTS_BUCKET, type Row } from '@/lib/care/db'
 import { parseSiteInput, setupHash, assertSitePricing, assertClient, confirmSite, CHECKLIST_TEMPLATE, LIMIT_DEFAULTS, LIMIT_CAPS } from '@/lib/care/sites'
-import { createCycle, enqueueScan, cancelScan, releaseHeldCycles, retryDispatch, dispatchConfigured } from '@/lib/care/cycles'
+import { createCycle, enqueueScan, cancelScan, releaseHeldCycles, retryDispatch, dispatchConfigured, isMissingColumn, PAYMENTS_MIGRATION, type CyclePayment } from '@/lib/care/cycles'
+import { carePayments } from '@/lib/care/revenue'
 import { pipeline } from '@/lib/care/pipeline'
-import { agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy, revokeLink, replaceLink, agreementVersion } from '@/lib/care/agreement'
+import { coveringAgreement, recordOfflineAgreement, NEEDS_SIGNED_AGREEMENT, agreementStatus, sendAgreementLink, ownerCheckout, reconcileAgreement, signedPdf, emailSignedCopy, revokeLink, replaceLink, agreementVersion } from '@/lib/care/agreement'
 import { siteHistory, runResults } from '@/lib/care/history'
 import { loadBundle, buildSnapshot, hashSnapshot, readinessProblems, updateContent, updateManual, updateFinding, markReady, approve, invalidateApproval, updateIssueNote, updatePlanTime, suggestionState, refreshSuggestions, acceptSuggestion, dismissSuggestion } from '@/lib/care/report'
 import { groupFindings, groupKey, type FindingIn } from '@/lib/care/report-model'
@@ -174,9 +175,12 @@ async function createSite({ body }: Ctx) {
   await assertClient(value.client_id)
   await assertSitePricing(value)
   // The care terms are recorded as accepted when you confirm the setup (confirmSite), not on saving.
-  const ins = await db.from('care_sites').insert({ ...value, enrollment_status: 'draft' }).select('*').single()
+  // A test website is chosen here only; its periods and payments never count in Revenue.
+  const isTest = body.is_test === true
+  const ins = await db.from('care_sites').insert({ ...value, enrollment_status: 'draft', ...(isTest ? { is_test: true } : {}) }).select('*').single()
+  if (ins.error && isTest && isMissingColumn(ins.error)) throw new CareError(`The database needs ${PAYMENTS_MIGRATION} before a test website can be enrolled.`, 503)
   const site = must(ins, 'Website')
-  await logActivity({ site_id: site.id, actor: ACTOR, action: 'enrollment_created', detail: { plan: value.plan } })
+  await logActivity({ site_id: site.id, actor: ACTOR, action: 'enrollment_created', detail: { plan: value.plan, test: isTest } })
   return ok({ site }, 201)
 }
 
@@ -312,21 +316,91 @@ async function clearBilling({ seg, body }: Ctx) {
 }
 
 /** A service period for a client billed outside Stripe (for example by invoice). */
+/**
+ * A paid period added by hand, for a client billed outside Stripe. Allowed
+ * only when a signed agreement covers the website's current scope, plan and
+ * price (signed in the app, or recorded as signed outside it), and only with
+ * the payment that was actually received:
+ *   invoice  one of your invoices for this client, already marked paid. Revenue
+ *            counts the invoice, so the period adds nothing more.
+ *   direct   money received outside invoices: amount, date, and how it was paid.
+ * Test websites use a direct test payment; it never counts in Revenue.
+ */
 async function manualCycle({ seg, body }: Ctx) {
   const siteId = id(seg[1])
   const site = must(await db.from('care_sites').select('*').eq('id', siteId).single(), 'Website')
   if (site.stripe_subscription_id) throw new CareError('This website is billed through Stripe, so its periods come from paid invoices.', 409)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.period_start)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(body.period_end))) throw new CareError('Enter the paid period start and end dates.')
-  if (body.confirm_paid !== true) throw new CareError('Confirm this period has been paid or agreed in writing.', 422)
+  if (body.confirm_paid !== true) throw new CareError('Confirm the payment for this period was received.', 422)
+  const agreementRow = await coveringAgreement(siteId)
+  if (!agreementRow) throw new CareError(NEEDS_SIGNED_AGREEMENT, 409)
   const s = await getSettings()
   const start = zonedToUtc(String(body.period_start), '00:00', s.timezone)
   const end = zonedToUtc(String(body.period_end), '00:00', s.timezone)
   if (end <= start) throw new CareError('The period must end after it starts.')
   if (!isPlanId(site.plan)) throw new CareError('Choose a plan first.')
-  const r = await createCycle({ siteId, source: 'manual', periodStart: start, periodEnd: end, plan: site.plan, paidAt: new Date(), actor: ACTOR })
+  const isTest = !!site.is_test
+  const today = localDate(new Date(), s.timezone)
+  let payment: CyclePayment
+  let paidAt = new Date()
+  if (body.payment_method === 'invoice') {
+    if (isTest) throw new CareError('A test website can’t use a real invoice. Record a direct test payment instead, so nothing fictional reaches Revenue.', 422)
+    const inv = (await db.from('invoices').select('id, client_id, invoice_number, status, paid_date').eq('id', id(String(body.invoice_id || ''))).maybeSingle()).data
+    if (!inv || inv.client_id !== site.client_id) throw new CareError('Choose one of this client’s invoices.', 422)
+    if (inv.status !== 'paid') throw new CareError(`Invoice ${inv.invoice_number} isn’t marked paid yet. Record its payment in Revenue or Pipeline first.`, 409)
+    payment = { method: 'invoice', is_test: false, invoice_id: inv.id, agreement_id: agreementRow.id, reference: `Invoice ${inv.invoice_number}` }
+    if (inv.paid_date) paidAt = new Date(`${String(inv.paid_date).slice(0, 10)}T12:00:00Z`)
+  } else if (body.payment_method === 'direct') {
+    const amount = Number(body.amount)
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 100000 || Math.round(amount * 100) !== Math.round(amount * 100 * 1000) / 1000) throw new CareError('Enter the amount received, in dollars and cents.', 422)
+    const on = String(body.received_on || '')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on) || on > today) throw new CareError('Enter the date the payment was received (not in the future).', 422)
+    const how = typeof body.reference === 'string' ? body.reference.trim() : ''
+    if (how.length < 3 || how.length > 200) throw new CareError('Say how it was paid, for example “Zelle, confirmation 4821”.', 422)
+    payment = { method: 'direct', is_test: isTest, amount_cents: Math.round(amount * 100), received_on: on, reference: how, agreement_id: agreementRow.id }
+    paidAt = new Date(`${on}T12:00:00Z`)
+  } else {
+    throw new CareError('Choose how this period was paid: one of your invoices, or a payment received directly.', 422)
+  }
+  const r = await createCycle({ siteId, source: 'manual', periodStart: start, periodEnd: end, plan: site.plan, paidAt, payment, actor: ACTOR })
   if (!r.created) throw new CareError('A review cycle already exists for that period.', 409)
   if (body.note) await db.from('care_cycles').update({ manual_note: String(body.note).slice(0, 500) }).eq('id', r.cycle.id)
+  await logActivity({ site_id: siteId, cycle_id: r.cycle.id, actor: ACTOR, action: 'manual_period_recorded', detail: { method: payment.method, test: isTest, amount_cents: payment.amount_cents ?? null, invoice: payment.invoice_id ?? null, agreement: agreementRow.id } })
   return ok({ cycle: r.cycle }, 201)
+}
+
+/** Record an agreement the client signed outside the app (paper, email, another e-signature service). */
+async function agreementOffline({ seg, body }: Ctx) {
+  return ok(await recordOfflineAgreement(id(seg[1]), body, ACTOR), 201)
+}
+
+/** This client's invoices that are marked paid, for choosing how a period was paid. */
+async function paidInvoices({ seg }: Ctx) {
+  const site = must(await db.from('care_sites').select('client_id').eq('id', id(seg[1])).single(), 'Website')
+  const rows = (await db.from('invoices').select('id, invoice_number, total_fee, amount, paid_date, service_desc').eq('client_id', site.client_id).eq('status', 'paid').order('paid_date', { ascending: false }).limit(50)).data || []
+  return ok({ invoices: rows })
+}
+
+/**
+ * Website Care payments for Revenue, each counted once (src/lib/care/revenue.ts).
+ * Before 20261108 the payment columns don't exist; Stripe periods still count
+ * and the response says the migration is needed.
+ */
+async function revenue() {
+  const BASE = 'id, site_id, source, amount_paid, currency, paid_at, period_start, period_end, plan, billing_flag'
+  const read = (cols: string) => db.from('care_cycles').select(cols).order('period_start', { ascending: false }).limit(500)
+  let cycles = await read(`${BASE}, is_test, payment_method, payment_invoice_id, payment_amount_cents, payment_received_on, payment_reference`)
+  let migration: string | null = null
+  if (cycles.error && isMissingColumn(cycles.error)) {
+    migration = PAYMENTS_MIGRATION
+    cycles = await read(BASE)
+  }
+  if (cycles.error) throw new CareError(cycles.error.message, 500)
+  const sitesQ = await db.from('care_sites').select(migration ? 'id, label' : 'id, label, is_test')
+  const rows = (cycles.data || []) as Row[]
+  const invIds = [...new Set(rows.map((c) => c.payment_invoice_id).filter(Boolean))]
+  const invoices = invIds.length ? (await db.from('invoices').select('id, invoice_number').in('id', invIds)).data || [] : []
+  return ok({ payments: carePayments(rows as Parameters<typeof carePayments>[0], (sitesQ.data || []) as Row[] as { id: string; label: string }[], invoices as { id: string; invoice_number: string }[]), migration })
 }
 
 async function checkUrl({ body }: Ctx) {
@@ -597,6 +671,9 @@ const routes: [string, string, Handler][] = [
   ['POST', 'sites/:id/portal', portal],
   ['POST', 'sites/:id/sync', sync],
   ['POST', 'sites/:id/cycles', manualCycle],
+  ['GET', 'sites/:id/paid-invoices', paidInvoices],
+  ['POST', 'sites/:id/agreement/offline', agreementOffline],
+  ['GET', 'revenue', revenue],
   ['POST', 'sites/:id/clear-billing', clearBilling],
   ['POST', 'sites/:id/pause', setStatus('paused')],
   ['POST', 'sites/:id/resume', setStatus('confirmed')],

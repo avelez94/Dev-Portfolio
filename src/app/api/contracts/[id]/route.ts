@@ -110,7 +110,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Send signed contract PDF
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://alantevelez.com'
+    const siteUrl = SITE_URL
     await fetch(`${siteUrl}/api/contracts/send-signed`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

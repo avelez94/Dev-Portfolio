@@ -29,7 +29,10 @@ async function api(path, body, opts = {}) {
     headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': opts.type || 'application/json' },
     body: opts.raw ?? JSON.stringify(body),
     signal: AbortSignal.timeout(opts.timeout || 30000),
+    // A redirect would drop the token; say what to fix instead of following it.
+    redirect: 'manual',
   })
+  if (r.status >= 300 && r.status < 400) throw new Error(`CARE_APP_URL redirects (HTTP ${r.status}). Set it to the final address, https://www.alantevelez.com, with no trailing slash.`)
   if (r.status === 204) return null
   const text = await r.text()
   let data

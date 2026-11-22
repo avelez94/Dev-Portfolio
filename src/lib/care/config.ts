@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
-import { SITE_URL } from '@/content/site'
+import { SITE_URL, canonicalUrl } from '@/content/site'
 import { inDemoScope } from '@/lib/demo/context'
 
 export function careEnabled(): boolean {
@@ -20,8 +20,9 @@ export function isProductionDeploy(): boolean {
   return process.env.VERCEL_ENV === 'production'
 }
 
+/** Absolute links in Care emails and Stripe return URLs, always on the canonical www origin. */
 export function appUrl(): string {
-  return (process.env.CARE_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || SITE_URL).replace(/\/$/, '')
+  return canonicalUrl(process.env.CARE_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || SITE_URL)
 }
 
 /** Constant time comparison for shared secrets (runner token, cron secret). */

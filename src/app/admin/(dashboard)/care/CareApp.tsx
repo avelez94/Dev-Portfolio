@@ -260,7 +260,7 @@ export function SitesTable({ data, go }: { data: Row; go: (n: { site?: string | 
           const next = mine.filter((y) => !y.completed_at).sort((a, b) => String(a.review_due_at).localeCompare(String(b.review_due_at)))[0]
           return (
             <tr key={s.id} className="click" onClick={() => go({ site: s.id })}>
-              <td><button className="care-btn small" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textAlign: 'left', minHeight: 0 }} onClick={(e) => { e.stopPropagation(); go({ site: s.id }) }}><b>{c?.business || c?.name || 'Unknown client'}</b></button><div className="care-muted">{s.label} · {s.site_url}</div></td>
+              <td><button className="care-btn small" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textAlign: 'left', minHeight: 0 }} onClick={(e) => { e.stopPropagation(); go({ site: s.id }) }}><b>{c?.business || c?.name || 'Unknown client'}</b></button><div className="care-muted">{s.label} · {s.site_url}{s.is_test ? ' · Test' : ''}</div></td>
               <td style={{ textTransform: 'capitalize' }}>{s.plan}</td>
               <td><SiteBilling site={s} manual={mine.some((y) => y.source === 'manual')} />{s.paid_through && <div className="care-muted">Paid through {fmt(s.paid_through, tz, false)}</div>}</td>
               <td><Badge tone={s.enrollment_status === 'confirmed' ? 'ok' : s.enrollment_status === 'draft' ? 'warn' : 'info'}>{s.enrollment_status === 'confirmed' ? 'Confirmed' : s.enrollment_status === 'draft' ? 'Needs confirmation' : s.enrollment_status === 'ended' ? 'Care ended' : 'Paused'}</Badge></td>

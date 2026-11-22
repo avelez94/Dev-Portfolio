@@ -11,6 +11,7 @@ Production: Vercel project `dev-portfolio` (team cutrated-mile), Supabase projec
 | 2 | `pending/website-care/20261030_website_care.sql` | connector |
 | 3 to 7 | `20261031_care_work_ledger`, `20261103_care_report_suggestions`, `20261104_care_checkout_invitations`, `20261105_care_agreements_and_dispatch`, `20261106_care_agreement_links` (as `supabase/release/20261030/03_apply.sql`, one transaction; 1 and 2 again, no change) | owner, SQL editor |
 | 8 | `pending/website-care/20261107_care_function_search_path.sql` | connector |
+| 9 | `pending/website-care/20261108_care_payments_and_offline_agreements.sql` (payment method on each paid period, test websites, agreements signed outside the app). **Not applied yet** as of Nov 22: run it in the SQL editor. Until then, recording a paid period or an offline agreement is refused with a message naming this file; nothing else changes. | owner, SQL editor |
 
 Precheck: no care objects existed; `clients.id` and `invoices.client_id` uuid; no duplicate invoice schedules; lockdown intact. Verify: record counts unchanged (clients 3, invoices 4, pricing 8, proposals 2, sows 2, contracts 1, documents 0, invoice_milestones 0); no client care records created.
 
@@ -32,3 +33,10 @@ Set: WEBSITE_CARE_ENABLED=true, CARE_EMAIL_ALLOWLIST (your addresses only), CARE
 
 ## Stripe off
 Without STRIPE_SECRET_KEY: checkout, subscriptions and the billing portal are refused server side (503 with a plain message); agreements are sent, signed, stored and emailed; nothing is marked paid and no paid period or scan starts without a verified Stripe payment notice.
+
+## Nov 22 update: payments in Revenue, signed agreement before a hand recorded period, canonical www
+
+- Code deployed to production (see the commit for this change). It works before and after migration 9; the features that need it refuse with a clear message until it runs.
+- A paid period recorded by hand needs a signed agreement covering the current scope, plan and price, and the payment actually received (a paid invoice of the client's, or a direct payment with amount, date and how). Agreements signed outside the app are recorded under **Record an existing signed agreement**.
+- Revenue counts Website Care payments once: Stripe periods by the amount collected, direct payments by the amount received, invoice paid periods through the invoice only. Test websites and Stripe test mode never count; plan minutes are never money.
+- Every server to server address uses `https://www.alantevelez.com` (the bare domain redirects; Stripe and the runner don't follow redirects).

@@ -1,6 +1,6 @@
 'use client'
-/** Revenue: totals, the last six months, projects, and every invoice. */
-import { useState } from 'react'
+/** Revenue: totals, the last six months, projects, every invoice, and Website Care payments (each counted once). */
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase-admin-browser'
 import { useTheme } from '../../_components/theme'
 import { Empty, Field, PageFrame, PageHeader, PageState } from '../../_components/ui'
@@ -12,6 +12,27 @@ import { markInvoicePaid, revenueTotals } from '../../_lib/invoices'
 import type { Client, Invoice, Project } from '../../_lib/types'
 import InvoiceDialog from './InvoiceDialog'
 import ProjectDialog from './ProjectDialog'
+
+type CarePayment = { cycle_id: string; site_label: string; period_start: string; period_end: string; method: string; counted: number; amount: number | null; received_on: string | null; invoice_number: string | null; reference: string | null; test: boolean; note: string; flag: string | null }
+
+/** Website Care payments, already reduced to what counts (src/lib/care/revenue.ts). Empty when Website Care is off. */
+function useCarePayments() {
+  const [state, setState] = useState<{ rows: CarePayment[]; migration: string | null; error: string | null }>({ rows: [], migration: null, error: null })
+  useEffect(() => {
+    let live = true
+    fetch('/api/care/admin/revenue', { cache: 'no-store' })
+      .then(async (r) => (r.status === 404 ? { payments: [], migration: null } : r.ok ? r.json() : Promise.reject(new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`))))
+      .then((d) => { if (live) setState({ rows: d.payments || [], migration: d.migration || null, error: null }) })
+      .catch((e) => { if (live) setState({ rows: [], migration: null, error: String(e.message || e) }) })
+    return () => { live = false }
+  }, [])
+  return state
+}
+
+/** A YYYY-MM-DD date shown as that calendar day (midnight UTC would show the day before in US time zones). */
+const fmtDay = (d: string) => fmtShort(`${d.slice(0, 10)}T12:00:00`)
+
+const METHOD_LABEL: Record<string, string> = { stripe: 'Stripe', invoice: 'Your invoice', direct: 'Paid directly', not_recorded: 'Not recorded' }
 
 const blankProject = () => ({ name: '', type: 'Business Website', value: '', platform: 'direct', status: 'active', end_date: '' })
 
@@ -27,7 +48,8 @@ export default function RevenueView() {
   const [viewingProjectId, setViewingProjectId] = useState<string | null>(null)
   useUnsaved(showNew && Boolean(np.name || np.value))
 
-  const t = revenueTotals(invoices.rows, projects.rows)
+  const care = useCarePayments()
+  const t = revenueTotals(invoices.rows, projects.rows, care.rows)
   const maxMonthly = Math.max(...t.monthly.map((m) => m.value), 1)
   const totalProjectValue = t.direct + t.referral || 1
   const now = new Date()
@@ -46,7 +68,7 @@ export default function RevenueView() {
       <PageState {...page} what="revenue">
         <div className="stat-row">
           {[
-            { label: 'Total earned', val: fmtMoney(t.totalEarned), sub: 'All time paid', bg: d.sand },
+            { label: 'Total earned', val: fmtMoney(t.totalEarned), sub: t.care > 0 ? `All time paid, incl. ${fmtMoney(t.care)} Website Care` : 'All time paid', bg: d.sand },
             { label: 'Outstanding', val: fmtMoney(t.totalOutstanding), sub: 'Awaiting payment', bg: d.linen },
             { label: 'This month', val: fmtMoney(t.thisMonth), sub: MONTHS[now.getMonth()], bg: d.blush },
             { label: 'Avg project', val: fmtMoney(t.avgProject), sub: projects.rows.length + ' projects', bg: d.pebble },
@@ -116,6 +138,28 @@ export default function RevenueView() {
               <div className="dt-cell" style={{ display: 'flex', gap: 4 }}>
                 <button className="icon-btn" style={{ color: d.text2, fontSize: 12 }} onClick={() => setViewingProjectId(p.id)} title="View">view</button>
                 <button aria-label="Remove" className="icon-btn" style={{ color: d.text3 }} onClick={async () => { await supabase.from('projects').delete().eq('id', p.id); await projects.reload() }}>x</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="section-label" style={{ color: d.text2, marginBottom: 12 }}>Website Care payments</div>
+        <p style={{ color: d.text3, fontSize: 12, margin: '-4px 0 10px', lineHeight: 1.6 }}>
+          Each payment counts once. Stripe and direct payments count here; a period paid by one of your invoices counts through that invoice below. Test websites and Stripe test payments never count. Included plan minutes are time, not revenue.
+        </p>
+        {care.migration && <p role="status" style={{ color: d.amberText, fontSize: 12, margin: '0 0 10px' }}>The database needs {care.migration} before payments recorded by hand can be shown here.</p>}
+        {care.error && <p role="alert" style={{ color: d.accent, fontSize: 12, margin: '0 0 10px' }}>Website Care payments couldn’t be loaded: {care.error}</p>}
+        <div className="data-table" style={{ borderColor: d.border }} data-testid="care-payments">
+          <div className="dt-header" style={{ gridTemplateColumns: '1.6fr 1.4fr 1fr 1fr 1fr', background: d.surface, borderColor: d.border }}>
+            {['Website', 'Period', 'Paid how', 'Received', 'Counted'].map((h, i) => <div key={i} className="dt-cell hd" style={{ color: d.text3 }}>{h}</div>)}
+          </div>
+          {care.rows.length === 0 ? <Empty>No Website Care payments yet.</Empty> : care.rows.map((c) => (
+            <div key={c.cycle_id} className="dt-row" style={{ gridTemplateColumns: '1.6fr 1.4fr 1fr 1fr 1fr', borderColor: d.border }}>
+              <div className="dt-cell" style={{ color: d.text }}>{c.site_label}{c.test && <span className="status-pill" style={{ background: d.amber, color: d.amberText, marginLeft: 6 }}>Test</span>}</div>
+              <div className="dt-cell" style={{ color: d.text2 }}>{fmtDay(c.period_start)} to {fmtDay(c.period_end)}</div>
+              <div className="dt-cell" style={{ color: d.text2 }} title={c.note}>{METHOD_LABEL[c.method] || c.method}{c.invoice_number ? ` ${c.invoice_number}` : ''}</div>
+              <div className="dt-cell" style={{ color: d.text2 }}>{c.received_on ? fmtDay(c.received_on) : 'none'}</div>
+              <div className="dt-cell" style={{ color: c.counted > 0 ? d.accent : d.text3, fontWeight: 500 }} title={c.note}>
+                {c.counted > 0 ? fmtMoney(c.counted) : c.method === 'invoice' ? 'In invoice' : c.test && c.amount ? `${fmtMoney(c.amount)} (test)` : 'Not counted'}
               </div>
             </div>
           ))}

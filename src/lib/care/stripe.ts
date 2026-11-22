@@ -419,6 +419,8 @@ export async function handleInvoicePaid(invoiceId: string) {
     siteId: site.id, source: 'stripe', invoiceId: inv.id, subscriptionId: subId, periodStart, periodEnd, plan,
     paidAt: inv.status_transitions?.paid_at ? new Date(inv.status_transitions.paid_at * 1000) : new Date(), amountPaid: inv.amount_paid, currency: inv.currency,
     billingReason: inv.billing_reason, actor: 'stripe',
+    // Test mode payments and test websites never count in Revenue.
+    payment: { method: 'stripe', is_test: !inv.livemode || !!site.is_test },
   })
   const paidThrough = site.paid_through && new Date(site.paid_through) > periodEnd ? site.paid_through : periodEnd.toISOString()
   await db.from('care_sites').update({ paid_through: paidThrough, failed_payment_count: 0, billing_attention_since: null, updated_at: new Date().toISOString() }).eq('id', site.id)

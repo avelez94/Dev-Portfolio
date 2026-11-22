@@ -196,8 +196,16 @@ export const invoiceStatusLabel = (s: string) => INVOICE_STATUS_LABEL[s] || 'Pen
 export const invoiceTypeLabel = (t: string) => (t === 'revision' ? 'Revision Invoice' : t === 'fixed_fee' ? 'Fixed Fee Invoice' : t === 'milestone' ? 'Milestone Schedule' : 'Project Invoice')
 
 /** Totals for the Revenue page, computed exactly as before. */
-export function revenueTotals(invoices: Invoice[], projects: { value: number; platform: string }[]) {
+/**
+ * Revenue totals. `care` is Website Care payments already reduced to what
+ * counts (src/lib/care/revenue.ts): periods paid by an invoice count through
+ * that invoice and arrive here as 0, so nothing is counted twice.
+ */
+export function revenueTotals(invoices: Invoice[], projects: { value: number; platform: string }[], care: { counted: number; received_on: string | null }[] = []) {
   const now = new Date()
+  // YYYY-MM-DD as a calendar date, so the 1st of a month never slips into the previous one.
+  const ym = (d: string) => { const [y, m] = d.slice(0, 10).split('-').map(Number); return { y, m: m - 1 } }
+  const careCounted = care.filter((c) => c.counted > 0 && c.received_on)
   const paidOn = (i: Invoice) => (i.paid_date || i.deposit_paid_date) as string
   const totalEarned = invoices.filter((i) => i.status === 'paid' || i.status === 'deposit_paid').reduce((s, i) => (i.status === 'paid' ? s + i.total_fee : s + (i.deposit_amount || i.total_fee * 0.5)), 0)
   const totalOutstanding = invoices.filter((i) => i.status === 'pending' || i.status === 'awaiting_deposit' || i.status === 'deposit_paid').reduce((s, i) => {
@@ -206,14 +214,17 @@ export function revenueTotals(invoices: Invoice[], projects: { value: number; pl
   }, 0)
   const thisMonth = invoices.filter((i) => (i.status === 'paid' || i.status === 'deposit_paid') && paidOn(i) && new Date(paidOn(i)).getMonth() === now.getMonth() && new Date(paidOn(i)).getFullYear() === now.getFullYear())
     .reduce((s, i) => (i.status === 'paid' ? s + (i.total_fee || i.amount) : s + (i.deposit_amount || 0)), 0)
+  const careTotal = careCounted.reduce((t, c) => t + c.counted, 0)
+  const careThisMonth = careCounted.filter((c) => { const d = ym(c.received_on!); return d.m === now.getMonth() && d.y === now.getFullYear() }).reduce((t, c) => t + c.counted, 0)
   const avgProject = projects.length > 0 ? projects.reduce((s, p) => s + p.value, 0) / projects.length : 0
   const monthly = Array.from({ length: 6 }, (_, i) => {
     const dt = new Date(); dt.setMonth(dt.getMonth() - 5 + i)
     const m = dt.getMonth(), y = dt.getFullYear()
     const total = invoices.filter((inv) => inv.status === 'paid' && inv.paid_date && new Date(inv.paid_date).getMonth() === m && new Date(inv.paid_date).getFullYear() === y).reduce((s, inv) => s + (inv.total_fee || inv.amount), 0)
-    return { month: m, year: y, value: total }
+    const careMonth = careCounted.filter((c) => { const d = ym(c.received_on!); return d.m === m && d.y === y }).reduce((t, c) => t + c.counted, 0)
+    return { month: m, year: y, value: total + careMonth }
   })
   const direct = projects.filter((p) => p.platform === 'direct').reduce((s, p) => s + p.value, 0)
   const referral = projects.filter((p) => p.platform === 'referral').reduce((s, p) => s + p.value, 0)
-  return { totalEarned, totalOutstanding, thisMonth, avgProject, monthly, direct, referral }
+  return { totalEarned: totalEarned + careTotal, totalOutstanding, thisMonth: thisMonth + careThisMonth, avgProject, monthly, direct, referral, care: careTotal }
 }

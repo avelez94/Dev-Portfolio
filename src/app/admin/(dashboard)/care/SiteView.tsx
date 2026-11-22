@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import WorkPanel from './WorkPanel'
 import AgreementPanel from './AgreementPanel'
+import ManualPeriodPanel from './ManualPeriodPanel'
 import PracticePanel from './PracticePanel'
 import ClientDocuments from '../_components/ClientDocuments'
 import HistoryPanel from './HistoryPanel'
@@ -34,7 +35,7 @@ function SiteList({ go }: { go: Go }) {
 const blankSite = {
   client_id: '', label: 'Main website', plan: 'essential', agreed_monthly_price: '', site_url: '', approved_domains: '', pages: [{ url: '', label: 'Home' }], destinations: [] as Row[],
   features: '', manual_checklist: [] as Row[], recipient_name: '', recipient_email: '', review_window_days: '', scan_limits: {} as Row,
-  is_additional_site: false, additional_site_terms: '', internal_notes: '',
+  is_additional_site: false, additional_site_terms: '', internal_notes: '', is_test: false,
 }
 
 function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () => void }) {
@@ -191,6 +192,7 @@ function SiteEditor({ go, site, onSaved }: { go: Go; site?: Row; onSaved?: () =>
           </Field>
         </div>
         <div className="care-sub">
+          {!site && <label className="care-row" data-testid="test-site"><input type="checkbox" checked={!!f.is_test} onChange={(e) => set('is_test', e.target.checked)} /> Test website: for practicing with your own email address. Its agreements, periods and payments are marked Test and never count in Revenue. This can’t be changed later.</label>}
           <label className="care-row"><input type="checkbox" checked={!!f.is_additional_site} onChange={(e) => set('is_additional_site', e.target.checked)} /> This is an additional website for a client who already has one</label>
           {f.is_additional_site && <Field label="Agreed pricing for the additional site" id="f-ast"><input id="f-ast" value={f.additional_site_terms} onChange={(e) => set('additional_site_terms', e.target.value)} placeholder="e.g. separate Essential Care subscription, agreed by email on Oct 20" /></Field>}
         </div>
@@ -210,7 +212,6 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
   const status = useLoad<Row>('status')
   const [link, setLink] = useState<string | null>(null)
   const [conf, setConf] = useState({ confirm_website: false, confirm_authorization: false, confirm_checklist: false, authorization_note: '' })
-  const [period, setPeriod] = useState({ period_start: '', period_end: '', note: '', confirm_paid: false })
   const [billNote, setBillNote] = useState('')
   useEffect(() => { if (data?.site?.authorization_note) setConf((c) => ({ ...c, authorization_note: data.site.authorization_note })) }, [data?.site?.authorization_note]) // eslint-disable-line react-hooks/set-state-in-effect
   if (error) return <ErrorBox error={error} onRetry={reload} />
@@ -229,6 +230,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         <div className="care-muted">Report recipient: {site.recipient_name || 'not set'} &lt;{site.recipient_email || 'no email'}&gt;</div>
         {client?.id && <div style={{ marginTop: 4 }}><a href={`/admin/pipeline?client=${client.id}`} data-testid="open-client-profile">Open client profile in Pipeline</a><OtherSites clientId={client.id} siteId={id as string} /></div>}
         <div className="care-row" style={{ marginTop: 8 }}>
+          {site.is_test && <Badge tone="warn">Test website · not counted in Revenue</Badge>}
           <Badge tone={confirmed ? 'ok' : 'warn'}>{confirmed ? 'Setup confirmed' : ended ? 'Care ended' : site.enrollment_status === 'paused' ? 'Paused' : 'Needs confirmation'}</Badge>
           <SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} />
           <span className="care-muted" style={{ textTransform: 'capitalize' }}>{site.plan} Care</span>
@@ -287,20 +289,7 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
           </div>
         )}
         {status.data?.demo && !ended && <PracticePanel site={site} onChange={reload} agreementLink={site.agreement_token ? `/care/agreement/${site.agreement_token}` : null} />}
-        {!site.stripe_subscription_id && !ended && (
-          <details style={{ marginTop: 12 }}>
-            <summary>Billed outside Stripe? Add a paid service period by hand</summary>
-            <div className="care-grid" style={{ marginTop: 10 }}>
-              <div className="care-two">
-                <Field label="Period start" id="p-s"><input id="p-s" type="date" value={period.period_start} onChange={(e) => setPeriod({ ...period, period_start: e.target.value })} /></Field>
-                <Field label="Period end" id="p-e"><input id="p-e" type="date" value={period.period_end} onChange={(e) => setPeriod({ ...period, period_end: e.target.value })} /></Field>
-              </div>
-              <Field label="Note" id="p-n"><input id="p-n" value={period.note} onChange={(e) => setPeriod({ ...period, note: e.target.value })} placeholder="Invoice number or agreement" /></Field>
-              <label className="care-row"><input type="checkbox" checked={period.confirm_paid} onChange={(e) => setPeriod({ ...period, confirm_paid: e.target.checked })} /> This period is paid or agreed in writing.</label>
-              <div><Action label="Add service period" run={() => careApi(`sites/${id}/cycles`, { method: 'POST', json: period })} done={reload} /></div>
-            </div>
-          </details>
-        )}
+        {!site.stripe_subscription_id && !ended && <ManualPeriodPanel site={site} onDone={reload} />}
       </section>
 
       {client?.id && <section className="care-panel" aria-label="Client documents"><ClientDocuments client={client} heading="Client documents" links={<a href={`/admin/pipeline?client=${client.id}`} style={{ textTransform: 'none', letterSpacing: 0 }}>Same list in Pipeline</a>} /></section>}

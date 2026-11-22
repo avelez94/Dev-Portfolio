@@ -31,7 +31,7 @@ The admin **Schedule** page also shows each review’s due date (a green diamond
 7. In **Preview and approve**: **Mark ready for review**, open the preview or PDF, tick the sign off, type your name, **Approve this version**.
 8. In **Send**: type the recipient address to confirm, **Send Report**. Check the badge says **Accepted by provider**.
 9. Look at **Billing attention** on the Overview. Reply to any payment problems in Stripe.
-10. For clients billed outside Stripe, add next month’s paid period by hand (see the reference below).
+10. For clients billed outside Stripe, bill next month yourself and, once it’s paid, record that paid period (see **Clients billed outside Stripe** below).
 
 ## 1. Enroll a website and record the care terms
 
@@ -119,7 +119,25 @@ The client pays on Stripe’s page. Stripe’s verified payment notice then sets
 
 **The client sees:** Stripe’s checkout page, then a “subscribed” page on your site. Stripe sends their receipt.
 
-**Clients billed outside Stripe:** open **Billed outside Stripe? Add a paid service period by hand**. Enter the start and end, a note, tick **This period is paid or agreed in writing**, and press **Add service period**. The billing badge then says **Billed outside Stripe**.
+### Clients billed outside Stripe
+
+The order is always: **signed agreement, then actual payment, then record the paid period, then the check runs.**
+
+1. **Signed agreement.** The client signs through the agreement link. If they already signed a care agreement outside the app (on paper, by email, or with another e-signature service), open **Care agreement**, **Record an existing signed agreement** and enter who signed, the date, how, and where the signed copy is kept, with the PDF if you have it. It shows as **Signed outside the app**. The app refuses to record a paid period until a signed agreement covers the current scope, plan and price.
+2. **Actual payment.** Bill the client yourself: a Fixed Fee invoice from Pipeline (marked paid when it’s paid), or Zelle, check or cash.
+3. **Record the paid period.** On the website’s page, open **Billed outside Stripe? Record a paid period**. Enter the period dates, then choose how it was paid:
+   - **One of my invoices, marked paid**: pick the invoice. Revenue counts the invoice; the period adds nothing more.
+   - **Paid to me directly**: enter the amount, the date you received it, and how (for example “Zelle, confirmation 4821”). Revenue counts this amount once.
+   Tick **I received this payment** and press **Record paid period**. The billing badge then says **Billed outside Stripe**.
+4. **The check runs.** Recording the period creates its review and queues the check right away.
+
+**Renewals are manual for these clients.** Nothing is collected automatically. Each month, bill the client again and record the new period once it’s paid. A review only starts for a period you’ve recorded.
+
+**Revenue** lists every Website Care payment under **Website Care payments** with how it was paid and what counted. Included plan minutes are time, never revenue.
+
+### Practicing with a test website
+
+When you enroll, tick **Test website** and use your own address (`alante.v+care1@gmail.com`). A test website is marked **Test** everywhere. It can only record **test payments** (it can’t use a real invoice), and none of its payments count in Revenue. This can’t be changed later, so a real client is never enrolled as a test. Don’t create invoices for the test client.
 
 **Fixing a mistake:** a paid period can’t be deleted from the app. If you added the wrong dates by hand, note it in the review and fix the next one.
 
@@ -344,7 +362,7 @@ Both come from the frozen copy made when you approved, so the email and the PDF 
 - **Canceled immediately:** open reviews are flagged **canceled immediately** for your decision. Past reports are kept.
 - **Refund or dispute:** the website and that period are flagged (**Refund recorded** or **Disputed**) for your review.
 
-**Clients billed outside Stripe:** there is no automatic renewal. Add each paid period by hand.
+**Clients billed outside Stripe:** there is no automatic renewal. Bill each month yourself and record the period once it’s paid (see **Clients billed outside Stripe** above).
 
 **Unfinished reservation:** an approved estimate near or past its period end is flagged on the Overview (**Unfinished approved work**). Reserved minutes never carry into the next period. **Carry to current period** creates a new draft that needs approval again; **Cancel** releases the minutes.
 
@@ -482,7 +500,10 @@ It lists, newest first: uploaded files, proposals, statements of work, contracts
 | “The agreement link was already sent” | The same private link was already emailed. | Use **Send again** to send a reminder. |
 | **Signature needed for the current details** | The price, plan or scope changed after signing. | **Send updated agreement**; payment opens once they sign it. |
 | **Quick add work** is greyed out | The client’s care terms aren’t current. | Record the terms (setup confirmation or **Mark agreement reviewed**). |
-| Plan time says **No paid billing period yet** | There’s no paid period for this website. | Wait for the first payment, or add a paid period by hand. |
+| Plan time says **No paid billing period yet** | There’s no paid period for this website. | Wait for the first payment, or record a paid period. |
+| “A paid period can only be added after the client signs…” | No signed agreement covers the current scope, plan and price. | Send the agreement link, or record an existing signed agreement. |
+| “…isn’t marked paid yet” | The invoice you chose is still pending. | Mark it paid in Revenue or Pipeline, then record the period. |
+| “The database needs …20261108…” | The production database is missing the latest Website Care migration. | Run that file in the Supabase SQL editor (see the release record). |
 | “needs X standard minutes but only Y are available” | Recording would go past the allowance. | Create an estimate for the larger work. |
 | **Mark ready for review** is greyed out | Something required is missing. | Fix each item listed under **Before this can be marked ready**. |
 | **Send Report** is greyed out | The typed address doesn’t match, or client emails are switched off here. | Type the exact recipient address. In preview, client emails are limited to the test allowlist (simulated in the demo). |
