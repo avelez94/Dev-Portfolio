@@ -7,24 +7,28 @@
 import { BlockList, isIP } from 'node:net'
 import { lookup } from 'node:dns/promises'
 
-const blocked = new BlockList()
+// Separate lists per family: a single BlockList holding the IPv4 mapped rule
+// (::ffff:0:0/96) matches every IPv4 address, which refused every public site.
+const blocked4 = new BlockList()
 for (const [net, bits] of [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
   ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.88.99.0', 24], ['192.168.0.0', 16],
   ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
-]) blocked.addSubnet(net, bits, 'ipv4')
+]) blocked4.addSubnet(net, bits, 'ipv4')
+const blocked6 = new BlockList()
 for (const [net, bits] of [
   ['::', 128], ['::1', 128], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['100::', 64], ['2001::', 23], ['2001:db8::', 32],
   ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
-]) blocked.addSubnet(net, bits, 'ipv6')
+]) blocked6.addSubnet(net, bits, 'ipv6')
 
 export function isBlockedAddress(ip) {
   const v = isIP(ip)
-  if (v === 4) return blocked.check(ip, 'ipv4')
+  if (v === 4) return blocked4.check(ip, 'ipv4')
   if (v === 6) {
+    // An IPv4 address written as IPv6 is judged by the IPv4 rules.
     const m = ip.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-    if (m) return blocked.check(m[1], 'ipv4')
-    return blocked.check(ip, 'ipv6')
+    if (m) return blocked4.check(m[1], 'ipv4')
+    return blocked6.check(ip, 'ipv6')
   }
   return true
 }
