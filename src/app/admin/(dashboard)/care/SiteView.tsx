@@ -252,7 +252,8 @@ function SiteDetail({ id, go }: { id: string; go: Go }) {
         </section>
       )}
 
-      {!ended && <AgreementPanel siteId={id as string} tz={tz} onChange={reload} />}
+      {/* Keyed on the confirmed setup and status so confirming (or changing) the scope reloads the agreement panel. */}
+      {!ended && <AgreementPanel key={`${site.enrollment_status}:${site.confirmed_hash || ''}:${site.agreed_monthly_price ?? ''}:${site.plan}`} siteId={id as string} tz={tz} onChange={reload} />}
 
       <section className="care-panel" aria-labelledby="bill-h">
         <div className="care-between"><h2 id="bill-h">Subscription and billing</h2><SiteBilling site={site} manual={cycles.some((c: Row) => c.source === 'manual')} /></div>
