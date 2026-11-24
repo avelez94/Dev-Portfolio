@@ -3,6 +3,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
+import { createRequire as cr } from 'node:module'
+const require = cr(import.meta.url)
 
 const ROOT = new URL('../..', import.meta.url).pathname
 const { createJiti } = createRequire(import.meta.url)('jiti')
@@ -32,5 +34,19 @@ test('the runner and its workflow point at the www origin and stop on a redirect
 test('enrollment is online agreements only: no offline agreement button or instructions', () => {
   for (const f of ['src/app/admin/(dashboard)/care/AgreementPanel.tsx', 'src/app/admin/(dashboard)/care/ManualPeriodPanel.tsx', 'docs/WEBSITE_CARE_GUIDE.md']) {
     assert.doesNotMatch(readFileSync(ROOT + f, 'utf8'), /Record an existing signed agreement|agreement\/offline/, f)
+  }
+})
+
+test('every care table a migration creates grants the server key access (production has no default grants)', () => {
+  const { readdirSync } = require('node:fs')
+  const dir = ROOT + 'supabase/pending/website-care/'
+  const all = readdirSync(dir).filter((f) => f.endsWith('.sql')).map((f) => readFileSync(dir + f, 'utf8')).join('\n')
+  const tables = [...all.matchAll(/create table if not exists public\.(care_\w+)/g)].map((m) => m[1])
+  assert.ok(tables.length >= 20)
+  // Tables granted one by one, or through the loop over every care_* table in the first two migrations.
+  const looped = new Set([...all.matchAll(/'(care_\w+)'/g)].map((m) => m[1]))
+  for (const t of tables) {
+    const direct = new RegExp(`grant select, insert, update, delete on public\\.${t} to service_role`).test(all)
+    assert.ok(direct || looped.has(t), `${t} has no grant to service_role`)
   }
 })

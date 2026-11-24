@@ -29,3 +29,5 @@ create index if not exists care_introductions_client on public.care_introduction
 
 alter table public.care_introductions enable row level security;
 revoke all on public.care_introductions from anon, authenticated;
+-- Production's default privileges are locked down, so the server key needs an explicit grant (as every care_* table has).
+grant select, insert, update, delete on public.care_introductions to service_role;
